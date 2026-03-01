@@ -108,10 +108,10 @@
         </StackPanel>
 
         <!-- Main Tabs -->
-        <TabControl Grid.Row="1" Background="Transparent" BorderThickness="0">
+        <ui:TabView Grid.Row="1" Background="Transparent" BorderThickness="0">
 
             <!-- General Tab -->
-            <TabItem Header="General" Style="{StaticResource ModernTabItem}">
+            <ui:TabViewItem Header="General" Style="{StaticResource ModernTabItem}">
                 <ScrollViewer VerticalScrollBarVisibility="Auto">
                     <StackPanel Margin="0,20,0,0">
                         <TextBlock Text="Theme" Style="{StaticResource FieldLabel}"/>
@@ -128,10 +128,10 @@
                                   Foreground="{DynamicResource AppFgBrush}" Margin="0,0,0,18"/>
                     </StackPanel>
                 </ScrollViewer>
-            </TabItem>
+            </ui:TabViewItem>
 
             <!-- Hotkeys Tab -->
-            <TabItem Header="Hotkeys" Style="{StaticResource ModernTabItem}">
+            <ui:TabViewItem Header="Hotkeys" Style="{StaticResource ModernTabItem}">
                 <ScrollViewer VerticalScrollBarVisibility="Auto">
                     <StackPanel Margin="0,20,0,0">
 
@@ -162,10 +162,10 @@
                                    FontSize="11" Foreground="{DynamicResource AppTextMutedBrush}" Margin="0,0,0,20"/>
                     </StackPanel>
                 </ScrollViewer>
-            </TabItem>
+            </ui:TabViewItem>
 
             <!-- Audio Tab -->
-            <TabItem Header="Audio" Style="{StaticResource ModernTabItem}">
+            <ui:TabViewItem Header="Audio" Style="{StaticResource ModernTabItem}">
                 <ScrollViewer VerticalScrollBarVisibility="Auto">
                     <StackPanel Margin="0,20,0,0">
                         <TextBlock Text="Microphone Input Device" Style="{StaticResource FieldLabel}"/>
@@ -194,10 +194,10 @@
                                    FontSize="11" Foreground="{DynamicResource AppAccentBrush}" Margin="0,10,0,20"/>
                     </StackPanel>
                 </ScrollViewer>
-            </TabItem>
+            </ui:TabViewItem>
 
             <!-- Transcription Tab -->
-            <TabItem Header="Transcription" Style="{StaticResource ModernTabItem}">
+            <ui:TabViewItem Header="Transcription" Style="{StaticResource ModernTabItem}">
                 <ScrollViewer VerticalScrollBarVisibility="Auto">
                     <StackPanel Margin="0,20,0,0">
                         <TextBlock Text="Speech-to-Text Service" Style="{StaticResource FieldLabel}"/>
@@ -231,10 +231,10 @@
                                    FontSize="11" Foreground="{DynamicResource AppTextMutedBrush}" Margin="0,0,0,18"/>
                     </StackPanel>
                 </ScrollViewer>
-            </TabItem>
+            </ui:TabViewItem>
 
             <!-- Refinement Tab -->
-            <TabItem Header="{Binding RefinementTabHeader}" Style="{StaticResource ModernTabItem}">
+            <ui:TabViewItem Header="{Binding RefinementTabHeader}" Style="{StaticResource ModernTabItem}">
                 <ScrollViewer VerticalScrollBarVisibility="Auto">
                     <StackPanel Margin="0,20,0,0">
                         <TextBlock Text="Refinement Service" Style="{StaticResource FieldLabel}"/>
@@ -309,10 +309,10 @@
                                  TextWrapping="Wrap" VerticalScrollBarVisibility="Auto" Margin="0,0,0,18"/>
                     </StackPanel>
                 </ScrollViewer>
-            </TabItem>
+            </ui:TabViewItem>
 
             <!-- API Keys Tab -->
-            <TabItem Header="API Keys" Style="{StaticResource ModernTabItem}">
+            <ui:TabViewItem Header="API Keys" Style="{StaticResource ModernTabItem}">
                 <ScrollViewer VerticalScrollBarVisibility="Auto">
                     <StackPanel Margin="0,20,0,0">
 
@@ -388,10 +388,10 @@
                                 Cursor="Hand"/>
                     </StackPanel>
                 </ScrollViewer>
-            </TabItem>
+            </ui:TabViewItem>
 
             <!-- History Tab -->
-            <TabItem Header="History" Style="{StaticResource ModernTabItem}">
+            <ui:TabViewItem Header="History" Style="{StaticResource ModernTabItem}">
                 <Grid Margin="0,15,0,0">
                     <Grid.RowDefinitions>
                         <RowDefinition Height="Auto"/>
@@ -430,9 +430,9 @@
                         </ListBox.ItemTemplate>
                     </ListBox>
                 </Grid>
-            </TabItem>
+            </ui:TabViewItem>
 
-        </TabControl>
+        </ui:TabView>
 
         <!-- Footer -->
         <Border Grid.Row="2" Background="{DynamicResource AppFooterBgBrush}" CornerRadius="12"

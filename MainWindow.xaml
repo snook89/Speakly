@@ -172,17 +172,17 @@
                         <ComboBox ItemsSource="{Binding AvailableAudioDevices}" SelectedItem="{Binding AudioDevice}" Margin="0,0,0,18"/>
 
                         <TextBlock Text="Sample Rate (Hz)" Style="{StaticResource FieldLabel}"/>
-                        <ui:TextBox Text="{Binding SampleRate}" Margin="0,0,0,5"/>
+                        <ui:NumberBox Text="{Binding SampleRate}" Margin="0,0,0,5"/>
                         <TextBlock Text="Hint: 16000 is recommended for most STT models (Nova-3, Whisper)."
                                    FontSize="11" Foreground="{DynamicResource AppTextMutedBrush}" Margin="0,0,0,18"/>
 
                         <TextBlock Text="Chunk Size (Bytes)" Style="{StaticResource FieldLabel}"/>
-                        <ui:TextBox Text="{Binding ChunkSize}" Margin="0,0,0,5"/>
+                        <ui:NumberBox Text="{Binding ChunkSize}" Margin="0,0,0,5"/>
                         <TextBlock Text="Hint: 4096 is standard. Smaller values decrease latency but increase CPU usage."
                                    FontSize="11" Foreground="{DynamicResource AppTextMutedBrush}" Margin="0,0,0,18"/>
 
                         <TextBlock Text="Channels" Style="{StaticResource FieldLabel}"/>
-                        <ui:TextBox Text="{Binding Channels}" Margin="0,0,0,5"/>
+                        <ui:NumberBox Text="{Binding Channels}" Margin="0,0,0,5"/>
                         <TextBlock Text="Hint: 1 (Mono) is best. Most AI models only support mono input."
                                    FontSize="11" Foreground="{DynamicResource AppTextMutedBrush}" Margin="0,0,0,18"/>
 

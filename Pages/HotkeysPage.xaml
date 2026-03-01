@@ -1,0 +1,43 @@
+<UserControl x:Class="Speakly.Pages.HotkeysPage"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
+             FontFamily="Segoe UI Variable Text">
+    <ScrollViewer VerticalScrollBarVisibility="Auto">
+        <StackPanel Margin="24,16,24,24">
+            <TextBlock Text="Hotkeys" Style="{StaticResource PageTitle}"/>
+
+            <Border Style="{StaticResource SectionCard}">
+                <StackPanel>
+                    <TextBlock Text="Push-to-Talk Key" Style="{StaticResource SectionTitle}"/>
+                    <TextBlock Text="Hold to record, release to transcribe" Style="{StaticResource FieldLabel}"/>
+                    <Grid Margin="0,0,0,6">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <ui:TextBox x:Name="PttHotkeyBox" Text="{Binding PttHotkey}" Grid.Column="0" IsReadOnly="True" Cursor="Hand"/>
+                        <ui:Button x:Name="SetPttBtn" Grid.Column="1" Content="Set key" Margin="8,0,0,0" Padding="12,0" Click="SetPtt_Click" Style="{StaticResource SecondaryButton}"/>
+                    </Grid>
+                    <TextBlock Text="Examples: Space · LeftCtrl · LeftAlt · F1 … F12" Style="{StaticResource HintText}"/>
+                </StackPanel>
+            </Border>
+
+            <Border Style="{StaticResource SectionCard}">
+                <StackPanel>
+                    <TextBlock Text="Toggle Recording Key" Style="{StaticResource SectionTitle}"/>
+                    <TextBlock Text="Press once to start, press again to stop" Style="{StaticResource FieldLabel}"/>
+                    <Grid Margin="0,0,0,6">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <ui:TextBox x:Name="RecordHotkeyBox" Text="{Binding RecordHotkey}" Grid.Column="0" IsReadOnly="True" Cursor="Hand"/>
+                        <ui:Button x:Name="SetRecBtn" Grid.Column="1" Content="Set key" Margin="8,0,0,0" Padding="12,0" Click="SetRec_Click" Style="{StaticResource SecondaryButton}"/>
+                    </Grid>
+                    <TextBlock Text="Examples: F9 · Insert · Scroll Lock. Must be different from PTT key." Style="{StaticResource HintText}"/>
+                </StackPanel>
+            </Border>
+        </StackPanel>
+    </ScrollViewer>
+</UserControl>

@@ -1,0 +1,35 @@
+<UserControl x:Class="Speakly.Pages.AudioPage"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
+             FontFamily="Segoe UI Variable Text">
+    <ScrollViewer VerticalScrollBarVisibility="Auto">
+        <StackPanel Margin="24,16,24,24">
+            <TextBlock Text="Audio" Style="{StaticResource PageTitle}"/>
+
+            <Border Style="{StaticResource SectionCard}">
+                <StackPanel>
+                    <TextBlock Text="Input &amp; Capture" Style="{StaticResource SectionTitle}"/>
+
+                    <TextBlock Text="Microphone Input Device" Style="{StaticResource FieldLabel}"/>
+                    <ComboBox ItemsSource="{Binding AvailableAudioDevices}" SelectedItem="{Binding AudioDevice}" Margin="0,0,0,16"/>
+
+                    <TextBlock Text="Sample Rate (Hz)" Style="{StaticResource FieldLabel}"/>
+                    <ui:NumberBox Value="{Binding SampleRate}" Margin="0,0,0,4"/>
+                    <TextBlock Text="16000 is recommended for most STT models." Style="{StaticResource HintText}" Margin="0,0,0,14"/>
+
+                    <TextBlock Text="Chunk Size (Bytes)" Style="{StaticResource FieldLabel}"/>
+                    <ui:NumberBox Value="{Binding ChunkSize}" Margin="0,0,0,4"/>
+                    <TextBlock Text="4096 is a common balance between latency and CPU usage." Style="{StaticResource HintText}" Margin="0,0,0,14"/>
+
+                    <TextBlock Text="Channels" Style="{StaticResource FieldLabel}"/>
+                    <ui:NumberBox Value="{Binding Channels}" Margin="0,0,0,4"/>
+                    <TextBlock Text="Use 1 (Mono) for best compatibility." Style="{StaticResource HintText}" Margin="0,0,0,14"/>
+
+                    <ui:ToggleSwitch Content="Save Debug Records" IsChecked="{Binding SaveDebugRecords}" Margin="0,6,0,4"/>
+                    <TextBlock Text="Saves timestamped .wav files to the Records folder for troubleshooting." Style="{StaticResource HintText}"/>
+                </StackPanel>
+            </Border>
+        </StackPanel>
+    </ScrollViewer>
+</UserControl>

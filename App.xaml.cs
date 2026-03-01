@@ -5,6 +5,7 @@ using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Input;
 using System.Windows.Media;
+using Wpf.Ui.Appearance;
 using Speakly.Config;
 using Speakly.Services;
 using Speakly.ViewModels;
@@ -13,6 +14,8 @@ namespace Speakly
 {
     public partial class App : Application
     {
+        public static MainViewModel ViewModel { get; private set; } = null!;
+
         private GlobalHotkeyService? _hotkeyService;
         private TrayIconService? _trayService;
         private IAudioRecorder? _recorder;
@@ -54,6 +57,7 @@ namespace Speakly
 
             InitializeTranscriptionAndRefinement();
 
+            ViewModel = new MainViewModel();
             MainWindow = new MainWindow();
             _trayService = new TrayIconService(MainWindow);
             
@@ -405,47 +409,61 @@ namespace Speakly
             System.Environment.Exit(0);
         }
 
+        public static string AppVersion { get; } =
+            System.Reflection.Assembly.GetExecutingAssembly().GetName().Version?.ToString(3) ?? "1.0.0";
+
         public static void SetTheme(string themeName)
         {
-            string normalizedTheme = string.IsNullOrWhiteSpace(themeName)
-                ? "Dark"
-                : themeName.Trim();
+            bool isLight = string.Equals(themeName, "Light", StringComparison.OrdinalIgnoreCase);
+            var appTheme = isLight ? ApplicationTheme.Light : ApplicationTheme.Dark;
+            var merged = Application.Current.Resources.MergedDictionaries;
 
-            string fileName = "DarkTheme.xaml";
-            if (normalizedTheme.Equals("Light", StringComparison.OrdinalIgnoreCase)) fileName = "LightTheme.xaml";
-            else if (normalizedTheme.Equals("Matrix", StringComparison.OrdinalIgnoreCase)) fileName = "MatrixTheme.xaml";
-            else if (normalizedTheme.Equals("Ocean", StringComparison.OrdinalIgnoreCase)) fileName = "OceanTheme.xaml";
+            // Replace the ThemesDictionary with a fresh instance.
+            // Setting .Theme on the existing instance does NOT re-initialize nav pane brushes.
+            // A new object recreates every brush key from scratch for the requested theme.
+            for (int i = 0; i < merged.Count; i++)
+            {
+                if (merged[i] is Wpf.Ui.Markup.ThemesDictionary)
+                {
+                    merged[i] = new Wpf.Ui.Markup.ThemesDictionary { Theme = appTheme };
+                    break;
+                }
+            }
+
+            // Sync ApplicationThemeManager's internal state and update window DWM attributes.
+            // WindowBackdropType.None prevents Mica backdrop from being applied – Mica inherits
+            // the OS system theme, so it would stay dark-rendered even when the app switches to
+            // Light, causing the NavigationView pane to appear black.
+            ApplicationThemeManager.Apply(appTheme, Wpf.Ui.Controls.WindowBackdropType.None, updateAccent: true);
+
+            // Explicitly flip the Win32 DWMWA_USE_IMMERSIVE_DARK_MODE attribute on the main
+            // window so the title bar and NavigationView pane chrome match the app theme.
+            var mainWindow = Application.Current.MainWindow;
+            if (mainWindow != null)
+            {
+                if (isLight)
+                    WindowBackgroundManager.RemoveDarkThemeFromWindow(mainWindow);
+                else
+                    WindowBackgroundManager.ApplyDarkThemeToWindow(mainWindow);
+            }
+
+            // Swap the custom overlay/capture brush file (Dark vs Light colours)
+            string fileName = isLight ? "LightTheme.xaml" : "DarkTheme.xaml";
             string dictUri = $"pack://application:,,,/Themes/{fileName}";
-
             try
             {
-                var merged = Application.Current.Resources.MergedDictionaries;
-                var dict = new ResourceDictionary { Source = new Uri(dictUri, UriKind.Absolute) };
-
-                int themeDictionaryIndex = -1;
-                for (int i = 0; i < merged.Count; i++)
+                var overlayDict = new ResourceDictionary { Source = new Uri(dictUri, UriKind.Absolute) };
+                for (int i = merged.Count - 1; i >= 0; i--)
                 {
-                    var source = merged[i].Source?.ToString() ?? string.Empty;
-                    if (source.Contains("/Themes/", StringComparison.OrdinalIgnoreCase) ||
-                        source.Contains("Themes/", StringComparison.OrdinalIgnoreCase))
-                    {
-                        themeDictionaryIndex = i;
-                        break;
-                    }
+                    var src = merged[i].Source?.ToString() ?? string.Empty;
+                    if (src.Contains("/Themes/", StringComparison.OrdinalIgnoreCase))
+                        merged.RemoveAt(i);
                 }
-
-                if (themeDictionaryIndex >= 0)
-                {
-                    merged[themeDictionaryIndex] = dict;
-                }
-                else
-                {
-                    merged.Add(dict);
-                }
+                merged.Add(overlayDict);
             }
             catch (Exception ex)
             {
-                System.Diagnostics.Debug.WriteLine($"Theme load failed: {ex.Message}");
+                System.Diagnostics.Debug.WriteLine($"Overlay theme load failed: {ex.Message}");
             }
         }
     }

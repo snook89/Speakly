@@ -30,6 +30,10 @@ namespace Speakly.ViewModels
         private const string RefinementPromptPresetGeneral = RefinementPromptLibrary.General;
         private const string RefinementPromptPresetUkrainian = RefinementPromptLibrary.Ukrainian;
 
+        public event Action? SaveSucceeded;
+        public event Action<string, string, string, string>? ApiTestCompleted;
+        public event Action<bool>? RefreshModelsCompleted;
+
         public ICommand SaveCommand { get; }
         public ICommand RefreshModelsCommand { get; }
         public ICommand ApplyRefinementPromptPresetCommand { get; }
@@ -235,6 +239,12 @@ namespace Speakly.ViewModels
 
         public ObservableCollection<HistoryEntry> HistoryEntries { get; } = new ObservableCollection<HistoryEntry>();
 
+        public ICommand ToggleFavoriteModelCommand => new RelayCommand(
+            obj => ToggleOpenRouterFavorite(obj as string ?? string.Empty),
+            obj => string.Equals(RefinementModel, "OpenRouter", StringComparison.OrdinalIgnoreCase)
+                   && obj is string s && !string.IsNullOrWhiteSpace(s)
+        );
+
         public ICommand CopyHistoryCommand => new RelayCommand(obj => {
             if (obj is string text) Clipboard.SetText(text);
         });
@@ -279,7 +289,7 @@ namespace Speakly.ViewModels
 
             SaveCommand = new RelayCommand(_ => {
                 ConfigManager.Save();
-                MessageBox.Show("Settings saved successfully!", "Speakly", MessageBoxButton.OK, MessageBoxImage.Information);
+                SaveSucceeded?.Invoke();
             });
 
             RefreshModelsCommand = new RelayCommand(
@@ -559,7 +569,7 @@ namespace Speakly.ViewModels
 
                 if (userInitiated)
                 {
-                    MessageBox.Show(ModelRefreshStatus, "Speakly", MessageBoxButton.OK, MessageBoxImage.Information);
+                    RefreshModelsCompleted?.Invoke(true);
                 }
             }
             catch (Exception ex)
@@ -569,7 +579,7 @@ namespace Speakly.ViewModels
 
                 if (userInitiated)
                 {
-                    MessageBox.Show(ModelRefreshStatus, "Speakly", MessageBoxButton.OK, MessageBoxImage.Warning);
+                    RefreshModelsCompleted?.Invoke(false);
                 }
             }
             finally
@@ -691,7 +701,7 @@ namespace Speakly.ViewModels
             sb.AppendLine($"OpenRouter: {or}");
 
             ApiTestStatus = sb.ToString();
-            MessageBox.Show(ApiTestStatus, "API Test Results", MessageBoxButton.OK, MessageBoxImage.Information);
+            ApiTestCompleted?.Invoke(dg, oa, cr, or);
             ApiTestStatus = "Ready";
         }
 

@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Collections.Concurrent;
 using System.Globalization;
 using System.IO;
@@ -19,7 +20,7 @@ namespace Speakly.Services
         private readonly ConcurrentQueue<byte[]> _connectionBuffer = new();
         private TaskCompletionSource? _finalResultTcs;
         private bool _isFinishing = false;
-        private const string Version = "1.5.0-HeaderAuthFix";
+        private const string Version = "1.6.0-HandshakeDiagnostics";
 
         public event EventHandler<TranscriptionEventArgs>? TranscriptionReceived;
         public event EventHandler<string>? ErrorReceived;
@@ -39,14 +40,10 @@ namespace Speakly.Services
             }
 
             _webSocket = new ClientWebSocket();
+            _webSocket.Options.SetRequestHeader("Authorization", $"Token {apiKey}");
+            _webSocket.Options.CollectHttpResponseDetails = true;
 
-            // Build URL without auth — auth goes in the Authorization header
-            string url = string.Format(CultureInfo.InvariantCulture,
-                "wss://api.deepgram.com/v1/listen?encoding=linear16&sample_rate={0}&channels={1}&model={2}&language={3}&interim_results=true&smart_format=true&endpointing=300",
-                config.SampleRate,
-                config.Channels,
-                config.DeepgramModel,
-                config.Language);
+            string url = BuildDeepgramWebSocketUrl(config);
 
             _cts = new CancellationTokenSource();
             _isFinishing = false;
@@ -54,16 +51,8 @@ namespace Speakly.Services
 
             try
             {
-                Logger.Log($"Connecting to Deepgram ({Version}): {url.Replace(apiKey, "REDACTED")}");
-
-                // Create a fresh HttpClient per connection so DefaultRequestHeaders are clean.
-                // Passing it as HttpMessageInvoker is the reliable way to send the Authorization
-                // header during the WebSocket upgrade in .NET 9.
-                using var httpClient = new HttpClient();
-                httpClient.DefaultRequestHeaders.Authorization =
-                    new System.Net.Http.Headers.AuthenticationHeaderValue("Token", apiKey);
-
-                await _webSocket.ConnectAsync(new Uri(url), httpClient, _cts.Token);
+                Logger.Log($"Connecting to Deepgram ({Version}): {url}");
+                await _webSocket.ConnectAsync(new Uri(url), _cts.Token);
                 
                 // Flush buffer
                 while (_connectionBuffer.TryDequeue(out var bufferedData))
@@ -76,9 +65,14 @@ namespace Speakly.Services
             }
             catch (Exception ex)
             {
+                string handshakeInfo = GetHandshakeFailureDetails();
                 string diagnosticInfo = await DiagnosticProbeAsync(apiKey);
-                string errorMessage = !string.IsNullOrWhiteSpace(diagnosticInfo)
-                    ? $"[v{Version}] Deepgram Error: {diagnosticInfo} (Original: {ex.Message})"
+                var details = new List<string>();
+                if (!string.IsNullOrWhiteSpace(handshakeInfo)) details.Add(handshakeInfo);
+                if (!string.IsNullOrWhiteSpace(diagnosticInfo)) details.Add(diagnosticInfo);
+
+                string errorMessage = details.Count > 0
+                    ? $"[v{Version}] Deepgram Error: {string.Join(" | ", details)} (Original: {ex.Message})"
                     : $"[v{Version}] Failed to connect to Deepgram: {ex.Message}";
 
                 ErrorReceived?.Invoke(this, errorMessage);
@@ -86,12 +80,62 @@ namespace Speakly.Services
             }
         }
 
+        private static string BuildDeepgramWebSocketUrl(AppConfig config)
+        {
+            var query = new List<string>
+            {
+                "encoding=linear16",
+                $"sample_rate={config.SampleRate.ToString(CultureInfo.InvariantCulture)}",
+                $"channels={config.Channels.ToString(CultureInfo.InvariantCulture)}",
+                $"model={Uri.EscapeDataString(config.DeepgramModel)}",
+                "interim_results=true",
+                "smart_format=true",
+                "endpointing=300"
+            };
+
+            if (!string.IsNullOrWhiteSpace(config.Language) &&
+                !string.Equals(config.Language, "auto", StringComparison.OrdinalIgnoreCase))
+            {
+                query.Add($"language={Uri.EscapeDataString(config.Language)}");
+            }
+
+            return $"wss://api.deepgram.com/v1/listen?{string.Join("&", query)}";
+        }
+
+        private string GetHandshakeFailureDetails()
+        {
+            if (_webSocket == null) return string.Empty;
+
+            var details = new List<string>();
+
+            if ((int)_webSocket.HttpStatusCode > 0)
+            {
+                details.Add($"Handshake HTTP {(int)_webSocket.HttpStatusCode}");
+            }
+
+            var headers = _webSocket.HttpResponseHeaders;
+            if (headers != null)
+            {
+                if (headers.TryGetValue("dg-error", out var dgErrors))
+                {
+                    details.Add($"dg-error: {string.Join(", ", dgErrors)}");
+                }
+
+                if (headers.TryGetValue("x-dg-request-id", out var requestIds))
+                {
+                    details.Add($"request-id: {string.Join(", ", requestIds)}");
+                }
+            }
+
+            return string.Join("; ", details);
+        }
+
 private async Task<string> DiagnosticProbeAsync(string apiKey)
         {
             try
             {
                 using var httpClient = new HttpClient();
-                using var authCheck = new HttpRequestMessage(HttpMethod.Get, "https://api.deepgram.com/v1/projects");
+                using var authCheck = new HttpRequestMessage(HttpMethod.Get, "https://api.deepgram.com/v1/auth/token");
                 authCheck.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Token", apiKey);
 
                 using var authResponse = await httpClient.SendAsync(authCheck);
@@ -99,6 +143,9 @@ private async Task<string> DiagnosticProbeAsync(string apiKey)
                     return "API Key Rejected (401 Unauthorized). Please check your key in Settings.";
                 if (authResponse.StatusCode == System.Net.HttpStatusCode.Forbidden)
                     return "API Key Forbidden (403). Your key may be restricted or expired.";
+
+                if (!authResponse.IsSuccessStatusCode)
+                    return $"Auth probe failed with HTTP {(int)authResponse.StatusCode}.";
 
                 // Auth is fine — the WebSocket connect itself failed for another reason
                 return string.Empty;

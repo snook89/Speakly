@@ -19,8 +19,7 @@ namespace Speakly.Services
         private readonly ConcurrentQueue<byte[]> _connectionBuffer = new();
         private TaskCompletionSource? _finalResultTcs;
         private bool _isFinishing = false;
-        private static readonly HttpClient _httpClient = new HttpClient();
-        private const string Version = "1.4.0-QueryAuth";
+        private const string Version = "1.5.0-HeaderAuthFix";
 
         public event EventHandler<TranscriptionEventArgs>? TranscriptionReceived;
         public event EventHandler<string>? ErrorReceived;
@@ -41,10 +40,9 @@ namespace Speakly.Services
 
             _webSocket = new ClientWebSocket();
 
-            // Pass API key as a query parameter — most reliable for WebSocket auth in .NET
+            // Build URL without auth — auth goes in the Authorization header
             string url = string.Format(CultureInfo.InvariantCulture,
-                "wss://api.deepgram.com/v1/listen?token={0}&encoding=linear16&sample_rate={1}&channels={2}&model={3}&language={4}&interim_results=true&smart_format=true&endpointing=300",
-                apiKey,
+                "wss://api.deepgram.com/v1/listen?encoding=linear16&sample_rate={0}&channels={1}&model={2}&language={3}&interim_results=true&smart_format=true&endpointing=300",
                 config.SampleRate,
                 config.Channels,
                 config.DeepgramModel,
@@ -56,10 +54,16 @@ namespace Speakly.Services
 
             try
             {
-                string loggedUrl = url.Replace(apiKey, "REDACTED");
-                Logger.Log($"Connecting to Deepgram ({Version}): {loggedUrl}");
+                Logger.Log($"Connecting to Deepgram ({Version}): {url.Replace(apiKey, "REDACTED")}");
 
-                await _webSocket.ConnectAsync(new Uri(url), _cts.Token);
+                // Create a fresh HttpClient per connection so DefaultRequestHeaders are clean.
+                // Passing it as HttpMessageInvoker is the reliable way to send the Authorization
+                // header during the WebSocket upgrade in .NET 9.
+                using var httpClient = new HttpClient();
+                httpClient.DefaultRequestHeaders.Authorization =
+                    new System.Net.Http.Headers.AuthenticationHeaderValue("Token", apiKey);
+
+                await _webSocket.ConnectAsync(new Uri(url), httpClient, _cts.Token);
                 
                 // Flush buffer
                 while (_connectionBuffer.TryDequeue(out var bufferedData))
@@ -86,11 +90,11 @@ private async Task<string> DiagnosticProbeAsync(string apiKey)
         {
             try
             {
-                // Verify API key validity against the Deepgram REST API
+                using var httpClient = new HttpClient();
                 using var authCheck = new HttpRequestMessage(HttpMethod.Get, "https://api.deepgram.com/v1/projects");
                 authCheck.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Token", apiKey);
 
-                using var authResponse = await _httpClient.SendAsync(authCheck);
+                using var authResponse = await httpClient.SendAsync(authCheck);
                 if (authResponse.StatusCode == System.Net.HttpStatusCode.Unauthorized)
                     return "API Key Rejected (401 Unauthorized). Please check your key in Settings.";
                 if (authResponse.StatusCode == System.Net.HttpStatusCode.Forbidden)

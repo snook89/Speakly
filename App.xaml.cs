@@ -22,6 +22,7 @@ namespace Speakly
         private SoundPlayer? _startSound;
         private SoundPlayer? _stopSound;
         private bool _isToggleRecording = false; // Track toggle-record state
+        private bool _finalTranscriptReceivedInCurrentSession = false;
         private IntPtr _lastActiveWindow = IntPtr.Zero;
         private System.IO.MemoryStream? _audioBuffer; // For debug records
 
@@ -126,6 +127,7 @@ namespace Speakly
                 if (_recorder != null && !_recorder.IsRecording)
                 {
                     _lastActiveWindow = TextInserter.GetForegroundWindow();
+                    _finalTranscriptReceivedInCurrentSession = false;
                     Logger.Log($"PTT Hotkey Pressed. Captured active window: {_lastActiveWindow}");
                     
                     _overlay?.SetStatus("RECORDING", Brushes.Red);
@@ -149,6 +151,7 @@ namespace Speakly
                 if (!_isToggleRecording)
                 {
                     _lastActiveWindow = TextInserter.GetForegroundWindow();
+                    _finalTranscriptReceivedInCurrentSession = false;
                     Logger.Log($"Toggle Recording Started. Captured active window: {_lastActiveWindow}");
                     
                     _isToggleRecording = true;
@@ -218,6 +221,11 @@ namespace Speakly
                 _audioBuffer.Dispose();
                 _audioBuffer = null;
             }
+
+            if (!_finalTranscriptReceivedInCurrentSession)
+            {
+                _overlay?.SetStatus("READY", Brushes.Aqua);
+            }
         }
 
         private void SaveDebugRecord()
@@ -280,6 +288,7 @@ namespace Speakly
             Logger.Log($"App received transcription: isFinal={e.IsFinal}, Text='{e.Text}'");
             if (e.IsFinal)
             {
+                _finalTranscriptReceivedInCurrentSession = true;
                 string textToInsert = e.Text;
 
                 if (_refiner != null)

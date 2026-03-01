@@ -59,7 +59,9 @@ namespace Speakly.Services
 
             try
             {
-                byte[] wavBytes = CreateWavHeader(_audioBuffer.ToArray());
+                int sampleRate = ConfigManager.Config.SampleRate;
+                int channels = ConfigManager.Config.Channels;
+                byte[] wavBytes = CreateWavHeader(_audioBuffer.ToArray(), sampleRate, channels);
 
                 using var content = new MultipartFormDataContent();
                 
@@ -68,7 +70,11 @@ namespace Speakly.Services
                 content.Add(fileContent, "file", "audio.wav");
                 
                 content.Add(new StringContent(ConfigManager.Config.OpenAISttModel), "model");
-                content.Add(new StringContent("en"), "language");
+                var configuredLanguage = ConfigManager.Config.Language?.Trim();
+                if (!string.IsNullOrWhiteSpace(configuredLanguage) && !string.Equals(configuredLanguage, "auto", StringComparison.OrdinalIgnoreCase))
+                {
+                    content.Add(new StringContent(configuredLanguage), "language");
+                }
                 
                 var request = new HttpRequestMessage(HttpMethod.Post, "https://api.openai.com/v1/audio/transcriptions")
                 {
@@ -104,7 +110,7 @@ namespace Speakly.Services
             }
         }
         
-        private byte[] CreateWavHeader(byte[] rawPcmData)
+        private byte[] CreateWavHeader(byte[] rawPcmData, int sampleRate, int channels)
         {
             using var ms = new MemoryStream();
             using var writer = new BinaryWriter(ms);
@@ -115,10 +121,10 @@ namespace Speakly.Services
             writer.Write("fmt ".ToCharArray());
             writer.Write(16);
             writer.Write((short)1); // PCM
-            writer.Write((short)1); // Channels (Mono)
-            writer.Write(16000);    // Sample Rate
-            writer.Write(16000 * 1 * 2); // Byte Rate
-            writer.Write((short)(1 * 2)); // Block Align
+            writer.Write((short)channels);
+            writer.Write(sampleRate);
+            writer.Write(sampleRate * channels * 2);
+            writer.Write((short)(channels * 2));
             writer.Write((short)16); // Bits Per Sample
             writer.Write("data".ToCharArray());
             writer.Write(rawPcmData.Length);

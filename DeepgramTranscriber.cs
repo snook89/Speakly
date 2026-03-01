@@ -93,13 +93,30 @@ namespace Speakly.Services
                 "endpointing=300"
             };
 
-            if (!string.IsNullOrWhiteSpace(config.Language) &&
-                !string.Equals(config.Language, "auto", StringComparison.OrdinalIgnoreCase))
+            var configuredLanguage = config.Language?.Trim();
+            if (!string.IsNullOrWhiteSpace(configuredLanguage))
             {
-                query.Add($"language={Uri.EscapeDataString(config.Language)}");
+                if (string.Equals(configuredLanguage, "auto", StringComparison.OrdinalIgnoreCase))
+                {
+                    if (SupportsMultilingualStreaming(config.DeepgramModel))
+                    {
+                        query.Add("language=multi");
+                    }
+                }
+                else
+                {
+                    query.Add($"language={Uri.EscapeDataString(configuredLanguage)}");
+                }
             }
 
             return $"wss://api.deepgram.com/v1/listen?{string.Join("&", query)}";
+        }
+
+        private static bool SupportsMultilingualStreaming(string? model)
+        {
+            if (string.IsNullOrWhiteSpace(model)) return false;
+            var normalizedModel = model.Trim().ToLowerInvariant();
+            return normalizedModel.StartsWith("nova-3") || normalizedModel.StartsWith("nova-2");
         }
 
         private string GetHandshakeFailureDetails()

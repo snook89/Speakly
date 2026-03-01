@@ -109,6 +109,42 @@ namespace Speakly
             return configuredLanguage.ToUpperInvariant();
         }
 
+        private string ResolveEffectiveInputLanguageCode()
+        {
+            var configuredLanguage = ConfigManager.Config.Language?.Trim();
+            if (string.IsNullOrWhiteSpace(configuredLanguage)) return "en";
+
+            if (string.Equals(configuredLanguage, "layout", StringComparison.OrdinalIgnoreCase))
+            {
+                return InputLanguageResolver.ResolveCurrentLanguageCode("en").ToLowerInvariant();
+            }
+
+            if (string.Equals(configuredLanguage, "auto", StringComparison.OrdinalIgnoreCase))
+            {
+                return "multi";
+            }
+
+            return configuredLanguage.ToLowerInvariant();
+        }
+
+        private void AutoAdjustRefinementPromptForLanguage()
+        {
+            try
+            {
+                string inputLanguage = ResolveEffectiveInputLanguageCode();
+                if ((inputLanguage == "en" || inputLanguage.StartsWith("en-", StringComparison.OrdinalIgnoreCase)) &&
+                    RefinementPromptLibrary.IsUkrainianPreset(ConfigManager.Config.RefinementPrompt))
+                {
+                    ConfigManager.Config.RefinementPrompt = RefinementPromptLibrary.General;
+                    Logger.Log("Auto-switched refinement prompt from Ukrainian preset to General due to EN input language.");
+                }
+            }
+            catch (Exception ex)
+            {
+                Logger.LogException("AutoAdjustRefinementPromptForLanguage", ex);
+            }
+        }
+
         private bool IsHotkeyMatch(string configStr, HotkeyEventArgs e)
         {
             if (string.IsNullOrWhiteSpace(configStr)) return false;
@@ -145,6 +181,7 @@ namespace Speakly
                 {
                     _lastActiveWindow = TextInserter.GetForegroundWindow();
                     Logger.Log($"PTT Hotkey Pressed. Captured active window: {_lastActiveWindow}");
+                    AutoAdjustRefinementPromptForLanguage();
                     _overlay?.SetActiveLanguage(ResolveOverlayLanguageDisplay());
                     _overlay?.SetStatus("RECORDING", Brushes.Red);
                     _startSound?.Play();
@@ -168,6 +205,7 @@ namespace Speakly
                 {
                     _lastActiveWindow = TextInserter.GetForegroundWindow();
                     Logger.Log($"Toggle Recording Started. Captured active window: {_lastActiveWindow}");
+                    AutoAdjustRefinementPromptForLanguage();
                     _overlay?.SetActiveLanguage(ResolveOverlayLanguageDisplay());
                     _isToggleRecording = true;
                     _overlay?.SetStatus("RECORDING", Brushes.OrangeRed);

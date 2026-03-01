@@ -12,6 +12,8 @@
         Foreground="{DynamicResource AppFgBrush}"
         FontFamily="Segoe UI">
     <Window.Resources>
+        <BooleanToVisibilityConverter x:Key="BoolToVisibilityConverter"/>
+
         <!-- Tab style -->
         <Style x:Key="ModernTabItem" TargetType="TabItem">
             <Setter Property="Foreground" Value="{DynamicResource AppFgBrush}"/>
@@ -231,7 +233,7 @@
             </TabItem>
 
             <!-- Refinement Tab -->
-            <TabItem Header="Refinement" Style="{StaticResource ModernTabItem}">
+            <TabItem Header="{Binding RefinementTabHeader}" Style="{StaticResource ModernTabItem}">
                 <ScrollViewer VerticalScrollBarVisibility="Auto">
                     <StackPanel Margin="0,20,0,0">
                         <TextBlock Text="Refinement Service" Style="{StaticResource FieldLabel}"/>
@@ -266,8 +268,8 @@
                                 Foreground="{DynamicResource AppFgBrush}"
                                 BorderThickness="0"
                                 Cursor="Hand"/>
-                            <Button Content="Reset Prompt"
-                                Command="{Binding ResetRefinementPromptCommand}"
+                            <Button Content="Clear"
+                                Command="{Binding ClearRefinementPromptCommand}"
                                 Padding="12,6"
                                 Margin="8,0,0,0"
                                 Background="{DynamicResource AppControlBorderBrush}"
@@ -275,6 +277,19 @@
                                 BorderThickness="0"
                                 Cursor="Hand"/>
                         </StackPanel>
+
+                        <Border Background="#33FFAA00"
+                                BorderBrush="#88FFAA00"
+                                BorderThickness="1"
+                                CornerRadius="8"
+                                Padding="10,8"
+                                Margin="0,0,0,10"
+                                Visibility="{Binding IsRefinementPromptMissing, Converter={StaticResource BoolToVisibilityConverter}}">
+                            <TextBlock Text="⚠ Custom System Prompt is empty. Refinement may behave unpredictably. Choose a preset or enter your own prompt."
+                                       TextWrapping="Wrap"
+                                       FontSize="11"
+                                       Foreground="{DynamicResource AppFgBrush}"/>
+                        </Border>
 
                         <TextBlock Text="Custom System Prompt" Style="{StaticResource FieldLabel}"/>
                         <TextBox Text="{Binding RefinementPrompt}" AcceptsReturn="True" Height="140"

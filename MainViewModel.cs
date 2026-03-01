@@ -27,25 +27,13 @@ namespace Speakly.ViewModels
         private bool _isRefreshingModels;
         private string _modelRefreshStatus = "Model list: defaults loaded";
 
-        private const string RefinementPromptPresetGeneral = AppConfig.DefaultRefinementPrompt;
-
-        private const string RefinementPromptPresetUkrainian =
-            "Role and Objective:\n" +
-            "- Refine transcribed speech-to-text outputs in Ukrainian for clarity, accuracy, and formatting compliance.\n\n" +
-            "Instructions:\n" +
-            "- Preserve the original meaning and intent of the message.\n" +
-            "- Ensure the final text is in Ukrainian and uses natural, correct Ukrainian grammar and punctuation.\n" +
-            "- If a user-provided format instruction appears at the end of the transcribed text, apply the format to the output but do not include the instruction itself in the final refined text.\n" +
-            "- Do not introduce content that is not implied in the original input.\n" +
-            "- Never answer as a chatbot, never ask follow-up questions, and never provide explanations.\n" +
-            "- If input is mixed, noisy, or unclear, return the original transcript unchanged.\n\n" +
-            "Output Format:\n" +
-            "- Output only the refined transcribed text as a single string.";
+        private const string RefinementPromptPresetGeneral = RefinementPromptLibrary.General;
+        private const string RefinementPromptPresetUkrainian = RefinementPromptLibrary.Ukrainian;
 
         public ICommand SaveCommand { get; }
         public ICommand RefreshModelsCommand { get; }
         public ICommand ApplyRefinementPromptPresetCommand { get; }
-        public ICommand ResetRefinementPromptCommand { get; }
+        public ICommand ClearRefinementPromptCommand { get; }
 
         public bool IsRefreshingModels
         {
@@ -194,8 +182,17 @@ namespace Speakly.ViewModels
         public string RefinementPrompt
         {
             get => ConfigManager.Config.RefinementPrompt;
-            set { ConfigManager.Config.RefinementPrompt = value; OnPropertyChanged(); }
+            set
+            {
+                ConfigManager.Config.RefinementPrompt = value;
+                OnPropertyChanged();
+                OnPropertyChanged(nameof(IsRefinementPromptMissing));
+                OnPropertyChanged(nameof(RefinementTabHeader));
+            }
         }
+
+        public bool IsRefinementPromptMissing => string.IsNullOrWhiteSpace(RefinementPrompt);
+        public string RefinementTabHeader => IsRefinementPromptMissing ? "Refinement ⚠" : "Refinement";
 
         public bool MinimizeToTray
         {
@@ -299,9 +296,9 @@ namespace Speakly.ViewModels
                 }
             });
 
-            ResetRefinementPromptCommand = new RelayCommand(_ =>
+            ClearRefinementPromptCommand = new RelayCommand(_ =>
             {
-                RefinementPrompt = AppConfig.DefaultRefinementPrompt;
+                RefinementPrompt = string.Empty;
             });
         }
 

@@ -20,7 +20,7 @@ namespace Speakly.Services
         private TaskCompletionSource? _finalResultTcs;
         private bool _isFinishing = false;
         private static readonly HttpClient _httpClient = new HttpClient();
-        private const string Version = "1.3.0-AuthFix";
+        private const string Version = "1.4.0-QueryAuth";
 
         public event EventHandler<TranscriptionEventArgs>? TranscriptionReceived;
         public event EventHandler<string>? ErrorReceived;
@@ -40,11 +40,11 @@ namespace Speakly.Services
             }
 
             _webSocket = new ClientWebSocket();
-            _webSocket.Options.SetRequestHeader("Authorization", $"Token {apiKey}");
 
-            // Use InvariantCulture to ensure numbers are formatted correctly
+            // Pass API key as a query parameter — most reliable for WebSocket auth in .NET
             string url = string.Format(CultureInfo.InvariantCulture,
-                "wss://api.deepgram.com/v1/listen?encoding=linear16&sample_rate={0}&channels={1}&model={2}&language={3}&interim_results=true&smart_format=true&endpointing=300",
+                "wss://api.deepgram.com/v1/listen?token={0}&encoding=linear16&sample_rate={1}&channels={2}&model={3}&language={4}&interim_results=true&smart_format=true&endpointing=300",
+                apiKey,
                 config.SampleRate,
                 config.Channels,
                 config.DeepgramModel,
@@ -56,9 +56,8 @@ namespace Speakly.Services
 
             try
             {
-                // Mask token in logs
-                string loggedUrl = url.Replace(apiKey, "REDACTED_TOKEN");
-                Logger.Log($"Connecting to Deepgram (v1.2.0): {loggedUrl}");
+                string loggedUrl = url.Replace(apiKey, "REDACTED");
+                Logger.Log($"Connecting to Deepgram ({Version}): {loggedUrl}");
 
                 await _webSocket.ConnectAsync(new Uri(url), _cts.Token);
                 

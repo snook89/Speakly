@@ -142,7 +142,7 @@
                                 <ColumnDefinition Width="*"/>
                                 <ColumnDefinition Width="Auto"/>
                             </Grid.ColumnDefinitions>
-                            <TextBox x:Name="PttHotkeyBox" Text="{Binding PttHotkey}" Grid.Column="0" IsReadOnly="True" Cursor="Hand" />
+                            <ui:TextBox x:Name="PttHotkeyBox" Text="{Binding PttHotkey}" Grid.Column="0" IsReadOnly="True" Cursor="Hand" />
                             <ui:Button x:Name="SetPttBtn" Grid.Column="1" Content="Set Key" Margin="6,0,0,0" Padding="10,0" Click="SetPtt_Click" Background="{DynamicResource AppControlBorderBrush}" Foreground="{DynamicResource AppFgBrush}" BorderThickness="0" Cursor="Hand"/>
                         </Grid>
                         <TextBlock Text="e.g. Space · LeftCtrl · LeftAlt · F1 … F12"
@@ -155,7 +155,7 @@
                                 <ColumnDefinition Width="*"/>
                                 <ColumnDefinition Width="Auto"/>
                             </Grid.ColumnDefinitions>
-                            <TextBox x:Name="RecordHotkeyBox" Text="{Binding RecordHotkey}" Grid.Column="0" IsReadOnly="True" Cursor="Hand" />
+                            <ui:TextBox x:Name="RecordHotkeyBox" Text="{Binding RecordHotkey}" Grid.Column="0" IsReadOnly="True" Cursor="Hand" />
                             <ui:Button x:Name="SetRecBtn" Grid.Column="1" Content="Set Key" Margin="6,0,0,0" Padding="10,0" Click="SetRec_Click" Background="{DynamicResource AppControlBorderBrush}" Foreground="{DynamicResource AppFgBrush}" BorderThickness="0" Cursor="Hand"/>
                         </Grid>
                         <TextBlock Text="e.g. F9 · Insert · Scroll Lock — must differ from PTT key"
@@ -172,17 +172,17 @@
                         <ComboBox ItemsSource="{Binding AvailableAudioDevices}" SelectedItem="{Binding AudioDevice}" Margin="0,0,0,18"/>
 
                         <TextBlock Text="Sample Rate (Hz)" Style="{StaticResource FieldLabel}"/>
-                        <TextBox Text="{Binding SampleRate}" Margin="0,0,0,5"/>
+                        <ui:TextBox Text="{Binding SampleRate}" Margin="0,0,0,5"/>
                         <TextBlock Text="Hint: 16000 is recommended for most STT models (Nova-3, Whisper)."
                                    FontSize="11" Foreground="{DynamicResource AppTextMutedBrush}" Margin="0,0,0,18"/>
 
                         <TextBlock Text="Chunk Size (Bytes)" Style="{StaticResource FieldLabel}"/>
-                        <TextBox Text="{Binding ChunkSize}" Margin="0,0,0,5"/>
+                        <ui:TextBox Text="{Binding ChunkSize}" Margin="0,0,0,5"/>
                         <TextBlock Text="Hint: 4096 is standard. Smaller values decrease latency but increase CPU usage."
                                    FontSize="11" Foreground="{DynamicResource AppTextMutedBrush}" Margin="0,0,0,18"/>
 
                         <TextBlock Text="Channels" Style="{StaticResource FieldLabel}"/>
-                        <TextBox Text="{Binding Channels}" Margin="0,0,0,5"/>
+                        <ui:TextBox Text="{Binding Channels}" Margin="0,0,0,5"/>
                         <TextBlock Text="Hint: 1 (Mono) is best. Most AI models only support mono input."
                                    FontSize="11" Foreground="{DynamicResource AppTextMutedBrush}" Margin="0,0,0,18"/>
 
@@ -207,7 +207,7 @@
                         </ComboBox>
 
                         <TextBlock Text="Language (ISO Code)" Style="{StaticResource FieldLabel}"/>
-                        <TextBox Text="{Binding Language}" Margin="0,0,0,5"/>
+                        <ui:TextBox Text="{Binding Language}" Margin="0,0,0,5"/>
                         <TextBlock Text="e.g. 'en', 'uk', 'es'. Use 'layout' to follow current keyboard layout. Deepgram 'auto' uses multilingual mode ('multi')."
                                    FontSize="11" Foreground="{DynamicResource AppTextMutedBrush}" Margin="0,0,0,18"/>
 
@@ -306,7 +306,7 @@
                         </Border>
 
                         <TextBlock Text="Custom System Prompt" Style="{StaticResource FieldLabel}"/>
-                        <TextBox Text="{Binding RefinementPrompt}" AcceptsReturn="True" Height="140"
+                        <ui:TextBox Text="{Binding RefinementPrompt}" AcceptsReturn="True" Height="140"
                                  TextWrapping="Wrap" VerticalScrollBarVisibility="Auto" Margin="0,0,0,18"/>
                     </StackPanel>
                 </ScrollViewer>
@@ -325,7 +325,7 @@
                                 <ColumnDefinition Width="Auto"/>
                             </Grid.ColumnDefinitions>
                             <PasswordBox x:Name="DeepgramPwdBox" Grid.Column="0"/>
-                            <TextBox x:Name="DeepgramTxtBox" Grid.Column="0" Visibility="Collapsed"
+                            <ui:TextBox x:Name="DeepgramTxtBox" Grid.Column="0" Visibility="Collapsed"
                                      Text="{Binding DeepgramApiKey}"/>
                                 <ui:Button Grid.Column="1" x:Name="DeepgramReveal" Content="👁 Show"
                                     Style="{StaticResource RevealButton}" Margin="6,0,0,0"
@@ -340,7 +340,7 @@
                                 <ColumnDefinition Width="Auto"/>
                             </Grid.ColumnDefinitions>
                             <PasswordBox x:Name="OpenAIPwdBox" Grid.Column="0"/>
-                            <TextBox x:Name="OpenAITxtBox" Grid.Column="0" Visibility="Collapsed"
+                            <ui:TextBox x:Name="OpenAITxtBox" Grid.Column="0" Visibility="Collapsed"
                                      Text="{Binding OpenAIApiKey}"/>
                                 <ui:Button Grid.Column="1" x:Name="OpenAIReveal" Content="👁 Show"
                                     Style="{StaticResource RevealButton}" Margin="6,0,0,0"
@@ -355,7 +355,7 @@
                                 <ColumnDefinition Width="Auto"/>
                             </Grid.ColumnDefinitions>
                             <PasswordBox x:Name="OpenRouterPwdBox" Grid.Column="0"/>
-                            <TextBox x:Name="OpenRouterTxtBox" Grid.Column="0" Visibility="Collapsed"
+                            <ui:TextBox x:Name="OpenRouterTxtBox" Grid.Column="0" Visibility="Collapsed"
                                      Text="{Binding OpenRouterApiKey}"/>
                                 <ui:Button Grid.Column="1" x:Name="OpenRouterReveal" Content="👁 Show"
                                     Style="{StaticResource RevealButton}" Margin="6,0,0,0"
@@ -370,7 +370,7 @@
                                 <ColumnDefinition Width="Auto"/>
                             </Grid.ColumnDefinitions>
                             <PasswordBox x:Name="CerebrasPwdBox" Grid.Column="0"/>
-                            <TextBox x:Name="CerebrasTxtBox" Grid.Column="0" Visibility="Collapsed"
+                            <ui:TextBox x:Name="CerebrasTxtBox" Grid.Column="0" Visibility="Collapsed"
                                      Text="{Binding CerebrasApiKey}"/>
                                 <ui:Button Grid.Column="1" x:Name="CerebrasReveal" Content="👁 Show"
                                     Style="{StaticResource RevealButton}" Margin="6,0,0,0"

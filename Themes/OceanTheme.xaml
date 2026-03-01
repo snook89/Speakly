@@ -1,0 +1,12 @@
+<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <!-- Ocean Theme -->
+    <SolidColorBrush x:Key="AppBgBrush" Color="#0B132B"/>
+    <SolidColorBrush x:Key="AppFgBrush" Color="#E0FBFC"/>
+    <SolidColorBrush x:Key="AppAccentBrush" Color="#29B6F6"/>
+    <SolidColorBrush x:Key="AppControlBgBrush" Color="#1C2541"/>
+    <SolidColorBrush x:Key="AppControlSelectedBrush" Color="#3A506B"/>
+    <SolidColorBrush x:Key="AppControlBorderBrush" Color="#3A506B"/>
+    <SolidColorBrush x:Key="AppTextMutedBrush" Color="#5BC0BE"/>
+    <SolidColorBrush x:Key="AppFooterBgBrush" Color="#080E21"/>
+</ResourceDictionary>

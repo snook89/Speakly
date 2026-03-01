@@ -1,0 +1,44 @@
+## .NET / C# / WPF
+# Build outputs
+bin/
+obj/
+
+# Visual Studio files
+.vs/
+*.suo
+*.user
+*.userosscache
+*.sln.docstates
+
+# NuGet
+*.nupkg
+*.snupkg
+packages/
+project.lock.json
+project.fragment.lock.json
+artifacts/
+
+# Rider / JetBrains
+.idea/
+*.sln.iml
+
+# VS Code
+.vscode/
+
+# Build error/output logs (project-specific)
+build_errors.txt
+build_output.txt
+
+# User config (contains API keys — never commit)
+%APPDATA%/Speakly/config.json
+
+# Debug audio recordings
+Records/
+
+# OS
+Thumbs.db
+Desktop.ini
+.DS_Store
+
+# Publish outputs
+publish/

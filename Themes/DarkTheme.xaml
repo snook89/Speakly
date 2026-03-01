@@ -1,0 +1,12 @@
+<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <!-- Dark Theme (Default) -->
+    <SolidColorBrush x:Key="AppBgBrush" Color="#121212"/>
+    <SolidColorBrush x:Key="AppFgBrush" Color="#FFFFFF"/>
+    <SolidColorBrush x:Key="AppAccentBrush" Color="#00D2FF"/>
+    <SolidColorBrush x:Key="AppControlBgBrush" Color="#1E1E1E"/>
+    <SolidColorBrush x:Key="AppControlSelectedBrush" Color="#2A2A2A"/>
+    <SolidColorBrush x:Key="AppControlBorderBrush" Color="#333333"/>
+    <SolidColorBrush x:Key="AppTextMutedBrush" Color="#AAAAAA"/>
+    <SolidColorBrush x:Key="AppFooterBgBrush" Color="#1A1A1A"/>
+</ResourceDictionary>

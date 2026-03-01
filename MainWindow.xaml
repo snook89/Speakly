@@ -122,10 +122,10 @@
                             <ComboBoxItem Content="Ocean"/>
                         </ComboBox>
 
-                        <CheckBox Content="Minimize to Tray on Close" IsChecked="{Binding MinimizeToTray}"
-                                  Foreground="{DynamicResource AppFgBrush}" Margin="0,0,0,12"/>
-                        <CheckBox Content="Enable Debug Logs" IsChecked="{Binding EnableDebugLogs}"
-                                  Foreground="{DynamicResource AppFgBrush}" Margin="0,0,0,18"/>
+                        <ui:ToggleSwitch Content="Minimize to Tray on Close" IsChecked="{Binding MinimizeToTray}"
+                                         Foreground="{DynamicResource AppFgBrush}" Margin="0,0,0,12"/>
+                        <ui:ToggleSwitch Content="Enable Debug Logs" IsChecked="{Binding EnableDebugLogs}"
+                                         Foreground="{DynamicResource AppFgBrush}" Margin="0,0,0,18"/>
                     </StackPanel>
                 </ScrollViewer>
             </ui:TabViewItem>
@@ -186,7 +186,7 @@
                         <TextBlock Text="Hint: 1 (Mono) is best. Most AI models only support mono input."
                                    FontSize="11" Foreground="{DynamicResource AppTextMutedBrush}" Margin="0,0,0,18"/>
 
-                        <CheckBox Content="Save Debug Records" IsChecked="{Binding SaveDebugRecords}" Margin="0,10,0,5"/>
+                        <ui:ToggleSwitch Content="Save Debug Records" IsChecked="{Binding SaveDebugRecords}" Margin="0,10,0,5"/>
                         <TextBlock Text="Saves timestamped .wav files to 'Records' folder for troubleshooting."
                                    FontSize="11" Foreground="{DynamicResource AppTextMutedBrush}" Margin="0,0,0,18"/>
 

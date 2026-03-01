@@ -1,10 +1,15 @@
 using System;
+using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.ComponentModel;
+using System.Linq;
+using System.Net.Http;
+using System.Net.Http.Headers;
 using System.Runtime.CompilerServices;
 using System.Windows;
 using System.Windows.Input;
 using System.Text;
+using System.Text.Json;
 using System.Threading.Tasks;
 using NAudio.Wave;
 using Speakly.Config;
@@ -16,6 +21,9 @@ namespace Speakly.ViewModels
     public class MainViewModel : INotifyPropertyChanged
     {
         public event PropertyChangedEventHandler? PropertyChanged;
+        private static readonly HttpClient _httpClient = new HttpClient { Timeout = TimeSpan.FromSeconds(20) };
+        private readonly Dictionary<string, List<string>> _dynamicSttModels = new(StringComparer.OrdinalIgnoreCase);
+        private readonly Dictionary<string, List<string>> _dynamicRefinementModels = new(StringComparer.OrdinalIgnoreCase);
 
         public ICommand SaveCommand { get; }
 
@@ -215,6 +223,7 @@ namespace Speakly.ViewModels
             LoadAudioDevices();
             UpdateSttModelList();
             UpdateRefinementModelList();
+            _ = RefreshProviderModelsAsync();
             
             foreach (var entry in HistoryManager.GetHistory())
             {
@@ -242,6 +251,12 @@ namespace Speakly.ViewModels
         private void UpdateSttModelList()
         {
             AvailableSttModels.Clear();
+            if (TryApplyDynamicModels(AvailableSttModels, _dynamicSttModels, SttModel))
+            {
+                OnPropertyChanged(nameof(SelectedSttModelString));
+                return;
+            }
+
             if (SttModel == "Deepgram")
             {
                 AvailableSttModels.Add("nova-2");
@@ -264,6 +279,12 @@ namespace Speakly.ViewModels
         private void UpdateRefinementModelList()
         {
             AvailableRefinementModels.Clear();
+            if (TryApplyDynamicModels(AvailableRefinementModels, _dynamicRefinementModels, RefinementModel))
+            {
+                OnPropertyChanged(nameof(SelectedRefinementModelString));
+                return;
+            }
+
             if (RefinementModel == "OpenAI")
             {
                 AvailableRefinementModels.Add("gpt-4o-mini");
@@ -289,6 +310,194 @@ namespace Speakly.ViewModels
                 AvailableRefinementModels.Add("deepseek/deepseek-chat");
             }
             OnPropertyChanged(nameof(SelectedRefinementModelString));
+        }
+
+        private bool TryApplyDynamicModels(ObservableCollection<string> target, Dictionary<string, List<string>> catalog, string provider)
+        {
+            if (!catalog.TryGetValue(provider, out var models) || models.Count == 0)
+            {
+                return false;
+            }
+
+            foreach (var model in models)
+            {
+                target.Add(model);
+            }
+
+            return true;
+        }
+
+        private async Task RefreshProviderModelsAsync()
+        {
+            try
+            {
+                var config = ConfigManager.Config;
+
+                if (!string.IsNullOrWhiteSpace(config.DeepgramApiKey))
+                {
+                    var deepgramModels = await FetchDeepgramModelsAsync(config.DeepgramApiKey.Trim());
+                    if (deepgramModels.Count > 0)
+                    {
+                        _dynamicSttModels["Deepgram"] = deepgramModels;
+                    }
+                }
+
+                if (!string.IsNullOrWhiteSpace(config.OpenAIApiKey))
+                {
+                    var openAiModels = await FetchModelsFromEndpointAsync(
+                        "https://api.openai.com/v1/models",
+                        new AuthenticationHeaderValue("Bearer", config.OpenAIApiKey.Trim()));
+
+                    var openAiSttModels = openAiModels
+                        .Where(IsOpenAiSttModel)
+                        .OrderBy(m => m, StringComparer.OrdinalIgnoreCase)
+                        .ToList();
+
+                    var openAiRefinementModels = openAiModels
+                        .Where(IsOpenAiRefinementModel)
+                        .OrderBy(m => m, StringComparer.OrdinalIgnoreCase)
+                        .ToList();
+
+                    if (openAiSttModels.Count > 0)
+                    {
+                        _dynamicSttModels["OpenAI"] = openAiSttModels;
+                    }
+
+                    if (openAiRefinementModels.Count > 0)
+                    {
+                        _dynamicRefinementModels["OpenAI"] = openAiRefinementModels;
+                    }
+                }
+
+                if (!string.IsNullOrWhiteSpace(config.CerebrasApiKey))
+                {
+                    var cerebrasModels = await FetchModelsFromEndpointAsync(
+                        "https://api.cerebras.ai/v1/models",
+                        new AuthenticationHeaderValue("Bearer", config.CerebrasApiKey.Trim()));
+
+                    if (cerebrasModels.Count > 0)
+                    {
+                        _dynamicRefinementModels["Cerebras"] = cerebrasModels
+                            .OrderBy(m => m, StringComparer.OrdinalIgnoreCase)
+                            .ToList();
+                    }
+                }
+
+                if (!string.IsNullOrWhiteSpace(config.OpenRouterApiKey))
+                {
+                    var openRouterModels = await FetchModelsFromEndpointAsync(
+                        "https://openrouter.ai/api/v1/models",
+                        new AuthenticationHeaderValue("Bearer", config.OpenRouterApiKey.Trim()));
+
+                    if (openRouterModels.Count > 0)
+                    {
+                        _dynamicRefinementModels["OpenRouter"] = openRouterModels
+                            .OrderBy(m => m, StringComparer.OrdinalIgnoreCase)
+                            .Take(200)
+                            .ToList();
+                    }
+                }
+
+                UpdateSttModelList();
+                UpdateRefinementModelList();
+            }
+            catch (Exception ex)
+            {
+                Logger.LogException("RefreshProviderModelsAsync", ex);
+            }
+        }
+
+        private async Task<List<string>> FetchDeepgramModelsAsync(string apiKey)
+        {
+            var models = await FetchModelsFromEndpointAsync(
+                "https://api.deepgram.com/v1/models",
+                new AuthenticationHeaderValue("Token", apiKey));
+
+            return models
+                .Where(m => m.Contains("nova", StringComparison.OrdinalIgnoreCase) ||
+                            m.Contains("whisper", StringComparison.OrdinalIgnoreCase) ||
+                            m.Contains("flux", StringComparison.OrdinalIgnoreCase))
+                .OrderBy(m => m, StringComparer.OrdinalIgnoreCase)
+                .ToList();
+        }
+
+        private async Task<List<string>> FetchModelsFromEndpointAsync(string url, AuthenticationHeaderValue authHeader)
+        {
+            using var request = new HttpRequestMessage(HttpMethod.Get, url);
+            request.Headers.Authorization = authHeader;
+
+            using var response = await _httpClient.SendAsync(request);
+            if (!response.IsSuccessStatusCode)
+            {
+                return new List<string>();
+            }
+
+            var json = await response.Content.ReadAsStringAsync();
+            return ExtractModelIds(json);
+        }
+
+        private static List<string> ExtractModelIds(string json)
+        {
+            var results = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+            using var document = JsonDocument.Parse(json);
+            var root = document.RootElement;
+
+            if (root.TryGetProperty("data", out var dataArray) && dataArray.ValueKind == JsonValueKind.Array)
+            {
+                CollectModelIdsFromArray(dataArray, results);
+            }
+
+            if (root.TryGetProperty("models", out var modelsArray) && modelsArray.ValueKind == JsonValueKind.Array)
+            {
+                CollectModelIdsFromArray(modelsArray, results);
+            }
+
+            if (root.ValueKind == JsonValueKind.Array)
+            {
+                CollectModelIdsFromArray(root, results);
+            }
+
+            return results.OrderBy(x => x, StringComparer.OrdinalIgnoreCase).ToList();
+        }
+
+        private static void CollectModelIdsFromArray(JsonElement arrayElement, HashSet<string> results)
+        {
+            foreach (var item in arrayElement.EnumerateArray())
+            {
+                if (item.ValueKind == JsonValueKind.String)
+                {
+                    var value = item.GetString();
+                    if (!string.IsNullOrWhiteSpace(value)) results.Add(value.Trim());
+                    continue;
+                }
+
+                if (item.ValueKind != JsonValueKind.Object) continue;
+
+                foreach (var propertyName in new[] { "id", "model", "name" })
+                {
+                    if (item.TryGetProperty(propertyName, out var valueElement) && valueElement.ValueKind == JsonValueKind.String)
+                    {
+                        var value = valueElement.GetString();
+                        if (!string.IsNullOrWhiteSpace(value)) results.Add(value.Trim());
+                    }
+                }
+            }
+        }
+
+        private static bool IsOpenAiSttModel(string modelId)
+        {
+            return modelId.Contains("whisper", StringComparison.OrdinalIgnoreCase)
+                   || modelId.Contains("transcribe", StringComparison.OrdinalIgnoreCase);
+        }
+
+        private static bool IsOpenAiRefinementModel(string modelId)
+        {
+            var normalized = modelId.Trim().ToLowerInvariant();
+            return normalized.StartsWith("gpt-")
+                   || normalized.StartsWith("o1")
+                   || normalized.StartsWith("o3")
+                   || normalized.StartsWith("o4");
         }
 
         private async Task TestApiConnectionsAsync()

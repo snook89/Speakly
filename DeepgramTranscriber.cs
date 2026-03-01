@@ -20,7 +20,7 @@ namespace Speakly.Services
         private TaskCompletionSource? _finalResultTcs;
         private bool _isFinishing = false;
         private static readonly HttpClient _httpClient = new HttpClient();
-        private const string Version = "1.1.0-Diagnostic";
+        private const string Version = "1.3.0-AuthFix";
 
         public event EventHandler<TranscriptionEventArgs>? TranscriptionReceived;
         public event EventHandler<string>? ErrorReceived;
@@ -41,8 +41,8 @@ namespace Speakly.Services
 
             _webSocket = new ClientWebSocket();
             _webSocket.Options.SetRequestHeader("Authorization", $"Token {apiKey}");
-            
-            // Use InvariantCulture to ensure numbers are formatted correctly (e.g., 16000 instead of 16.000)
+
+            // Use InvariantCulture to ensure numbers are formatted correctly
             string url = string.Format(CultureInfo.InvariantCulture,
                 "wss://api.deepgram.com/v1/listen?encoding=linear16&sample_rate={0}&channels={1}&model={2}&language={3}&interim_results=true&smart_format=true&endpointing=300",
                 config.SampleRate,
@@ -58,7 +58,8 @@ namespace Speakly.Services
             {
                 // Mask token in logs
                 string loggedUrl = url.Replace(apiKey, "REDACTED_TOKEN");
-                Logger.Log($"Connecting to Deepgram: {loggedUrl}");
+                Logger.Log($"Connecting to Deepgram (v1.2.0): {loggedUrl}");
+
                 await _webSocket.ConnectAsync(new Uri(url), _cts.Token);
                 
                 // Flush buffer
@@ -72,44 +73,37 @@ namespace Speakly.Services
             }
             catch (Exception ex)
             {
-                string diagnosticInfo = await DiagnosticProbeAsync(url, apiKey);
-                string errorMessage = !string.IsNullOrWhiteSpace(diagnosticInfo) 
+                string diagnosticInfo = await DiagnosticProbeAsync(apiKey);
+                string errorMessage = !string.IsNullOrWhiteSpace(diagnosticInfo)
                     ? $"[v{Version}] Deepgram Error: {diagnosticInfo} (Original: {ex.Message})"
                     : $"[v{Version}] Failed to connect to Deepgram: {ex.Message}";
-                
+
                 ErrorReceived?.Invoke(this, errorMessage);
                 await CleanupAsync();
             }
         }
 
-        private async Task<string> DiagnosticProbeAsync(string websocketUrl, string apiKey)
+private async Task<string> DiagnosticProbeAsync(string apiKey)
         {
             try
             {
-                // Convert wss:// to https://
-                string httpUrl = websocketUrl.Replace("wss://", "https://");
-                
-                using var request = new HttpRequestMessage(HttpMethod.Get, httpUrl);
-                request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Token", apiKey);
+                // Verify API key validity against the Deepgram REST API
+                using var authCheck = new HttpRequestMessage(HttpMethod.Get, "https://api.deepgram.com/v1/projects");
+                authCheck.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Token", apiKey);
 
-                using var response = await _httpClient.SendAsync(request);
-                
-                if (response.Headers.TryGetValues("dg-error", out var values))
-                {
-                    return string.Join(", ", values);
-                }
+                using var authResponse = await _httpClient.SendAsync(authCheck);
+                if (authResponse.StatusCode == System.Net.HttpStatusCode.Unauthorized)
+                    return "API Key Rejected (401 Unauthorized). Please check your key in Settings.";
+                if (authResponse.StatusCode == System.Net.HttpStatusCode.Forbidden)
+                    return "API Key Forbidden (403). Your key may be restricted or expired.";
 
-                if (!response.IsSuccessStatusCode)
-                {
-                    var body = await response.Content.ReadAsStringAsync();
-                    return $"HTTP {response.StatusCode}: {body}";
-                }
+                // Auth is fine — the WebSocket connect itself failed for another reason
+                return string.Empty;
             }
             catch (Exception ex)
             {
                 return $"Diagnostic failed: {ex.Message}";
             }
-            return "";
         }
 
         public async Task DisconnectAsync()

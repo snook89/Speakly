@@ -247,7 +247,20 @@
                         <ComboBox ItemsSource="{Binding AvailableRefinementModels}" 
                                   Text="{Binding SelectedRefinementModelString}" 
                                   IsEditable="True" 
-                              Margin="0,0,0,12"/>
+                              Margin="0,0,0,12">
+                            <ComboBox.ItemContainerStyle>
+                                <Style TargetType="ComboBoxItem" BasedOn="{StaticResource {x:Type ComboBoxItem}}">
+                                    <Setter Property="ContextMenu">
+                                        <Setter.Value>
+                                            <ContextMenu>
+                                                <MenuItem Header="★ Toggle Favorite (OpenRouter)"
+                                                          Click="ToggleFavoriteModel_Click"/>
+                                            </ContextMenu>
+                                        </Setter.Value>
+                                    </Setter>
+                                </Style>
+                            </ComboBox.ItemContainerStyle>
+                        </ComboBox>
 
                         <TextBlock Text="Prompt Presets" Style="{StaticResource FieldLabel}"/>
                         <StackPanel Orientation="Horizontal" Margin="0,0,0,12">

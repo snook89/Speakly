@@ -349,6 +349,7 @@ namespace Speakly.ViewModels
             AvailableRefinementModels.Clear();
             if (TryApplyDynamicModels(AvailableRefinementModels, _dynamicRefinementModels, RefinementModel))
             {
+                PrioritizeOpenRouterFavorites();
                 EnsureCurrentModelInList(AvailableRefinementModels, SelectedRefinementModelString);
                 OnPropertyChanged(nameof(SelectedRefinementModelString));
                 return;
@@ -378,8 +379,63 @@ namespace Speakly.ViewModels
                 AvailableRefinementModels.Add("x-ai/grok-2");
                 AvailableRefinementModels.Add("deepseek/deepseek-chat");
             }
+            PrioritizeOpenRouterFavorites();
             EnsureCurrentModelInList(AvailableRefinementModels, SelectedRefinementModelString);
             OnPropertyChanged(nameof(SelectedRefinementModelString));
+        }
+
+        public void ToggleOpenRouterFavorite(string modelId)
+        {
+            if (string.IsNullOrWhiteSpace(modelId)) return;
+
+            var normalized = modelId.Trim();
+            ConfigManager.Config.OpenRouterFavoriteModels ??= new List<string>();
+            var favorites = ConfigManager.Config.OpenRouterFavoriteModels;
+
+            int existingIndex = favorites.FindIndex(x => string.Equals(x, normalized, StringComparison.OrdinalIgnoreCase));
+            if (existingIndex >= 0)
+            {
+                favorites.RemoveAt(existingIndex);
+            }
+            else
+            {
+                favorites.Insert(0, normalized);
+            }
+
+            UpdateRefinementModelList();
+            ConfigManager.Save();
+        }
+
+        private void PrioritizeOpenRouterFavorites()
+        {
+            if (!string.Equals(RefinementModel, "OpenRouter", StringComparison.OrdinalIgnoreCase)) return;
+            if (AvailableRefinementModels.Count == 0) return;
+
+            var favorites = ConfigManager.Config.OpenRouterFavoriteModels;
+            if (favorites == null || favorites.Count == 0) return;
+
+            var current = AvailableRefinementModels.ToList();
+            var favoriteSet = new HashSet<string>(favorites, StringComparer.OrdinalIgnoreCase);
+
+            var preferred = favorites
+                .Where(f => current.Contains(f, StringComparer.OrdinalIgnoreCase))
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToList();
+
+            var rest = current
+                .Where(m => !favoriteSet.Contains(m))
+                .ToList();
+
+            AvailableRefinementModels.Clear();
+            foreach (var model in preferred)
+            {
+                AvailableRefinementModels.Add(model);
+            }
+
+            foreach (var model in rest)
+            {
+                AvailableRefinementModels.Add(model);
+            }
         }
 
         private static void EnsureCurrentModelInList(ObservableCollection<string> target, string currentModel)

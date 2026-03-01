@@ -1,4 +1,5 @@
-﻿using System.Collections.Generic;
+﻿using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Windows;
 using System.Windows.Controls;
@@ -102,6 +103,30 @@ namespace Speakly
             if (CerebrasPwdBox.Visibility == Visibility.Visible)
                 ConfigManager.Config.CerebrasApiKey = CerebrasPwdBox.Password;
             // If fields are revealed TextBoxes, their binding to the ViewModel already updated config
+        }
+
+        private void ToggleFavoriteModel_Click(object sender, RoutedEventArgs e)
+        {
+            if (DataContext is not MainViewModel vm) return;
+            if (!string.Equals(vm.RefinementModel, "OpenRouter", StringComparison.OrdinalIgnoreCase)) return;
+
+            string? modelId = null;
+
+            if (sender is MenuItem menuItem)
+            {
+                modelId = menuItem.DataContext as string;
+
+                if (string.IsNullOrWhiteSpace(modelId) && menuItem.Parent is ContextMenu contextMenu)
+                {
+                    if (contextMenu.PlacementTarget is ComboBoxItem comboBoxItem)
+                    {
+                        modelId = comboBoxItem.DataContext as string;
+                    }
+                }
+            }
+
+            if (string.IsNullOrWhiteSpace(modelId)) return;
+            vm.ToggleOpenRouterFavorite(modelId);
         }
 
         private void SetPtt_Click(object sender, RoutedEventArgs e)

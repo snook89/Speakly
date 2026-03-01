@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Text.Json;
 using System.Text.Json.Serialization;
@@ -61,6 +62,9 @@ namespace Speakly.Config
 
         [JsonPropertyName("openrouter_refinement_model")]
         public string OpenRouterRefinementModel { get; set; } = "google/gemini-2.0-flash-001";
+
+        [JsonPropertyName("openrouter_favorite_models")]
+        public List<string> OpenRouterFavoriteModels { get; set; } = new List<string>();
 
         [JsonPropertyName("enable_debug_logs")]
         public bool EnableDebugLogs { get; set; } = false;

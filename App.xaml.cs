@@ -407,19 +407,41 @@ namespace Speakly
 
         public static void SetTheme(string themeName)
         {
+            string normalizedTheme = string.IsNullOrWhiteSpace(themeName)
+                ? "Dark"
+                : themeName.Trim();
+
             string fileName = "DarkTheme.xaml";
-            if (themeName.Equals("Light", StringComparison.OrdinalIgnoreCase)) fileName = "LightTheme.xaml";
-            else if (themeName.Equals("Matrix", StringComparison.OrdinalIgnoreCase)) fileName = "MatrixTheme.xaml";
-            else if (themeName.Equals("Ocean", StringComparison.OrdinalIgnoreCase)) fileName = "OceanTheme.xaml";
+            if (normalizedTheme.Equals("Light", StringComparison.OrdinalIgnoreCase)) fileName = "LightTheme.xaml";
+            else if (normalizedTheme.Equals("Matrix", StringComparison.OrdinalIgnoreCase)) fileName = "MatrixTheme.xaml";
+            else if (normalizedTheme.Equals("Ocean", StringComparison.OrdinalIgnoreCase)) fileName = "OceanTheme.xaml";
             string dictUri = $"pack://application:,,,/Themes/{fileName}";
 
             try
             {
+                var merged = Application.Current.Resources.MergedDictionaries;
                 var dict = new ResourceDictionary { Source = new Uri(dictUri, UriKind.Absolute) };
-                if (Application.Current.Resources.MergedDictionaries.Count > 0)
-                    Application.Current.Resources.MergedDictionaries[0] = dict;
+
+                int themeDictionaryIndex = -1;
+                for (int i = 0; i < merged.Count; i++)
+                {
+                    var source = merged[i].Source?.ToString() ?? string.Empty;
+                    if (source.Contains("/Themes/", StringComparison.OrdinalIgnoreCase) ||
+                        source.Contains("Themes/", StringComparison.OrdinalIgnoreCase))
+                    {
+                        themeDictionaryIndex = i;
+                        break;
+                    }
+                }
+
+                if (themeDictionaryIndex >= 0)
+                {
+                    merged[themeDictionaryIndex] = dict;
+                }
                 else
-                    Application.Current.Resources.MergedDictionaries.Add(dict);
+                {
+                    merged.Add(dict);
+                }
             }
             catch (Exception ex)
             {

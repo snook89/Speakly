@@ -93,23 +93,31 @@ namespace Speakly.Services
                 "endpointing=300"
             };
 
-            var configuredLanguage = config.Language?.Trim();
-            if (!string.IsNullOrWhiteSpace(configuredLanguage))
+            var resolvedLanguage = ResolveLanguageForStreaming(config.Language, config.DeepgramModel);
+            if (!string.IsNullOrWhiteSpace(resolvedLanguage))
             {
-                if (string.Equals(configuredLanguage, "auto", StringComparison.OrdinalIgnoreCase))
-                {
-                    if (SupportsMultilingualStreaming(config.DeepgramModel))
-                    {
-                        query.Add("language=multi");
-                    }
-                }
-                else
-                {
-                    query.Add($"language={Uri.EscapeDataString(configuredLanguage)}");
-                }
+                query.Add($"language={Uri.EscapeDataString(resolvedLanguage)}");
             }
 
             return $"wss://api.deepgram.com/v1/listen?{string.Join("&", query)}";
+        }
+
+        private static string ResolveLanguageForStreaming(string? configuredLanguage, string? model)
+        {
+            var value = configuredLanguage?.Trim();
+            if (string.IsNullOrWhiteSpace(value)) return string.Empty;
+
+            if (string.Equals(value, "layout", StringComparison.OrdinalIgnoreCase))
+            {
+                return InputLanguageResolver.ResolveCurrentLanguageCode("en");
+            }
+
+            if (string.Equals(value, "auto", StringComparison.OrdinalIgnoreCase))
+            {
+                return SupportsMultilingualStreaming(model) ? "multi" : string.Empty;
+            }
+
+            return value.ToLowerInvariant();
         }
 
         private static bool SupportsMultilingualStreaming(string? model)

@@ -205,7 +205,7 @@
 
                         <TextBlock Text="Language (ISO Code)" Style="{StaticResource FieldLabel}"/>
                         <TextBox Text="{Binding Language}" Margin="0,0,0,5"/>
-                        <TextBlock Text="e.g. 'en', 'uk', 'es'. For Deepgram streaming, 'auto' uses multilingual mode ('multi')."
+                        <TextBlock Text="e.g. 'en', 'uk', 'es'. Use 'layout' to follow current keyboard layout. Deepgram 'auto' uses multilingual mode ('multi')."
                                    FontSize="11" Foreground="{DynamicResource AppTextMutedBrush}" Margin="0,0,0,18"/>
 
                         <TextBlock Text="Target Model" Style="{StaticResource FieldLabel}"/>

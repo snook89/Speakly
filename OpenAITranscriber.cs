@@ -71,7 +71,11 @@ namespace Speakly.Services
                 
                 content.Add(new StringContent(ConfigManager.Config.OpenAISttModel), "model");
                 var configuredLanguage = ConfigManager.Config.Language?.Trim();
-                if (!string.IsNullOrWhiteSpace(configuredLanguage) && !string.Equals(configuredLanguage, "auto", StringComparison.OrdinalIgnoreCase))
+                if (string.Equals(configuredLanguage, "layout", StringComparison.OrdinalIgnoreCase))
+                {
+                    content.Add(new StringContent(InputLanguageResolver.ResolveCurrentLanguageCode("en")), "language");
+                }
+                else if (!string.IsNullOrWhiteSpace(configuredLanguage) && !string.Equals(configuredLanguage, "auto", StringComparison.OrdinalIgnoreCase))
                 {
                     content.Add(new StringContent(configuredLanguage), "language");
                 }

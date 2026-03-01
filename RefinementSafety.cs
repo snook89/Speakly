@@ -8,17 +8,36 @@ namespace Speakly.Services
         {
             "i don't understand",
             "i do not understand",
+            "i understand that",
             "i can assist",
             "please provide",
             "please clarify",
             "as an ai",
             "я не розумію",
             "я не можу",
+            "я розумію, що",
             "будь ласка, надайте",
             "не бачу тексту",
             "не розумію, що ви",
+            "чи маєте",
+            "бажаєте",
+            "готовий текст",
+            "для редагування",
+            "почати від початку",
             "не понимаю",
             "пожалуйста, предоставьте"
+        };
+
+        private static readonly string[] QuestionIntentMarkers =
+        {
+            "чи ",
+            "can you",
+            "would you",
+            "do you want",
+            "бажаєте",
+            "маєте",
+            "готовий текст",
+            "please"
         };
 
         private const string HardGuardPrompt =
@@ -66,7 +85,39 @@ namespace Speakly.Services
                 }
             }
 
+            if (IsLikelyConversationalReply(originalText, candidate))
+            {
+                return originalText;
+            }
+
             return candidate;
+        }
+
+        private static bool IsLikelyConversationalReply(string original, string candidate)
+        {
+            var normalizedCandidate = candidate.ToLowerInvariant();
+            var normalizedOriginal = original.ToLowerInvariant();
+
+            bool candidateAsksQuestion = normalizedCandidate.Contains('?');
+            bool originalAsksQuestion = normalizedOriginal.Contains('?');
+
+            if (candidateAsksQuestion && !originalAsksQuestion)
+            {
+                foreach (var marker in QuestionIntentMarkers)
+                {
+                    if (normalizedCandidate.Contains(marker, StringComparison.Ordinal))
+                    {
+                        return true;
+                    }
+                }
+            }
+
+            if (candidateAsksQuestion && original.Length > 0 && candidate.Length > original.Length * 2.2)
+            {
+                return true;
+            }
+
+            return false;
         }
     }
 }

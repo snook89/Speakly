@@ -53,8 +53,11 @@ namespace Speakly.ViewModels
             {
                 _modelRefreshStatus = value;
                 OnPropertyChanged();
+                OnPropertyChanged(nameof(HasModelRefreshStatus));
             }
         }
+
+        public bool HasModelRefreshStatus => !string.IsNullOrWhiteSpace(ModelRefreshStatus);
 
         public string Hotkey 
         { 

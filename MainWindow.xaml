@@ -112,7 +112,7 @@
 
             <!-- General Tab -->
             <ui:TabViewItem Header="General" Style="{StaticResource ModernTabItem}">
-                <ScrollViewer VerticalScrollBarVisibility="Auto">
+                <ui:PassiveScrollViewer VerticalScrollBarVisibility="Auto">
                     <StackPanel Margin="0,20,0,0">
                         <TextBlock Text="Theme" Style="{StaticResource FieldLabel}"/>
                         <ComboBox SelectedValue="{Binding Theme}" SelectedValuePath="Content" Margin="0,0,0,18">
@@ -127,12 +127,12 @@
                         <ui:ToggleSwitch Content="Enable Debug Logs" IsChecked="{Binding EnableDebugLogs}"
                                          Foreground="{DynamicResource AppFgBrush}" Margin="0,0,0,18"/>
                     </StackPanel>
-                </ScrollViewer>
+                </ui:PassiveScrollViewer>
             </ui:TabViewItem>
 
             <!-- Hotkeys Tab -->
             <ui:TabViewItem Header="Hotkeys" Style="{StaticResource ModernTabItem}">
-                <ScrollViewer VerticalScrollBarVisibility="Auto">
+                <ui:PassiveScrollViewer VerticalScrollBarVisibility="Auto">
                     <StackPanel Margin="0,20,0,0">
 
                         <TextBlock Text="Push-to-Talk key (hold to record, release to transcribe)"
@@ -161,12 +161,12 @@
                         <TextBlock Text="e.g. F9 · Insert · Scroll Lock — must differ from PTT key"
                                    FontSize="11" Foreground="{DynamicResource AppTextMutedBrush}" Margin="0,0,0,20"/>
                     </StackPanel>
-                </ScrollViewer>
+                </ui:PassiveScrollViewer>
             </ui:TabViewItem>
 
             <!-- Audio Tab -->
             <ui:TabViewItem Header="Audio" Style="{StaticResource ModernTabItem}">
-                <ScrollViewer VerticalScrollBarVisibility="Auto">
+                <ui:PassiveScrollViewer VerticalScrollBarVisibility="Auto">
                     <StackPanel Margin="0,20,0,0">
                         <TextBlock Text="Microphone Input Device" Style="{StaticResource FieldLabel}"/>
                         <ComboBox ItemsSource="{Binding AvailableAudioDevices}" SelectedItem="{Binding AudioDevice}" Margin="0,0,0,18"/>
@@ -193,12 +193,12 @@
                         <TextBlock Text="Settings take effect on the next transcription session."
                                    FontSize="11" Foreground="{DynamicResource AppAccentBrush}" Margin="0,10,0,20"/>
                     </StackPanel>
-                </ScrollViewer>
+                </ui:PassiveScrollViewer>
             </ui:TabViewItem>
 
             <!-- Transcription Tab -->
             <ui:TabViewItem Header="Transcription" Style="{StaticResource ModernTabItem}">
-                <ScrollViewer VerticalScrollBarVisibility="Auto">
+                <ui:PassiveScrollViewer VerticalScrollBarVisibility="Auto">
                     <StackPanel Margin="0,20,0,0">
                         <TextBlock Text="Speech-to-Text Service" Style="{StaticResource FieldLabel}"/>
                         <ComboBox SelectedValue="{Binding SttModel}" SelectedValuePath="Content" Margin="0,0,0,18">
@@ -227,15 +227,18 @@
                                 FontWeight="SemiBold"
                                 BorderThickness="0"
                                 Cursor="Hand"/>
-                        <TextBlock Text="{Binding ModelRefreshStatus}"
-                                   FontSize="11" Foreground="{DynamicResource AppTextMutedBrush}" Margin="0,0,0,18"/>
+                        <ui:InfoBar Title="Model status"
+                                    Message="{Binding ModelRefreshStatus}"
+                                    Severity="Informational"
+                                    IsOpen="{Binding HasModelRefreshStatus}"
+                                    Margin="0,0,0,18"/>
                     </StackPanel>
-                </ScrollViewer>
+                </ui:PassiveScrollViewer>
             </ui:TabViewItem>
 
             <!-- Refinement Tab -->
             <ui:TabViewItem Header="{Binding RefinementTabHeader}" Style="{StaticResource ModernTabItem}">
-                <ScrollViewer VerticalScrollBarVisibility="Auto">
+                <ui:PassiveScrollViewer VerticalScrollBarVisibility="Auto">
                     <StackPanel Margin="0,20,0,0">
                         <TextBlock Text="Refinement Service" Style="{StaticResource FieldLabel}"/>
                         <ComboBox SelectedValue="{Binding RefinementModel}" SelectedValuePath="Content" Margin="0,0,0,18">
@@ -292,28 +295,22 @@
                                 Cursor="Hand"/>
                         </StackPanel>
 
-                        <ui:Card Background="{DynamicResource AppWarningPanelBrush}"
-                                 BorderBrush="{DynamicResource AppWarningBorderBrush}"
-                                 BorderThickness="1"
-                                 Padding="10,8"
-                                 Margin="0,0,0,10"
-                                 Visibility="{Binding IsRefinementPromptMissing, Converter={StaticResource BoolToVisibilityConverter}}">
-                            <TextBlock Text="⚠ Custom System Prompt is empty. Refinement may behave unpredictably. Choose a preset or enter your own prompt."
-                                       TextWrapping="Wrap"
-                                       FontSize="11"
-                                       Foreground="{DynamicResource AppFgBrush}"/>
-                        </ui:Card>
+                            <ui:InfoBar Title="Prompt warning"
+                                     Message="Custom System Prompt is empty. Refinement may behave unpredictably. Choose a preset or enter your own prompt."
+                                     Severity="Warning"
+                                     IsOpen="{Binding IsRefinementPromptMissing}"
+                                     Margin="0,0,0,10"/>
 
                         <TextBlock Text="Custom System Prompt" Style="{StaticResource FieldLabel}"/>
                         <ui:TextBox Text="{Binding RefinementPrompt}" AcceptsReturn="True" Height="140"
                                  TextWrapping="Wrap" VerticalScrollBarVisibility="Auto" Margin="0,0,0,18"/>
                     </StackPanel>
-                </ScrollViewer>
+                </ui:PassiveScrollViewer>
             </ui:TabViewItem>
 
             <!-- API Keys Tab -->
             <ui:TabViewItem Header="API Keys" Style="{StaticResource ModernTabItem}">
-                <ScrollViewer VerticalScrollBarVisibility="Auto">
+                <ui:PassiveScrollViewer VerticalScrollBarVisibility="Auto">
                     <StackPanel Margin="0,20,0,0">
 
                         <!-- Deepgram -->
@@ -387,7 +384,7 @@
                                 BorderThickness="0"
                                 Cursor="Hand"/>
                     </StackPanel>
-                </ScrollViewer>
+                </ui:PassiveScrollViewer>
             </ui:TabViewItem>
 
             <!-- History Tab -->

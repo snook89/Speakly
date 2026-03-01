@@ -24,8 +24,54 @@ namespace Speakly.ViewModels
         private static readonly HttpClient _httpClient = new HttpClient { Timeout = TimeSpan.FromSeconds(20) };
         private readonly Dictionary<string, List<string>> _dynamicSttModels = new(StringComparer.OrdinalIgnoreCase);
         private readonly Dictionary<string, List<string>> _dynamicRefinementModels = new(StringComparer.OrdinalIgnoreCase);
+        private bool _isRefreshingModels;
+        private string _modelRefreshStatus = "Model list: defaults loaded";
+
+        private const string RefinementPromptPresetGeneral =
+            "Role and Objective:\n" +
+            "- Refine transcribed speech-to-text outputs for clarity, accuracy, and formatting compliance.\n\n" +
+            "Instructions:\n" +
+            "- Preserve the original meaning and intent of the message.\n" +
+            "- If a user-provided format instruction appears at the end of the transcribed text, apply the format to the output but do not include the instruction itself in the final refined text.\n" +
+            "- Do not introduce content that is not implied in the original input. Return only the refined transcribed text, without explanations or commentary.\n\n" +
+            "Output Format:\n" +
+            "- Output only the refined transcribed text as a single string.";
+
+        private const string RefinementPromptPresetUkrainian =
+            "Role and Objective:\n" +
+            "- Refine transcribed speech-to-text outputs in Ukrainian for clarity, accuracy, and formatting compliance.\n\n" +
+            "Instructions:\n" +
+            "- Preserve the original meaning and intent of the message.\n" +
+            "- Ensure the final text is in Ukrainian and uses natural, correct Ukrainian grammar and punctuation.\n" +
+            "- If a user-provided format instruction appears at the end of the transcribed text, apply the format to the output but do not include the instruction itself in the final refined text.\n" +
+            "- Do not introduce content that is not implied in the original input. Return only the refined transcribed text, without explanations or commentary.\n\n" +
+            "Output Format:\n" +
+            "- Output only the refined transcribed text as a single string.";
 
         public ICommand SaveCommand { get; }
+        public ICommand RefreshModelsCommand { get; }
+        public ICommand ApplyRefinementPromptPresetCommand { get; }
+
+        public bool IsRefreshingModels
+        {
+            get => _isRefreshingModels;
+            private set
+            {
+                _isRefreshingModels = value;
+                OnPropertyChanged();
+                CommandManager.InvalidateRequerySuggested();
+            }
+        }
+
+        public string ModelRefreshStatus
+        {
+            get => _modelRefreshStatus;
+            private set
+            {
+                _modelRefreshStatus = value;
+                OnPropertyChanged();
+            }
+        }
 
         public string Hotkey 
         { 
@@ -234,6 +280,23 @@ namespace Speakly.ViewModels
                 ConfigManager.Save();
                 MessageBox.Show("Settings saved successfully!", "Speakly", MessageBoxButton.OK, MessageBoxImage.Information);
             });
+
+            RefreshModelsCommand = new RelayCommand(
+                async _ => await RefreshProviderModelsAsync(true),
+                _ => !IsRefreshingModels);
+
+            ApplyRefinementPromptPresetCommand = new RelayCommand(option =>
+            {
+                var selected = option?.ToString();
+                if (string.Equals(selected, "UK", StringComparison.OrdinalIgnoreCase))
+                {
+                    RefinementPrompt = RefinementPromptPresetUkrainian;
+                }
+                else
+                {
+                    RefinementPrompt = RefinementPromptPresetGeneral;
+                }
+            });
         }
 
         private void LoadAudioDevices()
@@ -327,8 +390,16 @@ namespace Speakly.ViewModels
             return true;
         }
 
-        private async Task RefreshProviderModelsAsync()
+        private async Task RefreshProviderModelsAsync(bool userInitiated = false)
         {
+            if (IsRefreshingModels)
+            {
+                return;
+            }
+
+            IsRefreshingModels = true;
+            ModelRefreshStatus = "Refreshing provider models...";
+
             try
             {
                 var config = ConfigManager.Config;
@@ -400,10 +471,35 @@ namespace Speakly.ViewModels
 
                 UpdateSttModelList();
                 UpdateRefinementModelList();
+
+                var activeSources = _dynamicSttModels.Keys
+                    .Concat(_dynamicRefinementModels.Keys)
+                    .Distinct(StringComparer.OrdinalIgnoreCase)
+                    .OrderBy(x => x)
+                    .ToList();
+
+                ModelRefreshStatus = activeSources.Count > 0
+                    ? $"Model list refreshed from: {string.Join(", ", activeSources)}"
+                    : "Model list: using built-in defaults";
+
+                if (userInitiated)
+                {
+                    MessageBox.Show(ModelRefreshStatus, "Speakly", MessageBoxButton.OK, MessageBoxImage.Information);
+                }
             }
             catch (Exception ex)
             {
                 Logger.LogException("RefreshProviderModelsAsync", ex);
+                ModelRefreshStatus = "Model refresh failed — using available defaults";
+
+                if (userInitiated)
+                {
+                    MessageBox.Show(ModelRefreshStatus, "Speakly", MessageBoxButton.OK, MessageBoxImage.Warning);
+                }
+            }
+            finally
+            {
+                IsRefreshingModels = false;
             }
         }
 

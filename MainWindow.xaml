@@ -212,7 +212,20 @@
                         <ComboBox ItemsSource="{Binding AvailableSttModels}" 
                                   Text="{Binding SelectedSttModelString}" 
                                   IsEditable="True" 
-                                  Margin="0,0,0,18"/>
+                                  Margin="0,0,0,8"/>
+
+                        <Button Content="REFRESH MODELS"
+                                Command="{Binding RefreshModelsCommand}"
+                                HorizontalAlignment="Left"
+                                Margin="0,0,0,6"
+                                Padding="16,6"
+                                Background="{DynamicResource AppControlBorderBrush}"
+                                Foreground="{DynamicResource AppFgBrush}"
+                                FontWeight="SemiBold"
+                                BorderThickness="0"
+                                Cursor="Hand"/>
+                        <TextBlock Text="{Binding ModelRefreshStatus}"
+                                   FontSize="11" Foreground="{DynamicResource AppTextMutedBrush}" Margin="0,0,0,18"/>
                     </StackPanel>
                 </ScrollViewer>
             </TabItem>
@@ -232,7 +245,28 @@
                         <ComboBox ItemsSource="{Binding AvailableRefinementModels}" 
                                   Text="{Binding SelectedRefinementModelString}" 
                                   IsEditable="True" 
-                                  Margin="0,0,0,18"/>
+                              Margin="0,0,0,12"/>
+
+                        <TextBlock Text="Prompt Presets" Style="{StaticResource FieldLabel}"/>
+                        <StackPanel Orientation="Horizontal" Margin="0,0,0,12">
+                            <Button Content="Preset 1 (General)"
+                                Command="{Binding ApplyRefinementPromptPresetCommand}"
+                                CommandParameter="GENERAL"
+                                Padding="12,6"
+                                Margin="0,0,8,0"
+                                Background="{DynamicResource AppControlBorderBrush}"
+                                Foreground="{DynamicResource AppFgBrush}"
+                                BorderThickness="0"
+                                Cursor="Hand"/>
+                            <Button Content="Preset 2 (Ukrainian)"
+                                Command="{Binding ApplyRefinementPromptPresetCommand}"
+                                CommandParameter="UK"
+                                Padding="12,6"
+                                Background="{DynamicResource AppControlBorderBrush}"
+                                Foreground="{DynamicResource AppFgBrush}"
+                                BorderThickness="0"
+                                Cursor="Hand"/>
+                        </StackPanel>
 
                         <TextBlock Text="Custom System Prompt" Style="{StaticResource FieldLabel}"/>
                         <TextBox Text="{Binding RefinementPrompt}" AcceptsReturn="True" Height="140"

@@ -9,4 +9,14 @@
     <SolidColorBrush x:Key="AppControlBorderBrush" Color="#333333"/>
     <SolidColorBrush x:Key="AppTextMutedBrush" Color="#AAAAAA"/>
     <SolidColorBrush x:Key="AppFooterBgBrush" Color="#1A1A1A"/>
+    <SolidColorBrush x:Key="AppAccentForegroundBrush" Color="#000000"/>
+    <SolidColorBrush x:Key="AppWarningPanelBrush" Color="#33FFAA00"/>
+    <SolidColorBrush x:Key="AppWarningBorderBrush" Color="#88FFAA00"/>
+    <SolidColorBrush x:Key="AppCaptureBgBrush" Color="#8B0000"/>
+
+    <SolidColorBrush x:Key="OverlayContainerBrush" Color="#D9121212"/>
+    <SolidColorBrush x:Key="OverlayPrimaryTextBrush" Color="#FFFFFF"/>
+    <SolidColorBrush x:Key="OverlayMutedTextBrush" Color="#AAAAAA"/>
+    <SolidColorBrush x:Key="OverlayLanguageBadgeBrush" Color="#3322D3EE"/>
+    <SolidColorBrush x:Key="OverlayLanguageTextBrush" Color="#CDEFFF"/>
 </ResourceDictionary>

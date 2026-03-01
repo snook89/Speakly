@@ -134,7 +134,7 @@ namespace Speakly
             _isRecordingPtt = true;
             _isRecordingRec = false;
             PttHotkeyBox.Text = "Press a key combo...";
-            PttHotkeyBox.Background = Brushes.DarkRed;
+            PttHotkeyBox.Background = TryFindResource("AppCaptureBgBrush") as Brush ?? Brushes.DarkRed;
             this.PreviewKeyDown += MainWindow_PreviewKeyDown;
         }
 
@@ -143,7 +143,7 @@ namespace Speakly
             _isRecordingRec = true;
             _isRecordingPtt = false;
             RecordHotkeyBox.Text = "Press a key combo...";
-            RecordHotkeyBox.Background = Brushes.DarkRed;
+            RecordHotkeyBox.Background = TryFindResource("AppCaptureBgBrush") as Brush ?? Brushes.DarkRed;
             this.PreviewKeyDown += MainWindow_PreviewKeyDown;
         }
 

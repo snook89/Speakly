@@ -291,8 +291,8 @@
                                 Cursor="Hand"/>
                         </StackPanel>
 
-                        <Border Background="#33FFAA00"
-                                BorderBrush="#88FFAA00"
+                        <Border Background="{DynamicResource AppWarningPanelBrush}"
+                                BorderBrush="{DynamicResource AppWarningBorderBrush}"
                                 BorderThickness="1"
                                 CornerRadius="8"
                                 Padding="10,8"
@@ -382,7 +382,7 @@
                                 Margin="0,10,0,10"
                                 Padding="20,8"
                                 Background="{DynamicResource AppAccentBrush}"
-                                Foreground="Black"
+                                Foreground="{DynamicResource AppAccentForegroundBrush}"
                                 FontWeight="Bold"
                                 BorderThickness="0"
                                 Cursor="Hand"/>
@@ -446,7 +446,7 @@
                         HorizontalAlignment="Right"
                         Padding="25,10"
                         Background="{DynamicResource AppAccentBrush}"
-                        Foreground="Black"
+                        Foreground="{DynamicResource AppAccentForegroundBrush}"
                         FontWeight="Bold"
                         BorderThickness="0"
                         Cursor="Hand">

@@ -13,7 +13,7 @@
 
     <!-- Draggable container -->
     <Border x:Name="Container"
-            Background="#D9121212"
+            Background="{DynamicResource OverlayContainerBrush}"
             CornerRadius="18"
             Padding="14,10"
             MouseDown="Container_MouseDown"
@@ -37,14 +37,14 @@
                 <Ellipse x:Name="StatusIndicator"
                          Grid.Column="0"
                          Width="9" Height="9"
-                         Fill="#00D2FF"
+                         Fill="{DynamicResource AppAccentBrush}"
                          VerticalAlignment="Center"
                          Margin="0,0,8,0"/>
 
                 <TextBlock x:Name="StatusText"
                            Grid.Column="1"
                            Text="READY"
-                           Foreground="White"
+                           Foreground="{DynamicResource OverlayPrimaryTextBrush}"
                            FontSize="12"
                            FontWeight="Bold"
                            FontFamily="Segoe UI"
@@ -52,7 +52,7 @@
 
                 <Border x:Name="LanguageBadge"
                         Grid.Column="2"
-                        Background="#3322D3EE"
+                        Background="{DynamicResource OverlayLanguageBadgeBrush}"
                         CornerRadius="6"
                         Padding="6,1"
                         Margin="8,0,0,0"
@@ -60,7 +60,7 @@
                         Visibility="Collapsed">
                     <TextBlock x:Name="LanguageText"
                                Text="EN"
-                               Foreground="#CDEFFF"
+                               Foreground="{DynamicResource OverlayLanguageTextBrush}"
                                FontSize="10"
                                FontWeight="SemiBold"
                                FontFamily="Segoe UI"/>
@@ -69,7 +69,7 @@
                 <TextBlock x:Name="TimerText"
                            Grid.Column="3"
                            Text=""
-                           Foreground="#AAAAAA"
+                           Foreground="{DynamicResource OverlayMutedTextBrush}"
                            FontSize="11"
                            FontFamily="Segoe UI Semibold"
                            VerticalAlignment="Center"

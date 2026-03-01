@@ -84,6 +84,9 @@ namespace Speakly
             WaveCanvas.Children.Clear();
             _bars.Clear();
 
+            var baseBrush = TryFindResource("AppAccentBrush") as Brush ?? _accentBrush;
+            var waveBrush = BuildWaveBrush(baseBrush);
+
             double canvasW = 260 - 28; // approx inner width after padding
             double gap      = canvasW / (BAR_COUNT * 2.0);
 
@@ -93,7 +96,7 @@ namespace Speakly
                 {
                     Width        = gap,
                     Height       = 4,
-                    Fill         = new SolidColorBrush(Color.FromArgb(180, 0, 210, 255)),
+                    Fill         = waveBrush,
                     RadiusX      = 2,
                     RadiusY      = 2,
                     VerticalAlignment = VerticalAlignment.Center,
@@ -162,11 +165,7 @@ namespace Speakly
                     // Recolour wave bars
                     foreach (var bar in _bars)
                     {
-                        if (bar.Fill is SolidColorBrush scb)
-                        {
-                            var c = ((SolidColorBrush)color).Color;
-                            bar.Fill = new SolidColorBrush(Color.FromArgb(180, c.R, c.G, c.B));
-                        }
+                        bar.Fill = BuildWaveBrush(color);
                     }
                 }
 
@@ -220,6 +219,17 @@ namespace Speakly
         public void UpdateAudioLevel(float level)
         {
             _audioLevel = Math.Clamp(level, 0f, 1f);
+        }
+
+        private static Brush BuildWaveBrush(Brush baseBrush)
+        {
+            if (baseBrush is SolidColorBrush solid)
+            {
+                var c = solid.Color;
+                return new SolidColorBrush(Color.FromArgb(180, c.R, c.G, c.B));
+            }
+
+            return new SolidColorBrush(Color.FromArgb(180, 0, 210, 255));
         }
     }
 }

@@ -201,30 +201,38 @@ namespace Speakly
             _overlay?.SetStatus("TRANSCRIBING", Brushes.Yellow);
             _stopSound?.Play();
             _recorder.StopRecording();
-            
-            if (_transcriber != null)
-            {
-                Logger.Log("Finalizing transcriber stream.");
-                // Let the transcriber send the closing signal
-                await _transcriber.FinishStreamAsync();
-                
-                // Wait for robust signal instead of magic number delay
-                await _transcriber.WaitForFinalResultAsync();
-                
-                Logger.Log("Disconnecting transcriber.");
-                await _transcriber.DisconnectAsync();
-            }
 
-            if (_audioBuffer != null)
+            try
             {
-                SaveDebugRecord();
-                _audioBuffer.Dispose();
-                _audioBuffer = null;
-            }
+                if (_transcriber != null)
+                {
+                    Logger.Log("Finalizing transcriber stream.");
+                    await _transcriber.FinishStreamAsync();
 
-            if (!_finalTranscriptReceivedInCurrentSession)
+                    await _transcriber.WaitForFinalResultAsync();
+
+                    Logger.Log("Disconnecting transcriber.");
+                    await _transcriber.DisconnectAsync();
+                }
+            }
+            catch (Exception ex)
             {
-                _overlay?.SetStatus("READY", Brushes.Aqua);
+                Logger.LogException("StopRecordingAsync", ex);
+            }
+            finally
+            {
+                if (_audioBuffer != null)
+                {
+                    SaveDebugRecord();
+                    _audioBuffer.Dispose();
+                    _audioBuffer = null;
+                }
+
+                // If no final transcript arrived, always recover overlay state.
+                if (!_finalTranscriptReceivedInCurrentSession)
+                {
+                    _overlay?.SetStatus("READY", Brushes.Aqua);
+                }
             }
         }
 

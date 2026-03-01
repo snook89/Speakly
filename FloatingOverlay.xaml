@@ -31,6 +31,7 @@
                     <ColumnDefinition Width="Auto"/>
                     <ColumnDefinition Width="*"/>
                     <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="Auto"/>
                 </Grid.ColumnDefinitions>
 
                 <Ellipse x:Name="StatusIndicator"
@@ -49,8 +50,24 @@
                            FontFamily="Segoe UI"
                            VerticalAlignment="Center"/>
 
+                <Border x:Name="LanguageBadge"
+                        Grid.Column="2"
+                        Background="#3322D3EE"
+                        CornerRadius="6"
+                        Padding="6,1"
+                        Margin="8,0,0,0"
+                        VerticalAlignment="Center"
+                        Visibility="Collapsed">
+                    <TextBlock x:Name="LanguageText"
+                               Text="EN"
+                               Foreground="#CDEFFF"
+                               FontSize="10"
+                               FontWeight="SemiBold"
+                               FontFamily="Segoe UI"/>
+                </Border>
+
                 <TextBlock x:Name="TimerText"
-                           Grid.Column="2"
+                           Grid.Column="3"
                            Text=""
                            Foreground="#AAAAAA"
                            FontSize="11"

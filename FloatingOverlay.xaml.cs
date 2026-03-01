@@ -23,6 +23,7 @@ namespace Speakly
         private float _audioLevel = 0f;          // 0.0 – 1.0, updated externally
         private readonly Random _rng = new();
         private const int BAR_COUNT = 22;
+        private string _activeLanguageCode = "EN";
 
         // ── Accent colour (changes with status) ───────────
         private Brush _accentBrush = Brushes.Aqua;
@@ -110,32 +111,34 @@ namespace Speakly
             double canvasH = WaveCanvas.ActualHeight > 0 ? WaveCanvas.ActualHeight : 28;
             double maxBarH = canvasH * 0.9;
             double minBarH = 3;
+            double staticIdleHeight = 3.5;
 
             for (int i = 0; i < _bars.Count; i++)
             {
                 double target;
                 if (_isRecording)
                 {
-                    // Sine wave envelope + random spike driven by audio level
-                    double phase = (DateTime.Now.Millisecond / 1000.0) * Math.PI * 2 + i * 0.4;
-                    double sineVal = (Math.Sin(phase) + 1) / 2;       // 0-1
-                    double randomJitter = _rng.NextDouble() * 0.4;
-                    // Boost the influence of _audioLevel
-                    double combined = (sineVal * 0.2 + randomJitter * 0.8) * _audioLevel
-                                    + sineVal * 0.1;  // idle breathing (reduced while recording)
+                    // VU-like motion while actively recording.
+                    double randomJitter = _rng.NextDouble() * 0.35;
+                    double bandShape = 0.65 + 0.35 * Math.Sin(i * 0.55 + DateTime.Now.Millisecond / 180.0);
+                    double combined = (_audioLevel * (0.7 + randomJitter)) * Math.Abs(bandShape);
                     target = minBarH + combined * (maxBarH - minBarH);
                 }
                 else
                 {
-                    // Gentle idle pulse
-                    double phase = (DateTime.Now.Millisecond / 1000.0) * Math.PI * 2 + i * 0.5;
-                    target = minBarH + ((Math.Sin(phase) + 1) / 2) * 5;
+                    // Fully static idle/transcribing bars.
+                    target = staticIdleHeight;
                 }
 
                 // Lerp towards target for smooth animation
                 double current = _bars[i].Height;
                 _bars[i].Height = current + (target - current) * 0.35;
                 Canvas.SetTop(_bars[i], (canvasH - _bars[i].Height) / 2);
+            }
+
+            if (!_isRecording)
+            {
+                _audioLevel = 0f;
             }
         }
 
@@ -173,15 +176,40 @@ namespace Speakly
                     _isRecording = true;
                     _recordStart = DateTime.Now;
                     _timer.Start();
+                    LanguageText.Text = _activeLanguageCode;
+                    LanguageBadge.Visibility = Visibility.Visible;
                 }
                 else
                 {
                     _isRecording = false;
                     _timer.Stop();
+                    LanguageBadge.Visibility = Visibility.Collapsed;
                     if (!status.Equals("READY", StringComparison.OrdinalIgnoreCase))
                         TimerText.Text = "";    // clear while processing
                     else
                         TimerText.Text = "";    // clear on ready
+                }
+            });
+        }
+
+        public void SetActiveLanguage(string languageCode)
+        {
+            Dispatcher.Invoke(() =>
+            {
+                var normalized = string.IsNullOrWhiteSpace(languageCode)
+                    ? "EN"
+                    : languageCode.Trim().ToUpperInvariant();
+
+                if (normalized.Length > 8)
+                {
+                    normalized = normalized[..8];
+                }
+
+                _activeLanguageCode = normalized;
+                if (_isRecording)
+                {
+                    LanguageText.Text = _activeLanguageCode;
+                    LanguageBadge.Visibility = Visibility.Visible;
                 }
             });
         }

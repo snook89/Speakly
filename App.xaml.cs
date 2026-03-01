@@ -91,6 +91,24 @@ namespace Speakly
             return (GetAsyncKeyState(vKey) & 0x8000) != 0;
         }
 
+        private string ResolveOverlayLanguageDisplay()
+        {
+            var configuredLanguage = ConfigManager.Config.Language?.Trim();
+            if (string.IsNullOrWhiteSpace(configuredLanguage)) return "EN";
+
+            if (string.Equals(configuredLanguage, "layout", StringComparison.OrdinalIgnoreCase))
+            {
+                return InputLanguageResolver.ResolveCurrentLanguageCode("en").ToUpperInvariant();
+            }
+
+            if (string.Equals(configuredLanguage, "auto", StringComparison.OrdinalIgnoreCase))
+            {
+                return "AUTO";
+            }
+
+            return configuredLanguage.ToUpperInvariant();
+        }
+
         private bool IsHotkeyMatch(string configStr, HotkeyEventArgs e)
         {
             if (string.IsNullOrWhiteSpace(configStr)) return false;
@@ -127,7 +145,7 @@ namespace Speakly
                 {
                     _lastActiveWindow = TextInserter.GetForegroundWindow();
                     Logger.Log($"PTT Hotkey Pressed. Captured active window: {_lastActiveWindow}");
-                    
+                    _overlay?.SetActiveLanguage(ResolveOverlayLanguageDisplay());
                     _overlay?.SetStatus("RECORDING", Brushes.Red);
                     _startSound?.Play();
                     
@@ -150,7 +168,7 @@ namespace Speakly
                 {
                     _lastActiveWindow = TextInserter.GetForegroundWindow();
                     Logger.Log($"Toggle Recording Started. Captured active window: {_lastActiveWindow}");
-                    
+                    _overlay?.SetActiveLanguage(ResolveOverlayLanguageDisplay());
                     _isToggleRecording = true;
                     _overlay?.SetStatus("RECORDING", Brushes.OrangeRed);
                     _startSound?.Play();

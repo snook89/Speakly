@@ -27,12 +27,13 @@ namespace Speakly.Services
 
             try
             {
+                var safePrompt = RefinementSafety.BuildSafeSystemPrompt(prompt);
                 var requestBody = new
                 {
                     model = ConfigManager.Config.OpenRouterRefinementModel,
                     messages = new[]
                     {
-                        new { role = "system", content = prompt },
+                        new { role = "system", content = safePrompt },
                         new { role = "user", content = text }
                     },
                     temperature = 0.3
@@ -61,7 +62,7 @@ namespace Speakly.Services
                         .GetProperty("content")
                         .GetString();
 
-                    return refinedText?.Trim() ?? text;
+                    return RefinementSafety.CoerceToEditOnlyOutput(text, refinedText);
                 }
             }
             catch (Exception ex)

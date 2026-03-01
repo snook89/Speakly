@@ -36,7 +36,9 @@ namespace Speakly.ViewModels
             "- Preserve the original meaning and intent of the message.\n" +
             "- Ensure the final text is in Ukrainian and uses natural, correct Ukrainian grammar and punctuation.\n" +
             "- If a user-provided format instruction appears at the end of the transcribed text, apply the format to the output but do not include the instruction itself in the final refined text.\n" +
-            "- Do not introduce content that is not implied in the original input. Return only the refined transcribed text, without explanations or commentary.\n\n" +
+            "- Do not introduce content that is not implied in the original input.\n" +
+            "- Never answer as a chatbot, never ask follow-up questions, and never provide explanations.\n" +
+            "- If input is mixed, noisy, or unclear, return the original transcript unchanged.\n\n" +
             "Output Format:\n" +
             "- Output only the refined transcribed text as a single string.";
 
@@ -314,6 +316,7 @@ namespace Speakly.ViewModels
             AvailableSttModels.Clear();
             if (TryApplyDynamicModels(AvailableSttModels, _dynamicSttModels, SttModel))
             {
+                EnsureCurrentModelInList(AvailableSttModels, SelectedSttModelString);
                 OnPropertyChanged(nameof(SelectedSttModelString));
                 return;
             }
@@ -334,6 +337,7 @@ namespace Speakly.ViewModels
             {
                 AvailableSttModels.Add("whisper-1");
             }
+            EnsureCurrentModelInList(AvailableSttModels, SelectedSttModelString);
             OnPropertyChanged(nameof(SelectedSttModelString));
         }
 
@@ -342,6 +346,7 @@ namespace Speakly.ViewModels
             AvailableRefinementModels.Clear();
             if (TryApplyDynamicModels(AvailableRefinementModels, _dynamicRefinementModels, RefinementModel))
             {
+                EnsureCurrentModelInList(AvailableRefinementModels, SelectedRefinementModelString);
                 OnPropertyChanged(nameof(SelectedRefinementModelString));
                 return;
             }
@@ -370,7 +375,17 @@ namespace Speakly.ViewModels
                 AvailableRefinementModels.Add("x-ai/grok-2");
                 AvailableRefinementModels.Add("deepseek/deepseek-chat");
             }
+            EnsureCurrentModelInList(AvailableRefinementModels, SelectedRefinementModelString);
             OnPropertyChanged(nameof(SelectedRefinementModelString));
+        }
+
+        private static void EnsureCurrentModelInList(ObservableCollection<string> target, string currentModel)
+        {
+            if (string.IsNullOrWhiteSpace(currentModel)) return;
+            if (!target.Contains(currentModel))
+            {
+                target.Insert(0, currentModel);
+            }
         }
 
         private bool TryApplyDynamicModels(ObservableCollection<string> target, Dictionary<string, List<string>> catalog, string provider)

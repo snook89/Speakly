@@ -293,7 +293,13 @@ namespace Speakly
 
                 if (_refiner != null)
                 {
-                    Logger.Log($"Refining text using {ConfigManager.Config.RefinementModel}");
+                    string activeRefinementModel = ConfigManager.Config.RefinementModel switch
+                    {
+                        "Cerebras" => ConfigManager.Config.CerebrasRefinementModel,
+                        "OpenRouter" => ConfigManager.Config.OpenRouterRefinementModel,
+                        _ => ConfigManager.Config.OpenAIRefinementModel
+                    };
+                    Logger.Log($"Refining text using {ConfigManager.Config.RefinementModel} (model={activeRefinementModel})");
                     _overlay?.SetStatus("REFINING", Brushes.Cyan);
                     textToInsert = await _refiner.RefineTextAsync(e.Text, ConfigManager.Config.RefinementPrompt);
                     Logger.Log($"Refinement complete: '{textToInsert}'");

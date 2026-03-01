@@ -16,7 +16,8 @@ namespace Speakly.Config
             "3) Do not add new facts, assumptions, or commentary.\n" +
             "4) If the transcript ends with a user format instruction (e.g., \"as bullets\", \"as email\", \"in JSON\"), apply that format but do not include the instruction text itself in the output.\n" +
             "5) Keep names, numbers, links, and technical terms accurate.\n" +
-            "6) If input is mixed or unclear, make the minimal safe correction.\n\n" +
+            "6) Never answer as a chatbot, never ask follow-up questions, and never provide explanations.\n" +
+            "7) If input is mixed, noisy, or unclear, return the original transcript unchanged.\n\n" +
             "Output contract:\n" +
             "Return only the refined final text as a single plain string. No explanations, no labels, no markdown fences.";
 

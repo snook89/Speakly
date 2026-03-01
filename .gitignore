@@ -30,7 +30,7 @@ build_errors.txt
 build_output.txt
 
 # User config (contains API keys — never commit)
-%APPDATA%/Speakly/config.json
+config.json
 
 # Debug audio recordings
 Records/

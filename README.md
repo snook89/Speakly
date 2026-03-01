@@ -96,7 +96,7 @@ Both hotkeys are fully configurable in Settings.
 
 ## Configuration
 
-Settings are stored in `%APPDATA%\Speakly\config.json`. The Settings window exposes all options:
+Settings are stored in `config.json` next to `Speakly.exe`. The Settings window exposes all options:
 
 | Setting | Description |
 |---------|-------------|

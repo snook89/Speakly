@@ -113,8 +113,7 @@ namespace Speakly.Config
     public static class ConfigManager
     {
         private static readonly string ConfigPath = Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
-            "Speakly",
+            AppContext.BaseDirectory,
             "config.json"
         );
 

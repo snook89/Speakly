@@ -10,6 +10,11 @@ namespace Speakly.Services
             "i do not understand",
             "i understand that",
             "i can assist",
+            "i'm doing well",
+            "i am doing well",
+            "thanks for asking",
+            "how can i help",
+            "functioning as expected",
             "please provide",
             "please clarify",
             "as an ai",
@@ -60,6 +65,14 @@ namespace Speakly.Services
             }
 
             return cleanedUserPrompt + "\n\n" + HardGuardPrompt;
+        }
+
+        public static string BuildRefinementUserMessage(string transcript)
+        {
+            return
+                "Refine the following speech-to-text transcript according to the system rules. " +
+                "Return ONLY the refined transcript text and nothing else.\n\n" +
+                "Transcript:\n<<<\n" + transcript + "\n>>>";
         }
 
         public static string CoerceToEditOnlyOutput(string originalText, string? refinedText)

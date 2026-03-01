@@ -122,8 +122,11 @@ namespace Speakly.ViewModels
             }
             set
             {
-                if (SttModel == "Deepgram") ConfigManager.Config.DeepgramModel = value;
-                else if (SttModel == "OpenAI") ConfigManager.Config.OpenAISttModel = value;
+                var normalized = value?.Trim();
+                if (string.IsNullOrWhiteSpace(normalized)) return;
+
+                if (SttModel == "Deepgram") ConfigManager.Config.DeepgramModel = normalized;
+                else if (SttModel == "OpenAI") ConfigManager.Config.OpenAISttModel = normalized;
                 OnPropertyChanged();
             }
         }
@@ -142,9 +145,12 @@ namespace Speakly.ViewModels
             }
             set
             {
-                if (RefinementModel == "OpenAI") ConfigManager.Config.OpenAIRefinementModel = value;
-                else if (RefinementModel == "Cerebras") ConfigManager.Config.CerebrasRefinementModel = value;
-                else if (RefinementModel == "OpenRouter") ConfigManager.Config.OpenRouterRefinementModel = value;
+                var normalized = value?.Trim();
+                if (string.IsNullOrWhiteSpace(normalized)) return;
+
+                if (RefinementModel == "OpenAI") ConfigManager.Config.OpenAIRefinementModel = normalized;
+                else if (RefinementModel == "Cerebras") ConfigManager.Config.CerebrasRefinementModel = normalized;
+                else if (RefinementModel == "OpenRouter") ConfigManager.Config.OpenRouterRefinementModel = normalized;
                 OnPropertyChanged();
             }
         }

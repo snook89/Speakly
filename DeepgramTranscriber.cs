@@ -82,18 +82,22 @@ namespace Speakly.Services
 
         private static string BuildDeepgramWebSocketUrl(AppConfig config)
         {
+            var selectedModel = string.IsNullOrWhiteSpace(config.DeepgramModel)
+                ? "nova-3"
+                : config.DeepgramModel.Trim();
+
             var query = new List<string>
             {
                 "encoding=linear16",
                 $"sample_rate={config.SampleRate.ToString(CultureInfo.InvariantCulture)}",
                 $"channels={config.Channels.ToString(CultureInfo.InvariantCulture)}",
-                $"model={Uri.EscapeDataString(config.DeepgramModel)}",
+                $"model={Uri.EscapeDataString(selectedModel)}",
                 "interim_results=true",
                 "smart_format=true",
                 "endpointing=300"
             };
 
-            var resolvedLanguage = ResolveLanguageForStreaming(config.Language, config.DeepgramModel);
+            var resolvedLanguage = ResolveLanguageForStreaming(config.Language, selectedModel);
             if (!string.IsNullOrWhiteSpace(resolvedLanguage))
             {
                 query.Add($"language={Uri.EscapeDataString(resolvedLanguage)}");

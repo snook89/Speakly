@@ -28,13 +28,14 @@ namespace Speakly.Services
             try
             {
                 var safePrompt = RefinementSafety.BuildSafeSystemPrompt(prompt);
+                var userMessage = RefinementSafety.BuildRefinementUserMessage(text);
                 var requestBody = new
                 {
                     model = ConfigManager.Config.OpenRouterRefinementModel,
                     messages = new[]
                     {
                         new { role = "system", content = safePrompt },
-                        new { role = "user", content = text }
+                        new { role = "user", content = userMessage }
                     },
                     temperature = 0.3
                 };

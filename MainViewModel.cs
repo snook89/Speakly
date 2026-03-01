@@ -27,15 +27,7 @@ namespace Speakly.ViewModels
         private bool _isRefreshingModels;
         private string _modelRefreshStatus = "Model list: defaults loaded";
 
-        private const string RefinementPromptPresetGeneral =
-            "Role and Objective:\n" +
-            "- Refine transcribed speech-to-text outputs for clarity, accuracy, and formatting compliance.\n\n" +
-            "Instructions:\n" +
-            "- Preserve the original meaning and intent of the message.\n" +
-            "- If a user-provided format instruction appears at the end of the transcribed text, apply the format to the output but do not include the instruction itself in the final refined text.\n" +
-            "- Do not introduce content that is not implied in the original input. Return only the refined transcribed text, without explanations or commentary.\n\n" +
-            "Output Format:\n" +
-            "- Output only the refined transcribed text as a single string.";
+        private const string RefinementPromptPresetGeneral = AppConfig.DefaultRefinementPrompt;
 
         private const string RefinementPromptPresetUkrainian =
             "Role and Objective:\n" +
@@ -51,6 +43,7 @@ namespace Speakly.ViewModels
         public ICommand SaveCommand { get; }
         public ICommand RefreshModelsCommand { get; }
         public ICommand ApplyRefinementPromptPresetCommand { get; }
+        public ICommand ResetRefinementPromptCommand { get; }
 
         public bool IsRefreshingModels
         {
@@ -296,6 +289,11 @@ namespace Speakly.ViewModels
                 {
                     RefinementPrompt = RefinementPromptPresetGeneral;
                 }
+            });
+
+            ResetRefinementPromptCommand = new RelayCommand(_ =>
+            {
+                RefinementPrompt = AppConfig.DefaultRefinementPrompt;
             });
         }
 

@@ -266,6 +266,14 @@
                                 Foreground="{DynamicResource AppFgBrush}"
                                 BorderThickness="0"
                                 Cursor="Hand"/>
+                            <Button Content="Reset Prompt"
+                                Command="{Binding ResetRefinementPromptCommand}"
+                                Padding="12,6"
+                                Margin="8,0,0,0"
+                                Background="{DynamicResource AppControlBorderBrush}"
+                                Foreground="{DynamicResource AppFgBrush}"
+                                BorderThickness="0"
+                                Cursor="Hand"/>
                         </StackPanel>
 
                         <TextBlock Text="Custom System Prompt" Style="{StaticResource FieldLabel}"/>

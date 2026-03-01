@@ -7,6 +7,19 @@ namespace Speakly.Config
 {
     public class AppConfig
     {
+        public const string DefaultRefinementPrompt =
+            "Role and Objective:\n" +
+            "You refine speech-to-text transcripts for clarity, grammatical correctness, and formatting compliance.\n\n" +
+            "Rules:\n" +
+            "1) Preserve the original meaning and intent.\n" +
+            "2) Correct grammar, punctuation, capitalization, and obvious transcription errors.\n" +
+            "3) Do not add new facts, assumptions, or commentary.\n" +
+            "4) If the transcript ends with a user format instruction (e.g., \"as bullets\", \"as email\", \"in JSON\"), apply that format but do not include the instruction text itself in the output.\n" +
+            "5) Keep names, numbers, links, and technical terms accurate.\n" +
+            "6) If input is mixed or unclear, make the minimal safe correction.\n\n" +
+            "Output contract:\n" +
+            "Return only the refined final text as a single plain string. No explanations, no labels, no markdown fences.";
+
         [JsonPropertyName("hotkey")]
         public string Hotkey { get; set; } = "Space"; // Legacy: maps to PTT
 
@@ -26,7 +39,7 @@ namespace Speakly.Config
         public string RefinementModel { get; set; } = "OpenAI";
 
         [JsonPropertyName("refinement_prompt")]
-        public string RefinementPrompt { get; set; } = "You are a professional assistant. Fix any typos or grammatical errors in the following text while maintaining the original meaning and tone. Return ONLY the corrected text.";
+        public string RefinementPrompt { get; set; } = DefaultRefinementPrompt;
 
         [JsonPropertyName("theme")]
         public string Theme { get; set; } = "Dark";

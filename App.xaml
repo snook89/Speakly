@@ -10,6 +10,8 @@
                 <ui:ControlsDictionary />
             </ResourceDictionary.MergedDictionaries>
 
+            <local:ModelFavoriteVisibilityConverter x:Key="ModelFavoriteVisibilityConverter"/>
+
             <!-- Shared page styles -->
             <Style x:Key="PageTitle" TargetType="TextBlock">
                 <Setter Property="FontSize" Value="28"/>

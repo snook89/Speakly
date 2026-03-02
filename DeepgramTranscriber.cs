@@ -19,8 +19,12 @@ namespace Speakly.Services
         private CancellationTokenSource? _cts;
         private readonly ConcurrentQueue<byte[]> _connectionBuffer = new();
         private TaskCompletionSource? _finalResultTcs;
-        private bool _isFinishing = false;
         private const string Version = "1.6.0-HandshakeDiagnostics";
+
+        // Accumulates is_final=true segments until speech_final=true signals a natural
+        // utterance boundary, or until the stream closes (Metadata flush).
+        // This prevents each chunk of a long sentence from being refined/inserted separately.
+        private readonly System.Text.StringBuilder _accumulator = new();
 
         public event EventHandler<TranscriptionEventArgs>? TranscriptionReceived;
         public event EventHandler<string>? ErrorReceived;
@@ -46,12 +50,12 @@ namespace Speakly.Services
             string url = BuildDeepgramWebSocketUrl(config);
 
             _cts = new CancellationTokenSource();
-            _isFinishing = false;
             _finalResultTcs = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
 
             try
             {
                 Logger.Log($"Connecting to Deepgram ({Version}): {url}");
+                _accumulator.Clear(); // reset any leftovers from a previous session
                 await _webSocket.ConnectAsync(new Uri(url), _cts.Token);
                 
                 // Flush buffer
@@ -230,7 +234,6 @@ private async Task<string> DiagnosticProbeAsync(string apiKey)
 
             try
             {
-                _isFinishing = true;
                 Logger.Log("Sending CloseStream to Deepgram.");
                 var closeMessage = Encoding.UTF8.GetBytes("{\"type\":\"CloseStream\"}");
                 await _webSocket.SendAsync(new ArraySegment<byte>(closeMessage), WebSocketMessageType.Text, true, _cts.Token);
@@ -309,31 +312,71 @@ private async Task<string> DiagnosticProbeAsync(string apiKey)
                 
                 if (root.TryGetProperty("type", out var typeElement) && typeElement.GetString() == "Results")
                 {
-                    bool isFinal = root.GetProperty("is_final").GetBoolean();
-                    var channel = root.GetProperty("channel");
+                    bool isFinal    = root.GetProperty("is_final").GetBoolean();
+                    bool speechFinal = root.TryGetProperty("speech_final", out var sfProp) && sfProp.GetBoolean();
+
+                    var channel      = root.GetProperty("channel");
                     var alternatives = channel.GetProperty("alternatives");
                     
                     if (alternatives.GetArrayLength() > 0)
                     {
                         var bestAlternative = alternatives[0];
-                        string? transcript = bestAlternative.GetProperty("transcript").GetString();
+                        string? transcript  = bestAlternative.GetProperty("transcript").GetString();
 
                         if (!string.IsNullOrWhiteSpace(transcript))
                         {
-                            Logger.Log($"Deepgram Transcription Arrived (isFinal={isFinal}): {transcript}");
-                            TranscriptionReceived?.Invoke(this, new TranscriptionEventArgs(transcript, isFinal));
+                            if (!isFinal)
+                            {
+                                // ── Interim result ─────────────────────────────────────────────
+                                // Show accumulated text + current interim so the overlay / logs
+                                // reflect the full in-progress sentence, not just the new chunk.
+                                var displayText = _accumulator.Length > 0
+                                    ? _accumulator.ToString().TrimEnd() + " " + transcript
+                                    : transcript;
+
+                                Logger.Log($"Deepgram Transcription Arrived (isFinal=False): {transcript}");
+                                TranscriptionReceived?.Invoke(this,
+                                    new TranscriptionEventArgs(displayText, false));
+                            }
+                            else
+                            {
+                                // ── Final chunk ────────────────────────────────────────────────
+                                // Accumulate until the speaker actually pauses (speech_final=true).
+                                if (_accumulator.Length > 0)
+                                    _accumulator.Append(' ');
+                                _accumulator.Append(transcript.Trim());
+
+                                Logger.Log($"Deepgram Transcription Arrived (isFinal=True, speechFinal={speechFinal}): {transcript}");
+
+                                if (speechFinal)
+                                {
+                                    // Natural utterance boundary — emit the complete sentence.
+                                    var fullUtterance = _accumulator.ToString();
+                                    _accumulator.Clear();
+                                    Logger.Log($"speech_final=True → emitting full utterance: '{fullUtterance}'");
+                                    TranscriptionReceived?.Invoke(this,
+                                        new TranscriptionEventArgs(fullUtterance, true));
+                                }
+                                // else: keep accumulating — speech_final will arrive later
+                            }
                         }
                     }
 
-                    if (isFinal && _isFinishing)
-                    {
-                        // Signal that we've received the last final result after closing stream
-                        _finalResultTcs?.TrySetResult();
-                    }
+                    // The old trigger (isFinal && _isFinishing) is removed.
+                    // The Metadata handler below is the authoritative signal for stream end;
+                    // it flushes any remaining accumulated text before signalling completion.
                 }
-                else if (root.TryGetProperty("type", out var type) && type.GetString() == "Metadata")
+                else if (root.TryGetProperty("type", out var type2) && type2.GetString() == "Metadata")
                 {
-                    // Metadata usually arrives at the very end after CloseStream
+                    // Stream has fully closed — flush anything left in the accumulator.
+                    if (_accumulator.Length > 0)
+                    {
+                        var remaining = _accumulator.ToString();
+                        _accumulator.Clear();
+                        Logger.Log($"Stream closed — flushing accumulated text: '{remaining}'");
+                        TranscriptionReceived?.Invoke(this,
+                            new TranscriptionEventArgs(remaining, true));
+                    }
                     _finalResultTcs?.TrySetResult();
                 }
             }

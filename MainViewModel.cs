@@ -27,17 +27,14 @@ namespace Speakly.ViewModels
         private bool _isRefreshingModels;
         private string _modelRefreshStatus = "Model list: defaults loaded";
 
-        private const string RefinementPromptPresetGeneral = RefinementPromptLibrary.General;
-        private const string RefinementPromptPresetUkrainian = RefinementPromptLibrary.Ukrainian;
-
         public event Action? SaveSucceeded;
         public event Action<string, string, string, string>? ApiTestCompleted;
         public event Action<bool>? RefreshModelsCompleted;
 
         public ICommand SaveCommand { get; }
         public ICommand RefreshModelsCommand { get; }
-        public ICommand ApplyRefinementPromptPresetCommand { get; }
-        public ICommand ClearRefinementPromptCommand { get; }
+        public ICommand SaveCurrentPromptCommand { get; }
+        public ICommand DeleteSelectedPromptCommand { get; }
 
         public bool IsRefreshingModels
         {
@@ -250,6 +247,18 @@ namespace Speakly.ViewModels
             set { ConfigManager.Config.SaveDebugRecords = value; OnPropertyChanged(); }
         }
 
+        public bool EnableRefinement
+        {
+            get => ConfigManager.Config.EnableRefinement;
+            set { ConfigManager.Config.EnableRefinement = value; OnPropertyChanged(); }
+        }
+
+        public bool CopyToClipboard
+        {
+            get => ConfigManager.Config.CopyToClipboard;
+            set { ConfigManager.Config.CopyToClipboard = value; OnPropertyChanged(); }
+        }
+
         public string Language
         {
             get => ConfigManager.Config.Language;
@@ -258,9 +267,55 @@ namespace Speakly.ViewModels
 
         public ObservableCollection<HistoryEntry> HistoryEntries { get; } = new ObservableCollection<HistoryEntry>();
 
-        public ICommand ToggleFavoriteModelCommand => new RelayCommand(
-            obj => ToggleOpenRouterFavorite(obj as string ?? string.Empty),
-            obj => string.Equals(RefinementModel, "OpenRouter", StringComparison.OrdinalIgnoreCase)
+        // ── Prompt Library ────────────────────────────────────────────────────
+
+        public ObservableCollection<PromptEntry> SavedPrompts { get; } = new ObservableCollection<PromptEntry>();
+
+        private PromptEntry? _selectedPromptEntry;
+        public PromptEntry? SelectedPromptEntry
+        {
+            get => _selectedPromptEntry;
+            set
+            {
+                _selectedPromptEntry = value;
+                OnPropertyChanged();
+                OnPropertyChanged(nameof(CanDeleteSelectedPrompt));
+                if (value != null)
+                    RefinementPrompt = value.Text;
+            }
+        }
+
+        private string _newPromptName = "";
+        public string NewPromptName
+        {
+            get => _newPromptName;
+            set { _newPromptName = value; OnPropertyChanged(); }
+        }
+
+        public bool CanDeleteSelectedPrompt =>
+            _selectedPromptEntry != null && !_selectedPromptEntry.IsBuiltIn;
+
+        private List<PromptEntry> _promptList = new();
+
+        private void ReloadSavedPrompts()
+        {
+            _promptList = PromptLibraryManager.Load();
+            SavedPrompts.Clear();
+            foreach (var p in _promptList)
+                SavedPrompts.Add(p);
+        }
+
+        public ICommand ToggleFavoriteModelCommand => ToggleRefinementFavoriteModelCommand;
+
+        public ICommand ToggleRefinementFavoriteModelCommand => new RelayCommand(
+            obj => ToggleRefinementFavorite(obj as string ?? string.Empty),
+            obj => GetRefinementFavoriteList() != null
+                   && obj is string s && !string.IsNullOrWhiteSpace(s)
+        );
+
+        public ICommand ToggleSttFavoriteModelCommand => new RelayCommand(
+            obj => ToggleSttFavorite(obj as string ?? string.Empty),
+            obj => GetSttFavoriteList() != null
                    && obj is string s && !string.IsNullOrWhiteSpace(s)
         );
 
@@ -337,23 +392,35 @@ namespace Speakly.ViewModels
                 async _ => await RefreshProviderModelsAsync(true),
                 _ => !IsRefreshingModels);
 
-            ApplyRefinementPromptPresetCommand = new RelayCommand(option =>
-            {
-                var selected = option?.ToString();
-                if (string.Equals(selected, "UK", StringComparison.OrdinalIgnoreCase))
-                {
-                    RefinementPrompt = RefinementPromptPresetUkrainian;
-                }
-                else
-                {
-                    RefinementPrompt = RefinementPromptPresetGeneral;
-                }
-            });
+            ReloadSavedPrompts();
 
-            ClearRefinementPromptCommand = new RelayCommand(_ =>
+            SaveCurrentPromptCommand = new RelayCommand(_ =>
             {
-                RefinementPrompt = string.Empty;
-            });
+                var name = NewPromptName?.Trim();
+                if (string.IsNullOrWhiteSpace(name)) return;
+
+                _promptList = PromptLibraryManager.AddOrUpdate(_promptList, name, RefinementPrompt);
+                SavedPrompts.Clear();
+                foreach (var p in _promptList) SavedPrompts.Add(p);
+
+                // Select the just-saved entry
+                var saved = SavedPrompts.FirstOrDefault(p =>
+                    string.Equals(p.Name, name, StringComparison.OrdinalIgnoreCase));
+                if (saved != null) SelectedPromptEntry = saved;
+                NewPromptName = "";
+            },
+            _ => !string.IsNullOrWhiteSpace(NewPromptName));
+
+            DeleteSelectedPromptCommand = new RelayCommand(_ =>
+            {
+                if (_selectedPromptEntry == null || _selectedPromptEntry.IsBuiltIn) return;
+                var deleteName = _selectedPromptEntry.Name;
+                _promptList = PromptLibraryManager.Delete(_promptList, deleteName);
+                SavedPrompts.Clear();
+                foreach (var p in _promptList) SavedPrompts.Add(p);
+                SelectedPromptEntry = SavedPrompts.FirstOrDefault();
+            },
+            _ => CanDeleteSelectedPrompt);
         }
 
         private void LoadAudioDevices()
@@ -373,6 +440,7 @@ namespace Speakly.ViewModels
             AvailableSttModels.Clear();
             if (TryApplyDynamicModels(AvailableSttModels, _dynamicSttModels, SttModel))
             {
+                PrioritizeSttFavorites();
                 EnsureCurrentModelInList(AvailableSttModels, SelectedSttModelString);
                 OnPropertyChanged(nameof(SelectedSttModelString));
                 return;
@@ -395,6 +463,7 @@ namespace Speakly.ViewModels
                 AvailableSttModels.Add("whisper-1");
                 AvailableSttModels.Add("whisper-1-hd");
             }
+            PrioritizeSttFavorites();
             EnsureCurrentModelInList(AvailableSttModels, SelectedSttModelString);
             OnPropertyChanged(nameof(SelectedSttModelString));
         }
@@ -404,7 +473,7 @@ namespace Speakly.ViewModels
             AvailableRefinementModels.Clear();
             if (TryApplyDynamicModels(AvailableRefinementModels, _dynamicRefinementModels, RefinementModel))
             {
-                PrioritizeOpenRouterFavorites();
+                PrioritizeRefinementFavorites();
                 EnsureCurrentModelInList(AvailableRefinementModels, SelectedRefinementModelString);
                 OnPropertyChanged(nameof(SelectedRefinementModelString));
                 return;
@@ -434,42 +503,98 @@ namespace Speakly.ViewModels
                 AvailableRefinementModels.Add("x-ai/grok-2");
                 AvailableRefinementModels.Add("deepseek/deepseek-chat");
             }
-            PrioritizeOpenRouterFavorites();
+            PrioritizeRefinementFavorites();
             EnsureCurrentModelInList(AvailableRefinementModels, SelectedRefinementModelString);
             OnPropertyChanged(nameof(SelectedRefinementModelString));
         }
 
-        public void ToggleOpenRouterFavorite(string modelId)
+        public void ToggleSttFavorite(string modelId)
         {
             if (string.IsNullOrWhiteSpace(modelId)) return;
 
-            var normalized = modelId.Trim();
-            ConfigManager.Config.OpenRouterFavoriteModels ??= new List<string>();
-            var favorites = ConfigManager.Config.OpenRouterFavoriteModels;
+            var favorites = GetSttFavoriteList();
+            if (favorites == null) return;
 
-            int existingIndex = favorites.FindIndex(x => string.Equals(x, normalized, StringComparison.OrdinalIgnoreCase));
+            ToggleFavoriteEntry(favorites, modelId.Trim());
+            UpdateSttModelList();
+            ConfigManager.Save();
+        }
+
+        public void ToggleRefinementFavorite(string modelId)
+        {
+            if (string.IsNullOrWhiteSpace(modelId)) return;
+
+            var favorites = GetRefinementFavoriteList();
+            if (favorites == null) return;
+
+            ToggleFavoriteEntry(favorites, modelId.Trim());
+            UpdateRefinementModelList();
+            ConfigManager.Save();
+        }
+
+        public bool IsSttModelFavorite(string modelId)
+        {
+            if (string.IsNullOrWhiteSpace(modelId)) return false;
+            var favorites = GetSttFavoriteList();
+            return favorites != null && favorites.Any(x => string.Equals(x, modelId, StringComparison.OrdinalIgnoreCase));
+        }
+
+        public bool IsRefinementModelFavorite(string modelId)
+        {
+            if (string.IsNullOrWhiteSpace(modelId)) return false;
+            var favorites = GetRefinementFavoriteList();
+            return favorites != null && favorites.Any(x => string.Equals(x, modelId, StringComparison.OrdinalIgnoreCase));
+        }
+
+        private void PrioritizeSttFavorites()
+        {
+            PrioritizeFavorites(AvailableSttModels, GetSttFavoriteList());
+        }
+
+        private void PrioritizeRefinementFavorites()
+        {
+            PrioritizeFavorites(AvailableRefinementModels, GetRefinementFavoriteList());
+        }
+
+        private List<string>? GetSttFavoriteList()
+        {
+            return SttModel switch
+            {
+                "Deepgram" => ConfigManager.Config.DeepgramFavoriteModels ??= new List<string>(),
+                "OpenAI" => ConfigManager.Config.OpenAISttFavoriteModels ??= new List<string>(),
+                _ => null
+            };
+        }
+
+        private List<string>? GetRefinementFavoriteList()
+        {
+            return RefinementModel switch
+            {
+                "OpenAI" => ConfigManager.Config.OpenAIRefinementFavoriteModels ??= new List<string>(),
+                "Cerebras" => ConfigManager.Config.CerebrasRefinementFavoriteModels ??= new List<string>(),
+                "OpenRouter" => ConfigManager.Config.OpenRouterFavoriteModels ??= new List<string>(),
+                _ => null
+            };
+        }
+
+        private static void ToggleFavoriteEntry(List<string> favorites, string modelId)
+        {
+            int existingIndex = favorites.FindIndex(x => string.Equals(x, modelId, StringComparison.OrdinalIgnoreCase));
             if (existingIndex >= 0)
             {
                 favorites.RemoveAt(existingIndex);
             }
             else
             {
-                favorites.Insert(0, normalized);
+                favorites.Insert(0, modelId);
             }
-
-            UpdateRefinementModelList();
-            ConfigManager.Save();
         }
 
-        private void PrioritizeOpenRouterFavorites()
+        private static void PrioritizeFavorites(ObservableCollection<string> models, List<string>? favorites)
         {
-            if (!string.Equals(RefinementModel, "OpenRouter", StringComparison.OrdinalIgnoreCase)) return;
-            if (AvailableRefinementModels.Count == 0) return;
+            if (models.Count == 0 || favorites == null || favorites.Count == 0) return;
 
-            var favorites = ConfigManager.Config.OpenRouterFavoriteModels;
-            if (favorites == null || favorites.Count == 0) return;
-
-            var current = AvailableRefinementModels.ToList();
+            var current = models.ToList();
             var favoriteSet = new HashSet<string>(favorites, StringComparer.OrdinalIgnoreCase);
 
             var preferred = favorites
@@ -481,15 +606,15 @@ namespace Speakly.ViewModels
                 .Where(m => !favoriteSet.Contains(m))
                 .ToList();
 
-            AvailableRefinementModels.Clear();
+            models.Clear();
             foreach (var model in preferred)
             {
-                AvailableRefinementModels.Add(model);
+                models.Add(model);
             }
 
             foreach (var model in rest)
             {
-                AvailableRefinementModels.Add(model);
+                models.Add(model);
             }
         }
 

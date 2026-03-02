@@ -72,6 +72,18 @@ namespace Speakly.Config
         [JsonPropertyName("openrouter_favorite_models")]
         public List<string> OpenRouterFavoriteModels { get; set; } = new List<string>();
 
+        [JsonPropertyName("openai_refinement_favorite_models")]
+        public List<string> OpenAIRefinementFavoriteModels { get; set; } = new List<string>();
+
+        [JsonPropertyName("cerebras_refinement_favorite_models")]
+        public List<string> CerebrasRefinementFavoriteModels { get; set; } = new List<string>();
+
+        [JsonPropertyName("deepgram_favorite_models")]
+        public List<string> DeepgramFavoriteModels { get; set; } = new List<string>();
+
+        [JsonPropertyName("openai_stt_favorite_models")]
+        public List<string> OpenAISttFavoriteModels { get; set; } = new List<string>();
+
         [JsonPropertyName("enable_debug_logs")]
         public bool EnableDebugLogs { get; set; } = false;
 
@@ -98,6 +110,12 @@ namespace Speakly.Config
 
         [JsonPropertyName("save_debug_records")]
         public bool SaveDebugRecords { get; set; } = false;
+
+        [JsonPropertyName("enable_refinement")]
+        public bool EnableRefinement { get; set; } = true;
+
+        [JsonPropertyName("copy_to_clipboard")]
+        public bool CopyToClipboard { get; set; } = false;
 
         [JsonPropertyName("openai_api_key")]
         public string OpenAIApiKey { get; set; } = "";

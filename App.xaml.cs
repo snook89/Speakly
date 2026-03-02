@@ -33,6 +33,15 @@ namespace Speakly
         private bool _isToggleRecording = false; // Track toggle-record state
         private IntPtr _lastActiveWindow = IntPtr.Zero;
         private System.IO.MemoryStream? _audioBuffer; // For debug records
+        // Serializes text insertions: only one InsertText may run at a time to prevent
+        // concurrent SendInput calls from interleaving keystrokes in the target window.
+        private readonly System.Threading.SemaphoreSlim _insertionGate = new System.Threading.SemaphoreSlim(1, 1);
+        // Accumulates every inserted utterance for the current PTT/Toggle session so
+        // the clipboard always holds the FULL session text, not just the last utterance.
+        private readonly System.Text.StringBuilder _sessionText = new();
+        // Whether at least one utterance has already been typed into the target window
+        // this session — used to prepend a space before subsequent utterances.
+        private bool _sessionHasInserted = false;
 
         protected override void OnStartup(StartupEventArgs e)
         {
@@ -194,6 +203,8 @@ namespace Speakly
                 {
                     _lastActiveWindow = TextInserter.GetForegroundWindow();
                     Logger.Log($"PTT Hotkey Pressed. Captured active window: {_lastActiveWindow}");
+                    _sessionText.Clear();
+                    _sessionHasInserted = false;
                     AutoAdjustRefinementPromptForLanguage();
                     _overlay?.SetActiveLanguage(ResolveOverlayLanguageDisplay());
                     _overlay?.SetStatus("RECORDING", Brushes.Red);
@@ -218,6 +229,8 @@ namespace Speakly
                 {
                     _lastActiveWindow = TextInserter.GetForegroundWindow();
                     Logger.Log($"Toggle Recording Started. Captured active window: {_lastActiveWindow}");
+                    _sessionText.Clear();
+                    _sessionHasInserted = false;
                     AutoAdjustRefinementPromptForLanguage();
                     _overlay?.SetActiveLanguage(ResolveOverlayLanguageDisplay());
                     _isToggleRecording = true;
@@ -362,7 +375,7 @@ namespace Speakly
             {
                 string textToInsert = e.Text;
 
-                if (_refiner != null)
+                if (_refiner != null && ConfigManager.Config.EnableRefinement)
                 {
                     string activeRefinementModel = ConfigManager.Config.RefinementModel switch
                     {
@@ -377,7 +390,31 @@ namespace Speakly
                 }
 
                 Logger.Log($"Inserting text into window {_lastActiveWindow}: '{textToInsert}'");
-                TextInserter.InsertText(textToInsert, _lastActiveWindow);
+                // Prepend a space between utterances so they don't run together in the target window.
+                var toType = _sessionHasInserted ? " " + textToInsert : textToInsert;
+                await _insertionGate.WaitAsync();
+                try
+                {
+                    await Task.Run(() => TextInserter.InsertText(toType, _lastActiveWindow));
+                }
+                finally
+                {
+                    _insertionGate.Release();
+                }
+                _sessionHasInserted = true;
+
+                if (ConfigManager.Config.CopyToClipboard)
+                {
+                    // Append a space separator between utterances (matching what gets typed
+                    // into the target window), then copy the FULL session text so the
+                    // clipboard always holds everything spoken — not just the last chunk.
+                    if (_sessionText.Length > 0) _sessionText.Append(' ');
+                    _sessionText.Append(textToInsert);
+                    var fullSessionText = _sessionText.ToString();
+                    Dispatcher.Invoke(() => System.Windows.Clipboard.SetText(fullSessionText));
+                    Logger.Log($"Copied full session text to clipboard (length={fullSessionText.Length}).");
+                }
+
                 HistoryManager.AddEntry(e.Text, textToInsert);
                 
                 // Sync to ViewModel
@@ -415,6 +452,8 @@ namespace Speakly
 
             _lastActiveWindow = TextInserter.GetForegroundWindow();
             Logger.Log($"Overlay Recording Started. Captured active window: {_lastActiveWindow}");
+            _sessionText.Clear();
+            _sessionHasInserted = false;
             AutoAdjustRefinementPromptForLanguage();
             _overlay?.SetActiveLanguage(ResolveOverlayLanguageDisplay());
             _isToggleRecording = true;

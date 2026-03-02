@@ -30,6 +30,8 @@
                     <TextBlock Text="Behavior" Style="{StaticResource SectionTitle}"/>
                     <ui:ToggleSwitch Content="Show Floating Overlay" IsChecked="{Binding ShowOverlay}" Margin="0,0,0,10"/>
                     <ui:ToggleSwitch Content="Minimize to Tray on Close" IsChecked="{Binding MinimizeToTray}" Margin="0,0,0,10"/>
+                    <ui:ToggleSwitch Content="Copy result to clipboard" IsChecked="{Binding CopyToClipboard}" Margin="0,0,0,10"/>
+                    <TextBlock Text="After each transcription the final text is also placed on the clipboard, so you can Ctrl+V it anywhere even if the target window was not focused." Style="{StaticResource HintText}" Margin="0,0,0,10"/>
                     <ui:ToggleSwitch Content="Enable Debug Logs" IsChecked="{Binding EnableDebugLogs}"/>
                 </StackPanel>
             </Border>

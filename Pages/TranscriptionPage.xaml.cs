@@ -1,9 +1,11 @@
 using System;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Media.Animation;
 using System.Windows.Media.Effects;
+using Speakly.Helpers;
 
 namespace Speakly.Pages
 {
@@ -36,6 +38,36 @@ namespace Speakly.Pages
 
                 ModelGlow.BeginAnimation(OpacityProperty, anim);
             });
+        }
+
+        private void ModelCombo_TextChanged(object sender, TextChangedEventArgs e)
+        {
+            if (sender is ComboBox combo)
+            {
+                EditableModelComboHelper.HandleTextChanged(combo);
+            }
+        }
+
+        private void ModelCombo_DropDownClosed(object sender, EventArgs e)
+        {
+            if (sender is ComboBox combo)
+            {
+                EditableModelComboHelper.ResetFilter(combo);
+            }
+        }
+
+        private void ModelCombo_PreviewKeyDown(object sender, KeyEventArgs e)
+        {
+            if (sender is not ComboBox combo) return;
+            if (e.Key != Key.Home || Keyboard.Modifiers != ModifierKeys.Control) return;
+
+            EditableModelComboHelper.ScrollDropDownToTop(combo);
+            e.Handled = true;
+        }
+
+        private void JumpToTop_Click(object sender, RoutedEventArgs e)
+        {
+            EditableModelComboHelper.ScrollDropDownToTop(SttModelCombo);
         }
     }
 }

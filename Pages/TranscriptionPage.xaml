@@ -23,8 +23,62 @@
 
                     <TextBlock Text="Target Model" Style="{StaticResource FieldLabel}"/>
                     <Grid x:Name="ModelRow">
-                        <ComboBox ItemsSource="{Binding AvailableSttModels}" Text="{Binding SelectedSttModelString}" IsEditable="True" Margin="0,0,0,12"/>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <ComboBox x:Name="SttModelCombo"
+                                  Grid.Column="0"
+                                  ItemsSource="{Binding AvailableSttModels}"
+                                  Text="{Binding SelectedSttModelString}"
+                                  IsEditable="True"
+                                  IsTextSearchEnabled="False"
+                                  StaysOpenOnEdit="True"
+                                  ScrollViewer.VerticalScrollBarVisibility="Visible"
+                                  TextChanged="ModelCombo_TextChanged"
+                                  DropDownClosed="ModelCombo_DropDownClosed"
+                                  PreviewKeyDown="ModelCombo_PreviewKeyDown"
+                                  Margin="0,0,8,12">
+                            <ComboBox.ItemTemplate>
+                                <DataTemplate>
+                                    <StackPanel Orientation="Horizontal">
+                                        <TextBlock Text="★"
+                                                   Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                                                   Margin="0,0,6,0">
+                                            <TextBlock.Visibility>
+                                                <MultiBinding Converter="{StaticResource ModelFavoriteVisibilityConverter}"
+                                                              ConverterParameter="Stt">
+                                                    <Binding />
+                                                    <Binding RelativeSource="{RelativeSource AncestorType=UserControl}" Path="DataContext"/>
+                                                </MultiBinding>
+                                            </TextBlock.Visibility>
+                                        </TextBlock>
+                                        <TextBlock Text="{Binding}" />
+                                    </StackPanel>
+                                </DataTemplate>
+                            </ComboBox.ItemTemplate>
+                            <ComboBox.ItemContainerStyle>
+                                <Style TargetType="ComboBoxItem" BasedOn="{StaticResource {x:Type ComboBoxItem}}">
+                                    <Setter Property="Tag" Value="{Binding DataContext, RelativeSource={RelativeSource AncestorType=UserControl}}"/>
+                                    <Setter Property="ContextMenu">
+                                        <Setter.Value>
+                                            <ContextMenu>
+                                                <MenuItem Header="★ Toggle Favorite"
+                                                          Command="{Binding PlacementTarget.Tag.ToggleSttFavoriteModelCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
+                                                          CommandParameter="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource AncestorType=ContextMenu}}"/>
+                                            </ContextMenu>
+                                        </Setter.Value>
+                                    </Setter>
+                                </Style>
+                            </ComboBox.ItemContainerStyle>
+                        </ComboBox>
+                        <ui:Button Grid.Column="1"
+                                   Content="Top"
+                                   Style="{StaticResource SecondaryButton}"
+                                   Click="JumpToTop_Click"
+                                   Margin="0,0,0,12"/>
                         <Border x:Name="ModelGlow"
+                                Grid.ColumnSpan="2"
                                 BorderThickness="2" IsHitTestVisible="False" Opacity="0" Panel.ZIndex="10"
                                 Margin="0,0,0,12">
                             <Border.Effect><DropShadowEffect x:Name="ModelGlowFx" BlurRadius="18" ShadowDepth="0" Opacity="0.95"/></Border.Effect>

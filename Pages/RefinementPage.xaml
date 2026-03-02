@@ -11,6 +11,21 @@
                 <StackPanel>
                     <TextBlock Text="AI Text Refinement" Style="{StaticResource SectionTitle}"/>
 
+                    <ui:ToggleSwitch Content="Enable AI Refinement" IsChecked="{Binding EnableRefinement}" Margin="0,0,0,16"/>
+
+                    <!-- All refinement settings are hidden when refinement is disabled -->
+                    <StackPanel>
+                        <StackPanel.Style>
+                            <Style TargetType="StackPanel">
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding EnableRefinement}" Value="False">
+                                        <Setter Property="Opacity" Value="0.4"/>
+                                        <Setter Property="IsEnabled" Value="False"/>
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </StackPanel.Style>
+
                     <TextBlock Text="Service" Style="{StaticResource FieldLabel}"/>
                     <ComboBox SelectedValue="{Binding RefinementModel}" SelectedValuePath="Content" Margin="0,0,0,16" MaxWidth="300" HorizontalAlignment="Left">
                         <ComboBoxItem Content="OpenAI"/>
@@ -20,10 +35,40 @@
 
                     <TextBlock Text="Target Model" Style="{StaticResource FieldLabel}"/>
                     <Grid x:Name="ModelRow">
-                        <ComboBox ItemsSource="{Binding AvailableRefinementModels}"
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <ComboBox x:Name="RefinementModelCombo"
+                                  Grid.Column="0"
+                                  ItemsSource="{Binding AvailableRefinementModels}"
                                   Text="{Binding SelectedRefinementModelString}"
                                   IsEditable="True"
-                                  Margin="0,0,0,12">
+                                  IsTextSearchEnabled="False"
+                                  StaysOpenOnEdit="True"
+                                  ScrollViewer.VerticalScrollBarVisibility="Visible"
+                                  TextChanged="ModelCombo_TextChanged"
+                                  DropDownClosed="ModelCombo_DropDownClosed"
+                                  PreviewKeyDown="ModelCombo_PreviewKeyDown"
+                                  Margin="0,0,8,12">
+                            <ComboBox.ItemTemplate>
+                                <DataTemplate>
+                                    <StackPanel Orientation="Horizontal">
+                                        <TextBlock Text="★"
+                                                   Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                                                   Margin="0,0,6,0">
+                                            <TextBlock.Visibility>
+                                                <MultiBinding Converter="{StaticResource ModelFavoriteVisibilityConverter}"
+                                                              ConverterParameter="Refinement">
+                                                    <Binding />
+                                                    <Binding RelativeSource="{RelativeSource AncestorType=UserControl}" Path="DataContext"/>
+                                                </MultiBinding>
+                                            </TextBlock.Visibility>
+                                        </TextBlock>
+                                        <TextBlock Text="{Binding}" />
+                                    </StackPanel>
+                                </DataTemplate>
+                            </ComboBox.ItemTemplate>
                             <ComboBox.ItemContainerStyle>
                                 <Style TargetType="ComboBoxItem" BasedOn="{StaticResource {x:Type ComboBoxItem}}">
                                     <!-- Tag carries the ViewModel so ContextMenu can reach it -->
@@ -31,8 +76,8 @@
                                     <Setter Property="ContextMenu">
                                         <Setter.Value>
                                             <ContextMenu>
-                                                <MenuItem Header="★ Toggle Favorite (OpenRouter)"
-                                                          Command="{Binding PlacementTarget.Tag.ToggleFavoriteModelCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
+                                                <MenuItem Header="★ Toggle Favorite"
+                                                          Command="{Binding PlacementTarget.Tag.ToggleRefinementFavoriteModelCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
                                                           CommandParameter="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource AncestorType=ContextMenu}}"/>
                                             </ContextMenu>
                                         </Setter.Value>
@@ -40,7 +85,13 @@
                                 </Style>
                             </ComboBox.ItemContainerStyle>
                         </ComboBox>
+                        <ui:Button Grid.Column="1"
+                                   Content="Top"
+                                   Style="{StaticResource SecondaryButton}"
+                                   Click="JumpToTop_Click"
+                                   Margin="0,0,0,12"/>
                         <Border x:Name="ModelGlow"
+                                Grid.ColumnSpan="2"
                                 BorderThickness="2" IsHitTestVisible="False" Opacity="0" Panel.ZIndex="10"
                                 Margin="0,0,0,12">
                             <Border.Effect><DropShadowEffect x:Name="ModelGlowFx" BlurRadius="18" ShadowDepth="0" Opacity="0.95"/></Border.Effect>
@@ -61,21 +112,23 @@
                                 Margin="0,0,0,12"/>
 
                     <TextBlock Text="Prompt Presets" Style="{StaticResource FieldLabel}"/>
-                    <StackPanel Orientation="Horizontal" Margin="0,0,0,14">
-                        <ui:Button Content="General"
-                                   Command="{Binding ApplyRefinementPromptPresetCommand}"
-                                   CommandParameter="GENERAL"
-                                   Style="{StaticResource SecondaryButton}"/>
-                        <ui:Button Content="Ukrainian"
-                                   Command="{Binding ApplyRefinementPromptPresetCommand}"
-                                   CommandParameter="UK"
+                    <Grid Margin="0,0,0,14">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <ComboBox Grid.Column="0"
+                                  ItemsSource="{Binding SavedPrompts}"
+                                  SelectedItem="{Binding SelectedPromptEntry}"
+                                  DisplayMemberPath="Name"
+                                  Margin="0,0,8,0"/>
+                        <ui:Button Grid.Column="1"
+                                   Content="Delete"
+                                   Command="{Binding DeleteSelectedPromptCommand}"
                                    Style="{StaticResource SecondaryButton}"
-                                   Margin="8,0,0,0"/>
-                        <ui:Button Content="Clear"
-                                   Command="{Binding ClearRefinementPromptCommand}"
-                                   Style="{StaticResource SecondaryButton}"
-                                   Margin="8,0,0,0"/>
-                    </StackPanel>
+                                   IsEnabled="{Binding CanDeleteSelectedPrompt}"
+                                   ToolTip="Delete selected user prompt (built-in prompts cannot be deleted)"/>
+                    </Grid>
 
                     <ui:InfoBar Title="Prompt warning"
                                 Message="Custom System Prompt is empty. Refinement may behave unpredictably."
@@ -84,7 +137,31 @@
                                 Margin="0,0,0,12"/>
 
                     <TextBlock Text="Custom System Prompt" Style="{StaticResource FieldLabel}"/>
-                    <ui:TextBox Text="{Binding RefinementPrompt}" AcceptsReturn="True" Height="160" TextWrapping="Wrap" VerticalScrollBarVisibility="Auto"/>
+                    <ui:TextBox x:Name="PromptTextBox"
+                                Text="{Binding RefinementPrompt, UpdateSourceTrigger=PropertyChanged}"
+                                AcceptsReturn="True" Height="160" TextWrapping="Wrap"
+                                VerticalScrollBarVisibility="Auto"
+                                Margin="0,0,0,12"/>
+
+                    <TextBlock Text="Save current prompt as:" Style="{StaticResource FieldLabel}"/>
+                    <Grid Margin="0,0,0,4">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <ui:TextBox Grid.Column="0"
+                                    PlaceholderText="Prompt name…"
+                                    Text="{Binding NewPromptName, UpdateSourceTrigger=PropertyChanged}"
+                                    Margin="0,0,8,0"/>
+                        <ui:Button Grid.Column="1"
+                                   Content="Save"
+                                   Command="{Binding SaveCurrentPromptCommand}"
+                                   Style="{StaticResource SecondaryButton}"
+                                   ToolTip="Save the current prompt text under this name"/>
+                    </Grid>
+                    <TextBlock Text="Built-in prompts (General, Ukrainian) cannot be overwritten or deleted."
+                               Style="{StaticResource HintText}" Margin="0,0,0,4"/>
+                    </StackPanel>
                 </StackPanel>
             </Border>
         </StackPanel>

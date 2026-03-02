@@ -33,6 +33,8 @@ namespace Speakly.Helpers
 
         public static void ScrollDropDownToTop(ComboBox combo)
         {
+            combo.ApplyTemplate();
+
             if (!combo.IsDropDownOpen)
             {
                 combo.IsDropDownOpen = true;
@@ -40,12 +42,21 @@ namespace Speakly.Helpers
 
             combo.Dispatcher.BeginInvoke(() =>
             {
-                if (combo.Template.FindName("PART_Popup", combo) is not Popup popup) return;
-                if (popup.Child is not DependencyObject root) return;
+                var scrollViewer = FindDropDownScrollViewer(combo);
+                if (scrollViewer != null)
+                {
+                    scrollViewer.ScrollToTop();
+                    return;
+                }
 
-                var scrollViewer = FindChild<ScrollViewer>(root);
-                scrollViewer?.ScrollToTop();
-            }, DispatcherPriority.Background);
+                // Fallback: force the first item into view when template internals differ.
+                if (combo.Items.Count == 0) return;
+                var firstItem = combo.Items[0];
+                if (combo.ItemContainerGenerator.ContainerFromItem(firstItem) is FrameworkElement container)
+                {
+                    container.BringIntoView();
+                }
+            }, DispatcherPriority.ContextIdle);
         }
 
         private static void ApplyContainsFilter(ComboBox combo, string query)
@@ -85,6 +96,20 @@ namespace Speakly.Helpers
             }
 
             return null;
+        }
+
+        private static ScrollViewer? FindDropDownScrollViewer(ComboBox combo)
+        {
+            if (combo.Template.FindName("PART_Popup", combo) is Popup popup && popup.Child is DependencyObject popupRoot)
+            {
+                var popupScrollViewer = FindChild<ScrollViewer>(popupRoot);
+                if (popupScrollViewer != null)
+                {
+                    return popupScrollViewer;
+                }
+            }
+
+            return FindChild<ScrollViewer>(combo);
         }
     }
 }

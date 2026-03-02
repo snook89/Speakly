@@ -85,6 +85,12 @@
                         <ui:SymbolIcon Symbol="History16"/>
                     </ui:NavigationViewItem.Icon>
                 </ui:NavigationViewItem>
+                <ui:NavigationViewItem Content="Statistics"
+                                       TargetPageType="{x:Type pages:StatisticsPage}">
+                    <ui:NavigationViewItem.Icon>
+                        <ui:SymbolIcon Symbol="History16"/>
+                    </ui:NavigationViewItem.Icon>
+                </ui:NavigationViewItem>
                 <ui:NavigationViewItem Content="Info"
                                        TargetPageType="{x:Type pages:InfoPage}">
                     <ui:NavigationViewItem.Icon>

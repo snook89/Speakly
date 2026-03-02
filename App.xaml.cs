@@ -1,7 +1,9 @@
 ﻿using System.Linq;
 using System.Media;
+using System.Collections.Generic;
 using System.Runtime.InteropServices;
 using System.Threading.Tasks;
+using System.Diagnostics;
 using System.Windows;
 using System.Windows.Input;
 using System.Windows.Media;
@@ -14,6 +16,15 @@ namespace Speakly
 {
     public partial class App : Application
     {
+        private enum SessionState
+        {
+            Idle,
+            Recording,
+            Transcribing,
+            Refining,
+            Error
+        }
+
         private static readonly string[] BaseThemeDictionaryUris =
         {
             "/Themes/LightTheme.xaml",
@@ -31,6 +42,8 @@ namespace Speakly
         private SoundPlayer? _startSound;
         private SoundPlayer? _stopSound;
         private bool _isToggleRecording = false; // Track toggle-record state
+        private readonly object _sessionLock = new();
+        private SessionState _sessionState = SessionState.Idle;
         private IntPtr _lastActiveWindow = IntPtr.Zero;
         private System.IO.MemoryStream? _audioBuffer; // For debug records
         // Serializes text insertions: only one InsertText may run at a time to prevent
@@ -42,6 +55,16 @@ namespace Speakly
         // Whether at least one utterance has already been typed into the target window
         // this session — used to prepend a space before subsequent utterances.
         private bool _sessionHasInserted = false;
+        private DateTime _recordingStartedUtc;
+        private DateTime _transcribingStartedUtc;
+        private int _recordMs;
+        private int _transcribeMs;
+        private int _refineMs;
+        private int _insertMs;
+        private readonly object _audioChunkLock = new();
+        private readonly List<byte[]> _sessionAudioChunks = new();
+        private bool _finalTranscriptionProcessed;
+        private bool _sttFailoverAttempted;
 
         protected override void OnStartup(StartupEventArgs e)
         {
@@ -73,6 +96,7 @@ namespace Speakly
             InitializeTranscriptionAndRefinement();
 
             ViewModel = new MainViewModel();
+            ViewModel.RunHealthChecks();
             MainWindow = new MainWindow();
             _trayService = new TrayIconService(MainWindow);
             
@@ -88,6 +112,7 @@ namespace Speakly
             {
                 _overlay = new FloatingOverlay();
                 _overlay.Show();
+                _overlay.EnsureVisibleOnScreen();
             }
 
             MainWindow.Show();
@@ -199,8 +224,9 @@ namespace Speakly
             // --- Push-to-Talk (hold) ---
             if (IsHotkeyMatch(ConfigManager.Config.PttHotkey, e))
             {
-                if (_recorder != null && !_recorder.IsRecording)
+                if (_recorder != null && TryEnterRecording())
                 {
+                    BeginSessionTiming();
                     _lastActiveWindow = TextInserter.GetForegroundWindow();
                     Logger.Log($"PTT Hotkey Pressed. Captured active window: {_lastActiveWindow}");
                     _sessionText.Clear();
@@ -227,6 +253,9 @@ namespace Speakly
             {
                 if (!_isToggleRecording)
                 {
+                    if (!TryEnterRecording()) return;
+                    BeginSessionTiming();
+
                     _lastActiveWindow = TextInserter.GetForegroundWindow();
                     Logger.Log($"Toggle Recording Started. Captured active window: {_lastActiveWindow}");
                     _sessionText.Clear();
@@ -275,11 +304,13 @@ namespace Speakly
 
         private async Task StopRecordingAsync()
         {
-            if (_recorder == null || !_recorder.IsRecording) return;
+            if (_recorder == null || !TryEnterTranscribing()) return;
             Logger.Log("Stopping recording.");
             _overlay?.SetStatus("TRANSCRIBING", Brushes.Yellow);
             _stopSound?.Play();
             _recorder.StopRecording();
+            _recordMs = (int)Math.Max(0, (DateTime.UtcNow - _recordingStartedUtc).TotalMilliseconds);
+            _transcribingStartedUtc = DateTime.UtcNow;
 
             try
             {
@@ -362,6 +393,8 @@ namespace Speakly
                 await _transcriber.SendAudioAsync(data);
             }
 
+            CaptureSessionAudio(data);
+
             if (_audioBuffer != null)
             {
                 _audioBuffer.Write(data, 0, data.Length);
@@ -370,73 +403,300 @@ namespace Speakly
 
         private async void OnTranscriptionReceived(object? sender, TranscriptionEventArgs e)
         {
+            if (!e.IsFinal || string.IsNullOrWhiteSpace(e.Text) || _finalTranscriptionProcessed) return;
             Logger.Log($"App received transcription: isFinal={e.IsFinal}, Text='{e.Text}'");
-            if (e.IsFinal)
+            await HandleFinalTranscriptionAsync(e.Text, ConfigManager.Config.SttModel, ResolveActiveSttModel());
+        }
+
+        private void CaptureSessionAudio(byte[] data)
+        {
+            if (data.Length == 0) return;
+
+            var copy = new byte[data.Length];
+            Buffer.BlockCopy(data, 0, copy, 0, data.Length);
+            lock (_audioChunkLock)
             {
-                string textToInsert = e.Text;
-
-                if (_refiner != null && ConfigManager.Config.EnableRefinement)
-                {
-                    string activeRefinementModel = ConfigManager.Config.RefinementModel switch
-                    {
-                        "Cerebras" => ConfigManager.Config.CerebrasRefinementModel,
-                        "OpenRouter" => ConfigManager.Config.OpenRouterRefinementModel,
-                        _ => ConfigManager.Config.OpenAIRefinementModel
-                    };
-                    Logger.Log($"Refining text using {ConfigManager.Config.RefinementModel} (model={activeRefinementModel})");
-                    _overlay?.SetStatus("REFINING", Brushes.Cyan);
-                    textToInsert = await _refiner.RefineTextAsync(e.Text, ConfigManager.Config.RefinementPrompt);
-                    Logger.Log($"Refinement complete: '{textToInsert}'");
-                }
-
-                Logger.Log($"Inserting text into window {_lastActiveWindow}: '{textToInsert}'");
-                // Prepend a space between utterances so they don't run together in the target window.
-                var toType = _sessionHasInserted ? " " + textToInsert : textToInsert;
-                await _insertionGate.WaitAsync();
-                try
-                {
-                    await Task.Run(() => TextInserter.InsertText(toType, _lastActiveWindow));
-                }
-                finally
-                {
-                    _insertionGate.Release();
-                }
-                _sessionHasInserted = true;
-
-                if (ConfigManager.Config.CopyToClipboard)
-                {
-                    // Append a space separator between utterances (matching what gets typed
-                    // into the target window), then copy the FULL session text so the
-                    // clipboard always holds everything spoken — not just the last chunk.
-                    if (_sessionText.Length > 0) _sessionText.Append(' ');
-                    _sessionText.Append(textToInsert);
-                    var fullSessionText = _sessionText.ToString();
-                    Dispatcher.Invoke(() => System.Windows.Clipboard.SetText(fullSessionText));
-                    Logger.Log($"Copied full session text to clipboard (length={fullSessionText.Length}).");
-                }
-
-                HistoryManager.AddEntry(e.Text, textToInsert);
-                
-                // Sync to ViewModel
-                Dispatcher.Invoke(() => {
-                    var vm = MainWindow.DataContext as MainViewModel;
-                    vm?.HistoryEntries.Insert(0, new HistoryEntry { 
-                        Timestamp = DateTime.Now, 
-                        OriginalText = e.Text, 
-                        RefinedText = textToInsert 
-                    });
-                });
-
-                _overlay?.SetStatus("READY", Brushes.Aqua);
+                _sessionAudioChunks.Add(copy);
             }
         }
 
-        private void OnTranscriberError(object? sender, string error)
+        private List<byte[]> SnapshotSessionAudio()
         {
+            lock (_audioChunkLock)
+            {
+                return _sessionAudioChunks.Select(chunk =>
+                {
+                    var copy = new byte[chunk.Length];
+                    Buffer.BlockCopy(chunk, 0, copy, 0, chunk.Length);
+                    return copy;
+                }).ToList();
+            }
+        }
+
+        private async void OnTranscriberError(object? sender, string error)
+        {
+            if (_finalTranscriptionProcessed) return;
+
+            var errorCode = ErrorClassifier.Classify(error);
+            Logger.Log($"Transcriber error classified as '{errorCode}': {error}");
+
+            var failoverSucceeded = await TryRunSttFailoverAsync(errorCode);
+            if (failoverSucceeded) return;
+
+            HandleSessionFailure(error, errorCode);
+        }
+
+        private async Task HandleFinalTranscriptionAsync(string originalText, string sttProvider, string sttModel)
+        {
+            if (_finalTranscriptionProcessed) return;
+            _finalTranscriptionProcessed = true;
+
+            string textToInsert = originalText;
+            _transcribeMs = (int)Math.Max(0, (DateTime.UtcNow - _transcribingStartedUtc).TotalMilliseconds);
+
+            if (_refiner != null && ConfigManager.Config.EnableRefinement)
+            {
+                SetSessionState(SessionState.Refining);
+                string activeRefinementModel = ConfigManager.Config.RefinementModel switch
+                {
+                    "Cerebras" => ConfigManager.Config.CerebrasRefinementModel,
+                    "OpenRouter" => ConfigManager.Config.OpenRouterRefinementModel,
+                    _ => ConfigManager.Config.OpenAIRefinementModel
+                };
+                Logger.Log($"Refining text using {ConfigManager.Config.RefinementModel} (model={activeRefinementModel})");
+                _overlay?.SetStatus("REFINING", Brushes.Cyan);
+                var swRefine = Stopwatch.StartNew();
+                textToInsert = await _refiner.RefineTextAsync(originalText, ConfigManager.Config.RefinementPrompt);
+                swRefine.Stop();
+                _refineMs = (int)swRefine.ElapsedMilliseconds;
+                Logger.Log($"Refinement complete: '{textToInsert}'");
+            }
+            else
+            {
+                _refineMs = 0;
+            }
+
+            Logger.Log($"Inserting text into window {_lastActiveWindow}: '{textToInsert}'");
+            var toType = _sessionHasInserted ? " " + textToInsert : textToInsert;
+            InsertResult insertResult = new InsertResult { Success = false, Method = "Unknown", ErrorCode = "NotExecuted" };
+            await _insertionGate.WaitAsync();
+            try
+            {
+                var swInsert = Stopwatch.StartNew();
+                insertResult = await Task.Run(() => TextInserter.InsertText(toType, _lastActiveWindow));
+                swInsert.Stop();
+                _insertMs = (int)swInsert.ElapsedMilliseconds;
+            }
+            finally
+            {
+                _insertionGate.Release();
+            }
+            _sessionHasInserted = true;
+
+            if (ConfigManager.Config.CopyToClipboard)
+            {
+                if (_sessionText.Length > 0) _sessionText.Append(' ');
+                _sessionText.Append(textToInsert);
+                var fullSessionText = _sessionText.ToString();
+                Dispatcher.Invoke(() => Clipboard.SetText(fullSessionText));
+                Logger.Log($"Copied full session text to clipboard (length={fullSessionText.Length}).");
+            }
+
+            HistoryManager.AddEntry(
+                original: originalText,
+                refined: textToInsert,
+                sttProvider: sttProvider,
+                sttModel: sttModel,
+                refinementProvider: ConfigManager.Config.EnableRefinement ? ConfigManager.Config.RefinementModel : "Disabled",
+                refinementModel: ConfigManager.Config.EnableRefinement ? ResolveActiveRefinementModel() : string.Empty,
+                recordMs: _recordMs,
+                transcribeMs: _transcribeMs,
+                refineMs: _refineMs,
+                insertMs: _insertMs,
+                succeeded: true,
+                errorCode: string.Empty,
+                insertionMethod: insertResult.Method);
+
+            StatisticsManager.RecordSession(new SessionMetricEntry
+            {
+                Timestamp = DateTime.Now,
+                SttProvider = sttProvider,
+                SttModel = sttModel,
+                RefinementProvider = ConfigManager.Config.EnableRefinement ? ConfigManager.Config.RefinementModel : "Disabled",
+                RefinementModel = ConfigManager.Config.EnableRefinement ? ResolveActiveRefinementModel() : string.Empty,
+                RecordMs = _recordMs,
+                TranscribeMs = _transcribeMs,
+                RefineMs = _refineMs,
+                InsertMs = _insertMs,
+                Succeeded = true,
+                ErrorCode = string.Empty
+            });
+
+            Dispatcher.Invoke(() =>
+            {
+                var vm = MainWindow.DataContext as MainViewModel;
+                vm?.HistoryEntries.Insert(0, new HistoryEntry
+                {
+                    Timestamp = DateTime.Now,
+                    OriginalText = originalText,
+                    RefinedText = textToInsert,
+                    SttProvider = sttProvider,
+                    SttModel = sttModel,
+                    RefinementProvider = ConfigManager.Config.EnableRefinement ? ConfigManager.Config.RefinementModel : "Disabled",
+                    RefinementModel = ConfigManager.Config.EnableRefinement ? ResolveActiveRefinementModel() : string.Empty,
+                    RecordMs = _recordMs,
+                    TranscribeMs = _transcribeMs,
+                    RefineMs = _refineMs,
+                    InsertMs = _insertMs,
+                    Succeeded = true,
+                    InsertionMethod = insertResult.Method
+                });
+                vm?.SetLastInsertionStatus(insertResult.Method, insertResult.Success, insertResult.ErrorCode);
+            });
+
+            _overlay?.SetStatus("READY", Brushes.Aqua);
+            SetSessionState(SessionState.Idle);
+        }
+
+        private async Task<bool> TryRunSttFailoverAsync(string errorCode)
+        {
+            if (_sttFailoverAttempted || _finalTranscriptionProcessed) return false;
+            if (!ConfigManager.Config.EnableSttFailover) return false;
+            if (!ErrorClassifier.IsTransient(errorCode)) return false;
+
+            var fallbackProvider = ResolveFallbackProvider();
+            if (string.IsNullOrWhiteSpace(fallbackProvider)) return false;
+
+            var audioSnapshot = SnapshotSessionAudio();
+            if (audioSnapshot.Count == 0) return false;
+
+            _sttFailoverAttempted = true;
+            _overlay?.SetStatus("FAILOVER", Brushes.Orange);
+            Logger.Log($"Attempting STT failover to {fallbackProvider}.");
+
+            ITranscriber? fallback = null;
+            try
+            {
+                var finalTcs = new TaskCompletionSource<string>(TaskCreationOptions.RunContinuationsAsynchronously);
+                var errorTcs = new TaskCompletionSource<string>(TaskCreationOptions.RunContinuationsAsynchronously);
+
+                fallback = TranscriberFactory.CreateTranscriber(fallbackProvider);
+                fallback.TranscriptionReceived += (_, e) =>
+                {
+                    if (e.IsFinal && !string.IsNullOrWhiteSpace(e.Text))
+                        finalTcs.TrySetResult(e.Text);
+                };
+                fallback.ErrorReceived += (_, e) => errorTcs.TrySetResult(e);
+
+                await fallback.ConnectAsync();
+
+                foreach (var chunk in audioSnapshot)
+                    await fallback.SendAudioAsync(chunk);
+
+                await fallback.FinishStreamAsync();
+                await fallback.WaitForFinalResultAsync();
+                await fallback.DisconnectAsync();
+
+                var completed = await Task.WhenAny(finalTcs.Task, errorTcs.Task, Task.Delay(1500));
+                if (completed == finalTcs.Task)
+                {
+                    var finalText = await finalTcs.Task;
+                    await HandleFinalTranscriptionAsync(finalText, fallbackProvider, ResolveSttModelForProvider(fallbackProvider));
+                    return true;
+                }
+
+                if (completed == errorTcs.Task)
+                    Logger.Log($"Fallback provider {fallbackProvider} failed: {await errorTcs.Task}");
+            }
+            catch (Exception ex)
+            {
+                Logger.LogException("TryRunSttFailoverAsync", ex);
+            }
+            finally
+            {
+                fallback?.Dispose();
+            }
+
+            return false;
+        }
+
+        private void HandleSessionFailure(string error, string errorCode)
+        {
+            SetSessionState(SessionState.Error);
             _overlay?.SetStatus("ERROR", Brushes.OrangeRed);
-            Dispatcher.Invoke(() => {
+
+            HistoryManager.AddEntry(
+                original: string.Empty,
+                refined: string.Empty,
+                sttProvider: ConfigManager.Config.SttModel,
+                sttModel: ResolveActiveSttModel(),
+                refinementProvider: ConfigManager.Config.EnableRefinement ? ConfigManager.Config.RefinementModel : "Disabled",
+                refinementModel: ConfigManager.Config.EnableRefinement ? ResolveActiveRefinementModel() : string.Empty,
+                recordMs: _recordMs,
+                transcribeMs: _transcribeMs,
+                refineMs: _refineMs,
+                insertMs: _insertMs,
+                succeeded: false,
+                errorCode: errorCode,
+                insertionMethod: "None");
+
+            StatisticsManager.RecordSession(new SessionMetricEntry
+            {
+                Timestamp = DateTime.Now,
+                SttProvider = ConfigManager.Config.SttModel,
+                SttModel = ResolveActiveSttModel(),
+                RefinementProvider = ConfigManager.Config.EnableRefinement ? ConfigManager.Config.RefinementModel : "Disabled",
+                RefinementModel = ConfigManager.Config.EnableRefinement ? ResolveActiveRefinementModel() : string.Empty,
+                RecordMs = _recordMs,
+                TranscribeMs = _transcribeMs,
+                RefineMs = _refineMs,
+                InsertMs = _insertMs,
+                Succeeded = false,
+                ErrorCode = errorCode
+            });
+
+            Dispatcher.Invoke(() =>
+            {
+                var vm = MainWindow.DataContext as MainViewModel;
+                vm?.SetLastInsertionStatus("N/A", false, errorCode);
                 MessageBox.Show($"Transcription Error: {error}", "Speakly Error", MessageBoxButton.OK, MessageBoxImage.Error);
             });
+
+            SetSessionState(SessionState.Idle);
+        }
+
+        private string ResolveFallbackProvider()
+        {
+            var current = ConfigManager.Config.SttModel?.Trim() ?? string.Empty;
+            var configuredOrder = ConfigManager.Config.SttFailoverOrder ?? new List<string>();
+
+            foreach (var candidate in configuredOrder)
+            {
+                if (string.IsNullOrWhiteSpace(candidate)) continue;
+                if (string.Equals(candidate, current, StringComparison.OrdinalIgnoreCase)) continue;
+                if (!HasApiKeyForSttProvider(candidate)) continue;
+                return candidate;
+            }
+
+            foreach (var candidate in new[] { "Deepgram", "OpenAI", "OpenRouter" })
+            {
+                if (string.Equals(candidate, current, StringComparison.OrdinalIgnoreCase)) continue;
+                if (!HasApiKeyForSttProvider(candidate)) continue;
+                return candidate;
+            }
+
+            return string.Empty;
+        }
+
+        private static bool HasApiKeyForSttProvider(string provider)
+        {
+            return provider.Trim().ToLowerInvariant() switch
+            {
+                "deepgram" => !string.IsNullOrWhiteSpace(ConfigManager.Config.DeepgramApiKey),
+                "openai" => !string.IsNullOrWhiteSpace(ConfigManager.Config.OpenAIApiKey),
+                "openrouter" => !string.IsNullOrWhiteSpace(ConfigManager.Config.OpenRouterApiKey),
+                _ => false
+            };
         }
 
         public async Task ToggleRecordingFromOverlayAsync()
@@ -449,6 +709,9 @@ namespace Speakly
                 await StopRecordingAsync();
                 return;
             }
+
+            if (!TryEnterRecording()) return;
+            BeginSessionTiming();
 
             _lastActiveWindow = TextInserter.GetForegroundWindow();
             Logger.Log($"Overlay Recording Started. Captured active window: {_lastActiveWindow}");
@@ -594,12 +857,38 @@ namespace Speakly
                     app._overlay = new FloatingOverlay();
                     app._overlay.Show();
                 }
+                else if (!app._overlay.IsVisible)
+                {
+                    app._overlay.Show();
+                }
+
+                app._overlay.EnsureVisibleOnScreen();
+                app._overlay.Topmost = true;
             }
             else
             {
                 app._overlay?.Close();
                 app._overlay = null;
             }
+        }
+
+        public static void RecoverOverlayPosition()
+        {
+            if (Application.Current is not App app) return;
+
+            if (app._overlay == null || !app._overlay.IsLoaded)
+            {
+                app._overlay = new FloatingOverlay();
+                app._overlay.Show();
+            }
+            else if (!app._overlay.IsVisible)
+            {
+                app._overlay.Show();
+            }
+
+            app._overlay.EnsureVisibleOnScreen();
+            app._overlay.Topmost = true;
+            app._overlay.Activate();
         }
 
         private static bool IsBaseThemeDictionary(string source)
@@ -618,6 +907,78 @@ namespace Speakly
             if (string.Equals(skinName, "Ember", StringComparison.OrdinalIgnoreCase)) return "Ember";
 
             return "Lavender";
+        }
+
+        private void BeginSessionTiming()
+        {
+            _recordingStartedUtc = DateTime.UtcNow;
+            _transcribingStartedUtc = _recordingStartedUtc;
+            _recordMs = 0;
+            _transcribeMs = 0;
+            _refineMs = 0;
+            _insertMs = 0;
+            _finalTranscriptionProcessed = false;
+            _sttFailoverAttempted = false;
+            lock (_audioChunkLock)
+            {
+                _sessionAudioChunks.Clear();
+            }
+        }
+
+        private static string ResolveActiveSttModel()
+        {
+            return ResolveSttModelForProvider(ConfigManager.Config.SttModel);
+        }
+
+        private static string ResolveSttModelForProvider(string provider)
+        {
+            return provider switch
+            {
+                "OpenAI" => ConfigManager.Config.OpenAISttModel,
+                "Deepgram" => ConfigManager.Config.DeepgramModel,
+                "OpenRouter" => ConfigManager.Config.OpenRouterSttModel,
+                _ => string.Empty
+            };
+        }
+
+        private static string ResolveActiveRefinementModel()
+        {
+            return ConfigManager.Config.RefinementModel switch
+            {
+                "OpenRouter" => ConfigManager.Config.OpenRouterRefinementModel,
+                "Cerebras" => ConfigManager.Config.CerebrasRefinementModel,
+                "OpenAI" => ConfigManager.Config.OpenAIRefinementModel,
+                _ => string.Empty
+            };
+        }
+
+        private bool TryEnterRecording()
+        {
+            lock (_sessionLock)
+            {
+                if (_sessionState != SessionState.Idle) return false;
+                _sessionState = SessionState.Recording;
+                return true;
+            }
+        }
+
+        private bool TryEnterTranscribing()
+        {
+            lock (_sessionLock)
+            {
+                if (_sessionState != SessionState.Recording && _sessionState != SessionState.Refining && _sessionState != SessionState.Transcribing)
+                    return false;
+                _sessionState = SessionState.Transcribing;
+                return true;
+            }
+        }
+
+        private void SetSessionState(SessionState state)
+        {
+            lock (_sessionLock)
+            {
+                _sessionState = state;
+            }
         }
     }
 }

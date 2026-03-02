@@ -26,6 +26,10 @@ namespace Speakly.ViewModels
         private readonly Dictionary<string, List<string>> _dynamicRefinementModels = new(StringComparer.OrdinalIgnoreCase);
         private bool _isRefreshingModels;
         private string _modelRefreshStatus = "Model list: defaults loaded";
+        private string _lastInsertionMethod = "N/A";
+        private string _lastInsertionStatus = "No insertion yet";
+        private string _healthSummary = "Health checks not run yet.";
+        private string _healthDetails = string.Empty;
 
         public event Action? SaveSucceeded;
         public event Action<string, string, string, string>? ApiTestCompleted;
@@ -35,6 +39,8 @@ namespace Speakly.ViewModels
         public ICommand RefreshModelsCommand { get; }
         public ICommand SaveCurrentPromptCommand { get; }
         public ICommand DeleteSelectedPromptCommand { get; }
+        public ICommand RecoverOverlayCommand { get; }
+        public ICommand RunHealthCheckCommand { get; }
 
         public bool IsRefreshingModels
         {
@@ -59,6 +65,50 @@ namespace Speakly.ViewModels
         }
 
         public bool HasModelRefreshStatus => !string.IsNullOrWhiteSpace(ModelRefreshStatus);
+
+        public string LastInsertionMethod
+        {
+            get => _lastInsertionMethod;
+            private set
+            {
+                _lastInsertionMethod = value;
+                OnPropertyChanged();
+            }
+        }
+
+        public string LastInsertionStatus
+        {
+            get => _lastInsertionStatus;
+            private set
+            {
+                _lastInsertionStatus = value;
+                OnPropertyChanged();
+            }
+        }
+
+        public string HealthSummary
+        {
+            get => _healthSummary;
+            private set
+            {
+                _healthSummary = value;
+                OnPropertyChanged();
+                OnPropertyChanged(nameof(HasHealthDetails));
+            }
+        }
+
+        public string HealthDetails
+        {
+            get => _healthDetails;
+            private set
+            {
+                _healthDetails = value;
+                OnPropertyChanged();
+                OnPropertyChanged(nameof(HasHealthDetails));
+            }
+        }
+
+        public bool HasHealthDetails => !string.IsNullOrWhiteSpace(HealthDetails);
 
         public string Hotkey 
         { 
@@ -117,6 +167,7 @@ namespace Speakly.ViewModels
                 {
                     "Deepgram" => ConfigManager.Config.DeepgramModel,
                     "OpenAI" => ConfigManager.Config.OpenAISttModel,
+                    "OpenRouter" => ConfigManager.Config.OpenRouterSttModel,
                     _ => ""
                 };
             }
@@ -124,11 +175,19 @@ namespace Speakly.ViewModels
             {
                 var normalized = value?.Trim();
                 if (string.IsNullOrWhiteSpace(normalized)) return;
+                if (!IsInModelList(AvailableSttModels, normalized)) return;
 
                 if (SttModel == "Deepgram") ConfigManager.Config.DeepgramModel = normalized;
                 else if (SttModel == "OpenAI") ConfigManager.Config.OpenAISttModel = normalized;
+                else if (SttModel == "OpenRouter") ConfigManager.Config.OpenRouterSttModel = normalized;
                 OnPropertyChanged();
             }
+        }
+
+        public bool EnableSttFailover
+        {
+            get => ConfigManager.Config.EnableSttFailover;
+            set { ConfigManager.Config.EnableSttFailover = value; OnPropertyChanged(); }
         }
 
         public string SelectedRefinementModelString
@@ -147,6 +206,7 @@ namespace Speakly.ViewModels
             {
                 var normalized = value?.Trim();
                 if (string.IsNullOrWhiteSpace(normalized)) return;
+                if (!IsInModelList(AvailableRefinementModels, normalized)) return;
 
                 if (RefinementModel == "OpenAI") ConfigManager.Config.OpenAIRefinementModel = normalized;
                 else if (RefinementModel == "Cerebras") ConfigManager.Config.CerebrasRefinementModel = normalized;
@@ -226,19 +286,31 @@ namespace Speakly.ViewModels
         public int SampleRate
         {
             get => ConfigManager.Config.SampleRate;
-            set { ConfigManager.Config.SampleRate = value; OnPropertyChanged(); }
+            set
+            {
+                ConfigManager.Config.SampleRate = Clamp(value, 8000, 48000);
+                OnPropertyChanged();
+            }
         }
 
         public int Channels
         {
             get => ConfigManager.Config.Channels;
-            set { ConfigManager.Config.Channels = value; OnPropertyChanged(); }
+            set
+            {
+                ConfigManager.Config.Channels = Clamp(value, 1, 2);
+                OnPropertyChanged();
+            }
         }
 
         public int ChunkSize
         {
             get => ConfigManager.Config.ChunkSize;
-            set { ConfigManager.Config.ChunkSize = value; OnPropertyChanged(); }
+            set
+            {
+                ConfigManager.Config.ChunkSize = Clamp(value, 256, 32768);
+                OnPropertyChanged();
+            }
         }
 
         public bool SaveDebugRecords
@@ -323,6 +395,14 @@ namespace Speakly.ViewModels
             if (obj is string text) Clipboard.SetText(text);
         });
 
+        public void SetLastInsertionStatus(string method, bool success, string errorCode)
+        {
+            LastInsertionMethod = string.IsNullOrWhiteSpace(method) ? "Unknown" : method;
+            LastInsertionStatus = success
+                ? $"OK ({LastInsertionMethod})"
+                : $"Failed ({LastInsertionMethod}){(string.IsNullOrWhiteSpace(errorCode) ? string.Empty : $": {errorCode}")}";
+        }
+
         public string ApiTestStatus
         {
             get => _apiTestStatus;
@@ -388,6 +468,14 @@ namespace Speakly.ViewModels
                 SaveSucceeded?.Invoke();
             });
 
+            RecoverOverlayCommand = new RelayCommand(_ =>
+            {
+                App.SetOverlayVisible(true);
+                App.RecoverOverlayPosition();
+            });
+
+            RunHealthCheckCommand = new RelayCommand(_ => RunHealthChecks());
+
             RefreshModelsCommand = new RelayCommand(
                 async _ => await RefreshProviderModelsAsync(true),
                 _ => !IsRefreshingModels);
@@ -421,6 +509,8 @@ namespace Speakly.ViewModels
                 SelectedPromptEntry = SavedPrompts.FirstOrDefault();
             },
             _ => CanDeleteSelectedPrompt);
+
+            RunHealthChecks();
         }
 
         private void LoadAudioDevices()
@@ -462,6 +552,12 @@ namespace Speakly.ViewModels
             {
                 AvailableSttModels.Add("whisper-1");
                 AvailableSttModels.Add("whisper-1-hd");
+            }
+            else if (SttModel == "OpenRouter")
+            {
+                AvailableSttModels.Add("openai/whisper-large-v3");
+                AvailableSttModels.Add("openai/whisper-1");
+                AvailableSttModels.Add("openai/whisper-large-v3-turbo");
             }
             PrioritizeSttFavorites();
             EnsureCurrentModelInList(AvailableSttModels, SelectedSttModelString);
@@ -562,6 +658,7 @@ namespace Speakly.ViewModels
             {
                 "Deepgram" => ConfigManager.Config.DeepgramFavoriteModels ??= new List<string>(),
                 "OpenAI" => ConfigManager.Config.OpenAISttFavoriteModels ??= new List<string>(),
+                "OpenRouter" => ConfigManager.Config.OpenRouterSttFavoriteModels ??= new List<string>(),
                 _ => null
             };
         }
@@ -625,6 +722,18 @@ namespace Speakly.ViewModels
             {
                 target.Insert(0, currentModel);
             }
+        }
+
+        private static bool IsInModelList(ObservableCollection<string> models, string candidate)
+        {
+            return models.Any(m => string.Equals(m, candidate, StringComparison.OrdinalIgnoreCase));
+        }
+
+        private static int Clamp(int value, int min, int max)
+        {
+            if (value < min) return min;
+            if (value > max) return max;
+            return value;
         }
 
         private bool TryApplyDynamicModels(ObservableCollection<string> target, Dictionary<string, List<string>> catalog, string provider)
@@ -708,6 +817,12 @@ namespace Speakly.ViewModels
 
                 if (!string.IsNullOrWhiteSpace(config.OpenRouterApiKey))
                 {
+                    var openRouterSttModels = await FetchOpenRouterSttModelsAsync(config.OpenRouterApiKey.Trim());
+                    if (openRouterSttModels.Count > 0)
+                    {
+                        _dynamicSttModels["OpenRouter"] = openRouterSttModels;
+                    }
+
                     var openRouterRefinementModels = await FetchOpenRouterChatModelsAsync(config.OpenRouterApiKey.Trim());
 
                     if (openRouterRefinementModels.Count > 0)
@@ -779,26 +894,80 @@ namespace Speakly.ViewModels
                 var id = idProp.GetString();
                 if (string.IsNullOrWhiteSpace(id)) continue;
 
-                // Only include models whose output is text (excludes image-gen, embeddings, etc.)
-                if (item.TryGetProperty("architecture", out var arch) && arch.ValueKind == JsonValueKind.Object)
-                {
-                    if (arch.TryGetProperty("modality", out var modalityProp))
-                    {
-                        var modality = modalityProp.GetString() ?? string.Empty;
-                        if (!string.IsNullOrEmpty(modality) &&
-                            !modality.EndsWith("->text", StringComparison.OrdinalIgnoreCase))
-                            continue;
-                    }
-                }
-
                 // Exclude whisper/audio-only model IDs — OpenRouter doesn't route audio endpoints
                 if (IsOpenRouterSttModel(id)) continue;
+
+                // Keep only refinement-capable text models. For OpenRouter, some entries
+                // (including free variants) expose modality as "text" rather than "...->text".
+                if (!IsOpenRouterTextRefinementModel(item, id)) continue;
 
                 refinementModels.Add(id);
             }
 
             refinementModels.Sort(StringComparer.OrdinalIgnoreCase);
             return refinementModels;
+        }
+
+        private async Task<List<string>> FetchOpenRouterSttModelsAsync(string apiKey)
+        {
+            using var request = new HttpRequestMessage(HttpMethod.Get, "https://openrouter.ai/api/v1/models");
+            request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", apiKey);
+
+            using var response = await _httpClient.SendAsync(request);
+            if (!response.IsSuccessStatusCode) return new List<string>();
+
+            var json = await response.Content.ReadAsStringAsync();
+            var sttModels = new List<string>();
+
+            using var document = JsonDocument.Parse(json);
+            if (!document.RootElement.TryGetProperty("data", out var dataArray) || dataArray.ValueKind != JsonValueKind.Array)
+                return sttModels;
+
+            foreach (var item in dataArray.EnumerateArray())
+            {
+                if (item.ValueKind != JsonValueKind.Object) continue;
+                if (!item.TryGetProperty("id", out var idProp) || idProp.ValueKind != JsonValueKind.String) continue;
+
+                var id = idProp.GetString();
+                if (string.IsNullOrWhiteSpace(id)) continue;
+                if (!IsOpenRouterSttModel(id)) continue;
+
+                sttModels.Add(id);
+            }
+
+            sttModels.Sort(StringComparer.OrdinalIgnoreCase);
+            return sttModels;
+        }
+
+        private static bool IsOpenRouterTextRefinementModel(JsonElement item, string modelId)
+        {
+            var isFree = modelId.Contains(":free", StringComparison.OrdinalIgnoreCase);
+
+            if (!item.TryGetProperty("architecture", out var arch) || arch.ValueKind != JsonValueKind.Object)
+            {
+                // If modality is missing, keep behavior permissive.
+                return true;
+            }
+
+            if (!arch.TryGetProperty("modality", out var modalityProp) || modalityProp.ValueKind != JsonValueKind.String)
+            {
+                return true;
+            }
+
+            var modality = modalityProp.GetString() ?? string.Empty;
+            if (string.IsNullOrWhiteSpace(modality))
+            {
+                return true;
+            }
+
+            // Common OpenRouter forms: "text->text", "image+text->text", and sometimes plain "text".
+            if (modality.EndsWith("->text", StringComparison.OrdinalIgnoreCase)) return true;
+            if (string.Equals(modality, "text", StringComparison.OrdinalIgnoreCase)) return true;
+
+            // For free variants, be a bit more permissive if text is present at all.
+            if (isFree && modality.Contains("text", StringComparison.OrdinalIgnoreCase)) return true;
+
+            return false;
         }
 
         private async Task<List<string>> FetchDeepgramModelsAsync(string apiKey)
@@ -926,6 +1095,13 @@ namespace Speakly.ViewModels
             ApiTestStatus = sb.ToString();
             ApiTestCompleted?.Invoke(dg, oa, cr, or);
             ApiTestStatus = "Ready";
+        }
+
+        public void RunHealthChecks()
+        {
+            var result = HealthCheckService.Run(ConfigManager.Config);
+            HealthSummary = result.Summary;
+            HealthDetails = result.Details;
         }
 
         protected void OnPropertyChanged([CallerMemberName] string? name = null)

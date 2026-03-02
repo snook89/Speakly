@@ -6,7 +6,7 @@ namespace Speakly.Pages
 {
     public partial class InfoPage : UserControl
     {
-        private const string GitHubUrl = "https://github.com/goxl/Speakly";
+        private const string GitHubUrl = "https://github.com/snook89/Speakly";
 
         public InfoPage()
         {

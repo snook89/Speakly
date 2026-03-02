@@ -17,6 +17,7 @@ namespace Speakly.Pages
         {
             InitializeComponent();
             DataContext = App.ViewModel;
+            ValidateHotkeys();
         }
 
         private void SetPtt_Click(object sender, RoutedEventArgs e)
@@ -65,6 +66,12 @@ namespace Speakly.Pages
 
             if (_isRecordingPtt)
             {
+                if (string.Equals(keyStr, ConfigManager.Config.RecordHotkey, System.StringComparison.OrdinalIgnoreCase))
+                {
+                    ShowValidation("PTT and Toggle hotkeys must be different.");
+                    return;
+                }
+
                 PttHotkeyBox.Text = keyStr;
                 PttHotkeyBox.ClearValue(BackgroundProperty);
                 ConfigManager.Config.PttHotkey = keyStr;
@@ -73,6 +80,12 @@ namespace Speakly.Pages
             }
             else if (_isRecordingRec)
             {
+                if (string.Equals(keyStr, ConfigManager.Config.PttHotkey, System.StringComparison.OrdinalIgnoreCase))
+                {
+                    ShowValidation("PTT and Toggle hotkeys must be different.");
+                    return;
+                }
+
                 RecordHotkeyBox.Text = keyStr;
                 RecordHotkeyBox.ClearValue(BackgroundProperty);
                 ConfigManager.Config.RecordHotkey = keyStr;
@@ -81,6 +94,41 @@ namespace Speakly.Pages
             }
 
             Window.GetWindow(this).PreviewKeyDown -= Page_PreviewKeyDown;
+            ValidateHotkeys();
+        }
+
+        private void ResetDefaults_Click(object sender, RoutedEventArgs e)
+        {
+            ConfigManager.Config.PttHotkey = "Space";
+            ConfigManager.Config.RecordHotkey = "F9";
+
+            if (DataContext is MainViewModel vm)
+            {
+                vm.PttHotkey = "Space";
+                vm.RecordHotkey = "F9";
+            }
+
+            PttHotkeyBox.Text = "Space";
+            RecordHotkeyBox.Text = "F9";
+            ValidationText.Text = "Hotkeys reset to defaults.";
+            ValidationText.Foreground = TryFindResource("SystemFillColorSuccessBrush") as Brush ?? Brushes.LightGreen;
+        }
+
+        private void ValidateHotkeys()
+        {
+            if (string.Equals(ConfigManager.Config.PttHotkey, ConfigManager.Config.RecordHotkey, System.StringComparison.OrdinalIgnoreCase))
+            {
+                ShowValidation("PTT and Toggle hotkeys must be different.");
+                return;
+            }
+
+            ValidationText.Text = string.Empty;
+        }
+
+        private void ShowValidation(string message)
+        {
+            ValidationText.Text = message;
+            ValidationText.Foreground = TryFindResource("SystemFillColorCautionBrush") as Brush ?? Brushes.OrangeRed;
         }
     }
 }

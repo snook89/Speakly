@@ -16,15 +16,15 @@
 
                     <TextBlock Text="Sample Rate (Hz)" Style="{StaticResource FieldLabel}"/>
                     <ui:NumberBox Value="{Binding SampleRate}" Margin="0,0,0,4"/>
-                    <TextBlock Text="16000 is recommended for most STT models." Style="{StaticResource HintText}" Margin="0,0,0,14"/>
+                    <TextBlock Text="16000 is recommended for most STT models. Allowed range: 8000–48000." Style="{StaticResource HintText}" Margin="0,0,0,14"/>
 
                     <TextBlock Text="Chunk Size (Bytes)" Style="{StaticResource FieldLabel}"/>
                     <ui:NumberBox Value="{Binding ChunkSize}" Margin="0,0,0,4"/>
-                    <TextBlock Text="4096 is a common balance between latency and CPU usage." Style="{StaticResource HintText}" Margin="0,0,0,14"/>
+                    <TextBlock Text="4096 is a common balance between latency and CPU usage. Allowed range: 256–32768." Style="{StaticResource HintText}" Margin="0,0,0,14"/>
 
                     <TextBlock Text="Channels" Style="{StaticResource FieldLabel}"/>
                     <ui:NumberBox Value="{Binding Channels}" Margin="0,0,0,4"/>
-                    <TextBlock Text="Use 1 (Mono) for best compatibility." Style="{StaticResource HintText}" Margin="0,0,0,14"/>
+                    <TextBlock Text="Use 1 (Mono) for best compatibility. Allowed range: 1–2." Style="{StaticResource HintText}" Margin="0,0,0,14"/>
 
                     <ui:ToggleSwitch Content="Save Debug Records" IsChecked="{Binding SaveDebugRecords}" Margin="0,6,0,4"/>
                     <TextBlock Text="Saves timestamped .wav files to the Records folder for troubleshooting." Style="{StaticResource HintText}"/>

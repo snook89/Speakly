@@ -30,7 +30,6 @@ namespace Speakly
 
         // Resize edge detection in device-independent pixels
         private const int ResizeEdge = 8;
-        private const int BarCount = 24;
 
         public FloatingOverlay()
         {
@@ -86,6 +85,9 @@ namespace Speakly
             BuildWaveBars();
             ApplyVisualState("READY");
             SizeChanged += (_, _) => UpdateResponsiveLayout();
+            Loaded += (_, _) => EnsureVisibleOnScreen();
+            Container.SizeChanged += (_, _) => UpdateContainerClip();
+            Loaded += (_, _) => UpdateContainerClip();
         }
 
         // ── Responsive label/badge breakpoints ────────────────────────────────
@@ -240,14 +242,15 @@ namespace Speakly
             double canvasWidth = WaveCanvas.ActualWidth;
             if (canvasWidth <= 0)
             {
-                canvasWidth = Math.Max(120, ActualWidth - 170);
+                canvasWidth = Math.Max(56, ActualWidth - 24);
             }
 
-            double gap = canvasWidth / (BarCount * 2.0);
+            int barCount = GetResponsiveBarCount(canvasWidth);
+            double gap = canvasWidth / (barCount * 2.0);
             double width = Math.Max(2, gap);
             var brush = BuildWaveBrush();
 
-            for (int i = 0; i < BarCount; i++)
+            for (int i = 0; i < barCount; i++)
             {
                 var bar = new Rectangle
                 {
@@ -331,6 +334,7 @@ namespace Speakly
                 if (!IsVisible)
                 {
                     Show();
+                    EnsureVisibleOnScreen();
                 }
 
                 string normalized = string.IsNullOrWhiteSpace(status)
@@ -472,6 +476,60 @@ namespace Speakly
             ToastBorder.Visibility = Visibility.Visible;
             _toastTimer.Stop();
             _toastTimer.Start();
+        }
+
+        private void UpdateContainerClip()
+        {
+            if (ContainerContent == null || Container == null) return;
+
+            // Border.CornerRadius does not clip child visuals; apply an explicit rounded clip
+            // so translucent content doesn't show square corners.
+            const double radius = 20.5;
+            var rect = new Rect(0, 0, Container.ActualWidth, Container.ActualHeight);
+            if (rect.Width <= 0 || rect.Height <= 0) return;
+
+            ContainerContent.Clip = new RectangleGeometry(rect, radius, radius);
+        }
+
+        public void EnsureVisibleOnScreen()
+        {
+            Dispatcher.Invoke(() =>
+            {
+                double screenLeft = SystemParameters.VirtualScreenLeft;
+                double screenTop = SystemParameters.VirtualScreenTop;
+                double screenRight = screenLeft + SystemParameters.VirtualScreenWidth;
+                double screenBottom = screenTop + SystemParameters.VirtualScreenHeight;
+
+                const double visibleMargin = 56;
+                const double minOverlayWidth = 56;
+                const double minOverlayHeight = 40;
+
+                if (Width < minOverlayWidth) Width = minOverlayWidth;
+                if (Height < minOverlayHeight) Height = minOverlayHeight;
+
+                if (Width > SystemParameters.VirtualScreenWidth)
+                    Width = SystemParameters.VirtualScreenWidth;
+                if (Height > SystemParameters.VirtualScreenHeight)
+                    Height = SystemParameters.VirtualScreenHeight;
+
+                double minLeft = screenLeft - Width + visibleMargin;
+                double maxLeft = screenRight - visibleMargin;
+                double minTop = screenTop;
+                double maxTop = screenBottom - visibleMargin;
+
+                Left = Math.Max(minLeft, Math.Min(Left, maxLeft));
+                Top = Math.Max(minTop, Math.Min(Top, maxTop));
+            });
+        }
+
+        private static int GetResponsiveBarCount(double canvasWidth)
+        {
+            if (canvasWidth <= 80) return 6;
+            if (canvasWidth <= 120) return 8;
+            if (canvasWidth <= 180) return 12;
+            if (canvasWidth <= 260) return 16;
+            if (canvasWidth <= 360) return 20;
+            return 24;
         }
     }
 }

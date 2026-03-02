@@ -35,22 +35,17 @@
 
                     <TextBlock Text="Target Model" Style="{StaticResource FieldLabel}"/>
                     <Grid x:Name="ModelRow">
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="*"/>
-                            <ColumnDefinition Width="Auto"/>
-                        </Grid.ColumnDefinitions>
                         <ComboBox x:Name="RefinementModelCombo"
-                                  Grid.Column="0"
                                   ItemsSource="{Binding AvailableRefinementModels}"
                                   Text="{Binding SelectedRefinementModelString}"
                                   IsEditable="True"
                                   IsTextSearchEnabled="False"
                                   StaysOpenOnEdit="True"
                                   ScrollViewer.VerticalScrollBarVisibility="Visible"
-                                  TextChanged="ModelCombo_TextChanged"
+                                  KeyUp="ModelCombo_KeyUp"
                                   DropDownClosed="ModelCombo_DropDownClosed"
                                   PreviewKeyDown="ModelCombo_PreviewKeyDown"
-                                  Margin="0,0,8,12">
+                                  Margin="0,0,0,12">
                             <ComboBox.ItemTemplate>
                                 <DataTemplate>
                                     <StackPanel Orientation="Horizontal">
@@ -85,13 +80,7 @@
                                 </Style>
                             </ComboBox.ItemContainerStyle>
                         </ComboBox>
-                        <ui:Button Grid.Column="1"
-                                   Content="Top"
-                                   Style="{StaticResource SecondaryButton}"
-                                   Click="JumpToTop_Click"
-                                   Margin="0,0,0,12"/>
                         <Border x:Name="ModelGlow"
-                                Grid.ColumnSpan="2"
                                 BorderThickness="2" IsHitTestVisible="False" Opacity="0" Panel.ZIndex="10"
                                 Margin="0,0,0,12">
                             <Border.Effect><DropShadowEffect x:Name="ModelGlowFx" BlurRadius="18" ShadowDepth="0" Opacity="0.95"/></Border.Effect>

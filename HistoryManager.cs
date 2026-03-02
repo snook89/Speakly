@@ -10,6 +10,17 @@ namespace Speakly.Services
         public DateTime Timestamp { get; set; }
         public string OriginalText { get; set; } = string.Empty;
         public string RefinedText { get; set; } = string.Empty;
+        public string SttProvider { get; set; } = string.Empty;
+        public string SttModel { get; set; } = string.Empty;
+        public string RefinementProvider { get; set; } = string.Empty;
+        public string RefinementModel { get; set; } = string.Empty;
+        public int RecordMs { get; set; }
+        public int TranscribeMs { get; set; }
+        public int RefineMs { get; set; }
+        public int InsertMs { get; set; }
+        public bool Succeeded { get; set; } = true;
+        public string ErrorCode { get; set; } = string.Empty;
+        public string InsertionMethod { get; set; } = string.Empty;
     }
 
     public static class HistoryManager
@@ -17,13 +28,37 @@ namespace Speakly.Services
         private static readonly string HistoryPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "history.json");
         private static List<HistoryEntry> _history = new List<HistoryEntry>();
 
-        public static void AddEntry(string original, string refined)
+        public static void AddEntry(
+            string original,
+            string refined,
+            string sttProvider = "",
+            string sttModel = "",
+            string refinementProvider = "",
+            string refinementModel = "",
+            int recordMs = 0,
+            int transcribeMs = 0,
+            int refineMs = 0,
+            int insertMs = 0,
+            bool succeeded = true,
+            string errorCode = "",
+            string insertionMethod = "")
         {
             _history.Add(new HistoryEntry 
             { 
                 Timestamp = DateTime.Now, 
                 OriginalText = original, 
-                RefinedText = refined 
+                RefinedText = refined,
+                SttProvider = sttProvider,
+                SttModel = sttModel,
+                RefinementProvider = refinementProvider,
+                RefinementModel = refinementModel,
+                RecordMs = recordMs,
+                TranscribeMs = transcribeMs,
+                RefineMs = refineMs,
+                InsertMs = insertMs,
+                Succeeded = succeeded,
+                ErrorCode = errorCode,
+                InsertionMethod = insertionMethod
             });
 
             // Keep the last 100 entries

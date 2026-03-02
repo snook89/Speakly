@@ -10,7 +10,7 @@
         Topmost="True"
         ShowInTaskbar="False"
         ResizeMode="CanResize"
-        MinWidth="80"
+        MinWidth="56"
         MinHeight="40"
         MaxWidth="1800"
         MaxHeight="600">
@@ -48,18 +48,8 @@
                     Background="{DynamicResource OverlaySkin.PillowIdleBrush}"
                     BorderBrush="{DynamicResource OverlaySkin.PillowIdleBorderBrush}"
                     Padding="0"
-                    ClipToBounds="True"
                     MouseDown="Container_MouseDown">
-                <Border.Effect>
-                    <DropShadowEffect x:Name="PillowShadow"
-                                      Color="{DynamicResource OverlaySkin.ShadowColor}"
-                                      Direction="315"
-                                      ShadowDepth="5"
-                                      BlurRadius="14"
-                                      Opacity="0.55"/>
-                </Border.Effect>
-
-                <Grid>
+                <Grid x:Name="ContainerContent">
                     <!-- Sheen highlight, non-interactive -->
                     <Border VerticalAlignment="Top"
                             HorizontalAlignment="Stretch"

@@ -40,7 +40,7 @@ namespace Speakly.Pages
             });
         }
 
-        private void ModelCombo_TextChanged(object sender, TextChangedEventArgs e)
+        private void ModelCombo_KeyUp(object sender, KeyEventArgs e)
         {
             if (sender is ComboBox combo)
             {
@@ -65,9 +65,5 @@ namespace Speakly.Pages
             e.Handled = true;
         }
 
-        private void JumpToTop_Click(object sender, RoutedEventArgs e)
-        {
-            EditableModelComboHelper.ScrollDropDownToTop(SttModelCombo);
-        }
     }
 }

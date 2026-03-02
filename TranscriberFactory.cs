@@ -8,6 +8,8 @@ namespace Speakly.Services
             {
                 case "openai":
                     return new OpenAITranscriber();
+                case "openrouter":
+                    return new OpenRouterTranscriber();
                 case "deepgram":
                 default:
                     return new DeepgramTranscriber();

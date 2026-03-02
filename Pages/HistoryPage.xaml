@@ -6,12 +6,43 @@
     <Grid Margin="24,16,24,24">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
             <RowDefinition Height="*"/>
         </Grid.RowDefinitions>
 
         <TextBlock Grid.Row="0" Text="History" Style="{StaticResource PageTitle}"/>
 
-        <ListBox Grid.Row="1"
+        <Grid Grid.Row="1" Margin="0,0,0,10">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="2*"/>
+                <ColumnDefinition Width="Auto"/>
+                <ColumnDefinition Width="Auto"/>
+            </Grid.ColumnDefinitions>
+            <ui:TextBox x:Name="SearchBox"
+                        Grid.Column="0"
+                        PlaceholderText="Search history..."
+                        TextChanged="SearchBox_TextChanged"
+                        Margin="0,0,8,0"/>
+            <ComboBox x:Name="StatusFilterBox"
+                      Grid.Column="1"
+                      SelectionChanged="Filter_SelectionChanged"
+                      Width="130"
+                      Margin="0,0,8,0">
+                <ComboBoxItem Content="All statuses" Tag="all"/>
+                <ComboBoxItem Content="Successful" Tag="ok"/>
+                <ComboBoxItem Content="Failed" Tag="fail"/>
+            </ComboBox>
+            <ComboBox x:Name="ProviderFilterBox"
+                      Grid.Column="2"
+                      SelectionChanged="Filter_SelectionChanged"
+                      Width="130">
+                <ComboBoxItem Content="All providers" Tag="all"/>
+                <ComboBoxItem Content="Deepgram" Tag="Deepgram"/>
+                <ComboBoxItem Content="OpenAI" Tag="OpenAI"/>
+            </ComboBox>
+        </Grid>
+
+        <ListBox Grid.Row="2"
                  ItemsSource="{Binding HistoryEntries}"
                  Background="Transparent"
                  BorderThickness="0"
@@ -30,6 +61,13 @@
                                            FontSize="11"
                                            Foreground="{DynamicResource TextFillColorSecondaryBrush}"
                                            Margin="0,0,0,4"/>
+                                <TextBlock Text="{Binding SttProvider, StringFormat=STT: {0}}"
+                                           FontSize="11"
+                                           Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
+                                <TextBlock Text="{Binding Succeeded, StringFormat=Successful: {0}}"
+                                           FontSize="11"
+                                           Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                                           Margin="0,0,0,4"/>
                                 <TextBlock Text="{Binding RefinedText}"
                                            TextWrapping="Wrap"
                                            FontSize="14"
@@ -40,6 +78,19 @@
                                            FontStyle="Italic"
                                            Margin="0,4,0,0"
                                            TextWrapping="Wrap"/>
+                                <TextBlock Text="{Binding RecordMs, StringFormat=Record: {0} ms}"
+                                           FontSize="11"
+                                           Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                                           Margin="0,4,0,0"/>
+                                <TextBlock Text="{Binding TranscribeMs, StringFormat=Transcribe: {0} ms}"
+                                           FontSize="11"
+                                           Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
+                                <TextBlock Text="{Binding RefineMs, StringFormat=Refine: {0} ms}"
+                                           FontSize="11"
+                                           Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
+                                <TextBlock Text="{Binding InsertMs, StringFormat=Insert: {0} ms}"
+                                           FontSize="11"
+                                           Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
                             </StackPanel>
 
                             <ui:Button Grid.Column="1"

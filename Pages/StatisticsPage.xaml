@@ -1,0 +1,50 @@
+<UserControl x:Class="Speakly.Pages.StatisticsPage"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
+             FontFamily="Segoe UI Variable Text">
+    <ScrollViewer VerticalScrollBarVisibility="Auto">
+        <StackPanel Margin="24,16,24,24">
+            <TextBlock Text="Statistics" Style="{StaticResource PageTitle}"/>
+
+            <Border Style="{StaticResource SectionCard}">
+                <StackPanel>
+                    <TextBlock Text="Range" Style="{StaticResource FieldLabel}"/>
+                    <ComboBox x:Name="RangeCombo" SelectionChanged="RangeCombo_SelectionChanged" Width="220" Margin="0,0,0,12">
+                        <ComboBoxItem Content="Today" Tag="1"/>
+                        <ComboBoxItem Content="Last 7 days" Tag="7"/>
+                        <ComboBoxItem Content="Last 30 days" Tag="30"/>
+                    </ComboBox>
+
+                    <TextBlock x:Name="SummaryText" Style="{StaticResource HintText}"/>
+                </StackPanel>
+            </Border>
+
+            <Border Style="{StaticResource SectionCard}">
+                <StackPanel>
+                    <TextBlock Text="Stage Latency Averages" Style="{StaticResource SectionTitle}"/>
+                    <TextBlock x:Name="LatencyText" Style="{StaticResource HintText}"/>
+                </StackPanel>
+            </Border>
+
+            <Border Style="{StaticResource SectionCard}">
+                <StackPanel>
+                    <TextBlock Text="Provider Breakdown" Style="{StaticResource SectionTitle}"/>
+                    <ListView x:Name="ProviderList"
+                              BorderThickness="0"
+                              Background="Transparent">
+                        <ListView.View>
+                            <GridView>
+                                <GridViewColumn Header="Provider" DisplayMemberBinding="{Binding Provider}" Width="140"/>
+                                <GridViewColumn Header="Sessions" DisplayMemberBinding="{Binding Sessions}" Width="80"/>
+                                <GridViewColumn Header="Successes" DisplayMemberBinding="{Binding Successes}" Width="90"/>
+                                <GridViewColumn Header="Success Rate" DisplayMemberBinding="{Binding SuccessRateText}" Width="110"/>
+                                <GridViewColumn Header="Avg Latency" DisplayMemberBinding="{Binding AvgLatencyText}" Width="110"/>
+                            </GridView>
+                        </ListView.View>
+                    </ListView>
+                </StackPanel>
+            </Border>
+        </StackPanel>
+    </ScrollViewer>
+</UserControl>

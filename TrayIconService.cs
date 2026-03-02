@@ -42,11 +42,15 @@ namespace Speakly.Services
             
             MenuItem settingsItem = new MenuItem { Header = "Settings" };
             settingsItem.Click += OnSettingsClick;
+
+            MenuItem showOverlayItem = new MenuItem { Header = "Show Overlay" };
+            showOverlayItem.Click += OnShowOverlayClick;
             
             MenuItem exitItem = new MenuItem { Header = "Exit" };
             exitItem.Click += OnExitClick;
 
             _contextMenu.Items.Add(settingsItem);
+            _contextMenu.Items.Add(showOverlayItem);
             _contextMenu.Items.Add(new Separator());
             _contextMenu.Items.Add(exitItem);
 
@@ -100,6 +104,12 @@ namespace Speakly.Services
         private void OnSettingsClick(object sender, RoutedEventArgs e)
         {
             ShowMainWindow();
+        }
+
+        private void OnShowOverlayClick(object sender, RoutedEventArgs e)
+        {
+            ConfigManager.Config.ShowOverlay = true;
+            App.RecoverOverlayPosition();
         }
 
         private void ShowMainWindow()

@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using Speakly.Services;
 
 namespace Speakly.Config
 {
@@ -33,6 +34,12 @@ namespace Speakly.Config
 
         [JsonPropertyName("stt_model")]
         public string SttModel { get; set; } = "Deepgram";
+
+        [JsonPropertyName("enable_stt_failover")]
+        public bool EnableSttFailover { get; set; } = true;
+
+        [JsonPropertyName("stt_failover_order")]
+        public List<string> SttFailoverOrder { get; set; } = new List<string> { "Deepgram", "OpenAI", "OpenRouter" };
 
         [JsonPropertyName("audio_device")]
         public string AudioDevice { get; set; } = "Default";
@@ -84,6 +91,9 @@ namespace Speakly.Config
         [JsonPropertyName("openai_stt_favorite_models")]
         public List<string> OpenAISttFavoriteModels { get; set; } = new List<string>();
 
+        [JsonPropertyName("openrouter_stt_favorite_models")]
+        public List<string> OpenRouterSttFavoriteModels { get; set; } = new List<string>();
+
         [JsonPropertyName("enable_debug_logs")]
         public bool EnableDebugLogs { get; set; } = false;
 
@@ -117,17 +127,74 @@ namespace Speakly.Config
         [JsonPropertyName("copy_to_clipboard")]
         public bool CopyToClipboard { get; set; } = false;
 
-        [JsonPropertyName("openai_api_key")]
+        [JsonIgnore]
         public string OpenAIApiKey { get; set; } = "";
-        
-        [JsonPropertyName("deepgram_api_key")]
+
+        [JsonIgnore]
         public string DeepgramApiKey { get; set; } = "";
-        
-        [JsonPropertyName("cerebras_api_key")]
+
+        [JsonIgnore]
         public string CerebrasApiKey { get; set; } = "";
-        
-        [JsonPropertyName("openrouter_api_key")]
+
+        [JsonIgnore]
         public string OpenRouterApiKey { get; set; } = "";
+
+        // Backward-compat plaintext load fields (read-only for migration).
+        [JsonPropertyName("openai_api_key")]
+        public string? LegacyOpenAIApiKey
+        {
+            get => null;
+            set
+            {
+                if (string.IsNullOrWhiteSpace(OpenAIApiKey) && !string.IsNullOrWhiteSpace(value))
+                    OpenAIApiKey = value;
+            }
+        }
+
+        [JsonPropertyName("deepgram_api_key")]
+        public string? LegacyDeepgramApiKey
+        {
+            get => null;
+            set
+            {
+                if (string.IsNullOrWhiteSpace(DeepgramApiKey) && !string.IsNullOrWhiteSpace(value))
+                    DeepgramApiKey = value;
+            }
+        }
+
+        [JsonPropertyName("cerebras_api_key")]
+        public string? LegacyCerebrasApiKey
+        {
+            get => null;
+            set
+            {
+                if (string.IsNullOrWhiteSpace(CerebrasApiKey) && !string.IsNullOrWhiteSpace(value))
+                    CerebrasApiKey = value;
+            }
+        }
+
+        [JsonPropertyName("openrouter_api_key")]
+        public string? LegacyOpenRouterApiKey
+        {
+            get => null;
+            set
+            {
+                if (string.IsNullOrWhiteSpace(OpenRouterApiKey) && !string.IsNullOrWhiteSpace(value))
+                    OpenRouterApiKey = value;
+            }
+        }
+
+        [JsonPropertyName("openai_api_key_enc")]
+        public string OpenAIApiKeyEnc { get; set; } = "";
+
+        [JsonPropertyName("deepgram_api_key_enc")]
+        public string DeepgramApiKeyEnc { get; set; } = "";
+
+        [JsonPropertyName("cerebras_api_key_enc")]
+        public string CerebrasApiKeyEnc { get; set; } = "";
+
+        [JsonPropertyName("openrouter_api_key_enc")]
+        public string OpenRouterApiKeyEnc { get; set; } = "";
 
         // Window state logic
         [JsonPropertyName("main_window_left")]
@@ -184,10 +251,12 @@ namespace Speakly.Config
                 {
                     string json = File.ReadAllText(ConfigPath);
                     _currentConfig = JsonSerializer.Deserialize<AppConfig>(json) ?? new AppConfig();
+                    HydrateSecrets(_currentConfig);
                 }
                 else
                 {
                     _currentConfig = new AppConfig();
+                    PrepareSecrets(_currentConfig);
                     Save();
                 }
             }
@@ -207,11 +276,42 @@ namespace Speakly.Config
                     Directory.CreateDirectory(directory);
                 }
 
-                var options = new JsonSerializerOptions { WriteIndented = true };
+                if (_currentConfig == null) return;
+
+                PrepareSecrets(_currentConfig);
+
+                var options = new JsonSerializerOptions
+                {
+                    WriteIndented = true,
+                    DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull
+                };
                 string json = JsonSerializer.Serialize(_currentConfig, options);
                 File.WriteAllText(ConfigPath, json);
             }
             catch { }
+        }
+
+        private static void HydrateSecrets(AppConfig config)
+        {
+            var openAi = SecretStore.Unprotect(config.OpenAIApiKeyEnc);
+            if (!string.IsNullOrWhiteSpace(openAi)) config.OpenAIApiKey = openAi;
+
+            var deepgram = SecretStore.Unprotect(config.DeepgramApiKeyEnc);
+            if (!string.IsNullOrWhiteSpace(deepgram)) config.DeepgramApiKey = deepgram;
+
+            var cerebras = SecretStore.Unprotect(config.CerebrasApiKeyEnc);
+            if (!string.IsNullOrWhiteSpace(cerebras)) config.CerebrasApiKey = cerebras;
+
+            var openRouter = SecretStore.Unprotect(config.OpenRouterApiKeyEnc);
+            if (!string.IsNullOrWhiteSpace(openRouter)) config.OpenRouterApiKey = openRouter;
+        }
+
+        private static void PrepareSecrets(AppConfig config)
+        {
+            config.OpenAIApiKeyEnc = SecretStore.Protect(config.OpenAIApiKey);
+            config.DeepgramApiKeyEnc = SecretStore.Protect(config.DeepgramApiKey);
+            config.CerebrasApiKeyEnc = SecretStore.Protect(config.CerebrasApiKey);
+            config.OpenRouterApiKeyEnc = SecretStore.Protect(config.OpenRouterApiKey);
         }
     }
 }

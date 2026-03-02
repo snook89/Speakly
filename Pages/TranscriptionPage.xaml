@@ -15,6 +15,7 @@
                     <ComboBox SelectedValue="{Binding SttModel}" SelectedValuePath="Content" Margin="0,0,0,16" MaxWidth="300" HorizontalAlignment="Left">
                         <ComboBoxItem Content="Deepgram"/>
                         <ComboBoxItem Content="OpenAI"/>
+                        <ComboBoxItem Content="OpenRouter"/>
                     </ComboBox>
 
                     <TextBlock Text="Language (ISO code)" Style="{StaticResource FieldLabel}"/>
@@ -23,22 +24,17 @@
 
                     <TextBlock Text="Target Model" Style="{StaticResource FieldLabel}"/>
                     <Grid x:Name="ModelRow">
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="*"/>
-                            <ColumnDefinition Width="Auto"/>
-                        </Grid.ColumnDefinitions>
                         <ComboBox x:Name="SttModelCombo"
-                                  Grid.Column="0"
                                   ItemsSource="{Binding AvailableSttModels}"
                                   Text="{Binding SelectedSttModelString}"
                                   IsEditable="True"
                                   IsTextSearchEnabled="False"
                                   StaysOpenOnEdit="True"
                                   ScrollViewer.VerticalScrollBarVisibility="Visible"
-                                  TextChanged="ModelCombo_TextChanged"
+                                  KeyUp="ModelCombo_KeyUp"
                                   DropDownClosed="ModelCombo_DropDownClosed"
                                   PreviewKeyDown="ModelCombo_PreviewKeyDown"
-                                  Margin="0,0,8,12">
+                                  Margin="0,0,0,12">
                             <ComboBox.ItemTemplate>
                                 <DataTemplate>
                                     <StackPanel Orientation="Horizontal">
@@ -72,13 +68,7 @@
                                 </Style>
                             </ComboBox.ItemContainerStyle>
                         </ComboBox>
-                        <ui:Button Grid.Column="1"
-                                   Content="Top"
-                                   Style="{StaticResource SecondaryButton}"
-                                   Click="JumpToTop_Click"
-                                   Margin="0,0,0,12"/>
                         <Border x:Name="ModelGlow"
-                                Grid.ColumnSpan="2"
                                 BorderThickness="2" IsHitTestVisible="False" Opacity="0" Panel.ZIndex="10"
                                 Margin="0,0,0,12">
                             <Border.Effect><DropShadowEffect x:Name="ModelGlowFx" BlurRadius="18" ShadowDepth="0" Opacity="0.95"/></Border.Effect>

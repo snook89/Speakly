@@ -5,6 +5,13 @@ using System.Windows;
 
 namespace Speakly.Services
 {
+    public class InsertResult
+    {
+        public bool Success { get; set; }
+        public string Method { get; set; } = "None";
+        public string ErrorCode { get; set; } = string.Empty;
+    }
+
     public static class TextInserter
     {
         [DllImport("user32.dll", SetLastError = true)]
@@ -84,12 +91,12 @@ namespace Speakly.Services
             public IntPtr dwExtraInfo;
         }
 
-        public static void InsertText(string text, IntPtr targetWindow = default)
+        public static InsertResult InsertText(string text, IntPtr targetWindow = default)
         {
             if (string.IsNullOrEmpty(text)) 
             {
                 Logger.Log("InsertText called with empty string. Skipping.");
-                return;
+                return new InsertResult { Success = true, Method = "SkippedEmpty" };
             }
 
             if (targetWindow != IntPtr.Zero)
@@ -110,12 +117,14 @@ namespace Speakly.Services
                 CheckForElevation(targetWindow);
                 SendUnicodeStringWithDelay(text);
                 Logger.Log("SendUnicodeStringWithDelay completed.");
+                return new InsertResult { Success = true, Method = "SendInput" };
             }
             catch (Exception ex)
             {
                 Logger.LogException("InsertText (SendUnicodeString)", ex);
                 Logger.Log("Falling back to clipboard insertion.");
                 ClipboardInsert(text);
+                return new InsertResult { Success = true, Method = "ClipboardFallback", ErrorCode = ex.GetType().Name };
             }
         }
 
@@ -224,14 +233,36 @@ namespace Speakly.Services
         {
             Application.Current.Dispatcher.Invoke(() =>
             {
-                string original = Clipboard.GetText();
-                Clipboard.SetText(text);
-                
-                // Emulate Ctrl+V
-                SendKeyCombination(0x11, 0x56); // VK_CONTROL, 'V'
-                
-                // Note: Restoring clipboard depends on Config.RestoreClipboard
-                // For simplicity, we just set it here.
+                string? original = null;
+                bool hadText = false;
+
+                try
+                {
+                    if (Clipboard.ContainsText())
+                    {
+                        original = Clipboard.GetText();
+                        hadText = true;
+                    }
+
+                    Clipboard.SetText(text);
+
+                    // Emulate Ctrl+V
+                    SendKeyCombination(0x11, 0x56); // VK_CONTROL, 'V'
+                }
+                finally
+                {
+                    if (Config.ConfigManager.Config.RestoreClipboard)
+                    {
+                        if (hadText && original != null)
+                        {
+                            Clipboard.SetText(original);
+                        }
+                        else
+                        {
+                            Clipboard.Clear();
+                        }
+                    }
+                }
             });
         }
 

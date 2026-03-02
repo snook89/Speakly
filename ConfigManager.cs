@@ -46,12 +46,18 @@ namespace Speakly.Config
         [JsonPropertyName("theme")]
         public string Theme { get; set; } = "Dark";
 
+        [JsonPropertyName("overlay_skin")]
+        public string OverlaySkin { get; set; } = "Lavender";
+
         // Per-Service STT Models
         [JsonPropertyName("deepgram_model")]
         public string DeepgramModel { get; set; } = "nova-2";
 
         [JsonPropertyName("openai_stt_model")]
         public string OpenAISttModel { get; set; } = "whisper-1";
+
+        [JsonPropertyName("openrouter_stt_model")]
+        public string OpenRouterSttModel { get; set; } = "openai/whisper-large-v3";
 
         // Per-Service Refinement Models
         [JsonPropertyName("openai_refinement_model")]
@@ -74,6 +80,9 @@ namespace Speakly.Config
         
         [JsonPropertyName("minimize_to_tray")]
         public bool MinimizeToTray { get; set; } = true;
+
+        [JsonPropertyName("show_overlay")]
+        public bool ShowOverlay { get; set; } = true;
 
         [JsonPropertyName("language")]
         public string Language { get; set; } = "en";

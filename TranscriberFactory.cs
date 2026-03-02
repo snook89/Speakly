@@ -10,7 +10,6 @@ namespace Speakly.Services
                     return new OpenAITranscriber();
                 case "deepgram":
                 default:
-                    // Currently Deepgram is our default and most actively supported ultra-low latency model
                     return new DeepgramTranscriber();
             }
         }

@@ -100,6 +100,14 @@ namespace Speakly.ViewModels
         }
 
         public ObservableCollection<string> AvailableAudioDevices { get; } = new ObservableCollection<string>();
+        public ObservableCollection<string> AvailableOverlaySkins { get; } = new ObservableCollection<string>
+        {
+            "Lavender",
+            "Midnight",
+            "Sakura",
+            "Forest",
+            "Ember"
+        };
 
         public ObservableCollection<string> AvailableSttModels { get; } = new ObservableCollection<string>();
         public ObservableCollection<string> AvailableRefinementModels { get; } = new ObservableCollection<string>();
@@ -207,6 +215,17 @@ namespace Speakly.ViewModels
             set { ConfigManager.Config.MinimizeToTray = value; OnPropertyChanged(); }
         }
 
+        public bool ShowOverlay
+        {
+            get => ConfigManager.Config.ShowOverlay;
+            set
+            {
+                ConfigManager.Config.ShowOverlay = value;
+                App.SetOverlayVisible(value);
+                OnPropertyChanged();
+            }
+        }
+
         public int SampleRate
         {
             get => ConfigManager.Config.SampleRate;
@@ -272,6 +291,28 @@ namespace Speakly.ViewModels
                 ConfigManager.Config.Theme = value; 
                 App.SetTheme(value);
                 OnPropertyChanged(); 
+            }
+        }
+
+        public string OverlaySkin
+        {
+            get => ConfigManager.Config.OverlaySkin;
+            set
+            {
+                var normalized = value?.Trim();
+                if (string.IsNullOrWhiteSpace(normalized))
+                {
+                    normalized = "Lavender";
+                }
+
+                if (!AvailableOverlaySkins.Any(s => string.Equals(s, normalized, StringComparison.OrdinalIgnoreCase)))
+                {
+                    normalized = "Lavender";
+                }
+
+                ConfigManager.Config.OverlaySkin = normalized;
+                App.SetOverlaySkin(normalized);
+                OnPropertyChanged();
             }
         }
 
@@ -352,6 +393,7 @@ namespace Speakly.ViewModels
             else if (SttModel == "OpenAI")
             {
                 AvailableSttModels.Add("whisper-1");
+                AvailableSttModels.Add("whisper-1-hd");
             }
             EnsureCurrentModelInList(AvailableSttModels, SelectedSttModelString);
             OnPropertyChanged(nameof(SelectedSttModelString));
@@ -541,17 +583,10 @@ namespace Speakly.ViewModels
 
                 if (!string.IsNullOrWhiteSpace(config.OpenRouterApiKey))
                 {
-                    var openRouterModels = await FetchModelsFromEndpointAsync(
-                        "https://openrouter.ai/api/v1/models",
-                        new AuthenticationHeaderValue("Bearer", config.OpenRouterApiKey.Trim()));
+                    var openRouterRefinementModels = await FetchOpenRouterChatModelsAsync(config.OpenRouterApiKey.Trim());
 
-                    if (openRouterModels.Count > 0)
-                    {
-                        _dynamicRefinementModels["OpenRouter"] = openRouterModels
-                            .OrderBy(m => m, StringComparer.OrdinalIgnoreCase)
-                            .Take(200)
-                            .ToList();
-                    }
+                    if (openRouterRefinementModels.Count > 0)
+                        _dynamicRefinementModels["OpenRouter"] = openRouterRefinementModels;
                 }
 
                 UpdateSttModelList();
@@ -586,6 +621,59 @@ namespace Speakly.ViewModels
             {
                 IsRefreshingModels = false;
             }
+        }
+
+        /// <summary>
+        /// Fetches OpenRouter chat/completion models suitable for text refinement.
+        /// Only includes models whose architecture.modality ends with "->text",
+        /// which excludes image-generation, embedding, and audio-only model types.
+        /// Whisper/STT-class model IDs are also excluded since OpenRouter does not
+        /// support audio transcription endpoints.
+        /// </summary>
+        private async Task<List<string>> FetchOpenRouterChatModelsAsync(string apiKey)
+        {
+            using var request = new HttpRequestMessage(HttpMethod.Get, "https://openrouter.ai/api/v1/models");
+            request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", apiKey);
+
+            using var response = await _httpClient.SendAsync(request);
+            if (!response.IsSuccessStatusCode) return new List<string>();
+
+            var json = await response.Content.ReadAsStringAsync();
+            var refinementModels = new List<string>();
+
+            using var document = JsonDocument.Parse(json);
+            var root = document.RootElement;
+
+            if (!root.TryGetProperty("data", out var dataArray) || dataArray.ValueKind != JsonValueKind.Array)
+                return refinementModels;
+
+            foreach (var item in dataArray.EnumerateArray())
+            {
+                if (item.ValueKind != JsonValueKind.Object) continue;
+                if (!item.TryGetProperty("id", out var idProp)) continue;
+                var id = idProp.GetString();
+                if (string.IsNullOrWhiteSpace(id)) continue;
+
+                // Only include models whose output is text (excludes image-gen, embeddings, etc.)
+                if (item.TryGetProperty("architecture", out var arch) && arch.ValueKind == JsonValueKind.Object)
+                {
+                    if (arch.TryGetProperty("modality", out var modalityProp))
+                    {
+                        var modality = modalityProp.GetString() ?? string.Empty;
+                        if (!string.IsNullOrEmpty(modality) &&
+                            !modality.EndsWith("->text", StringComparison.OrdinalIgnoreCase))
+                            continue;
+                    }
+                }
+
+                // Exclude whisper/audio-only model IDs — OpenRouter doesn't route audio endpoints
+                if (IsOpenRouterSttModel(id)) continue;
+
+                refinementModels.Add(id);
+            }
+
+            refinementModels.Sort(StringComparer.OrdinalIgnoreCase);
+            return refinementModels;
         }
 
         private async Task<List<string>> FetchDeepgramModelsAsync(string apiKey)
@@ -670,6 +758,16 @@ namespace Speakly.ViewModels
         {
             return modelId.Contains("whisper", StringComparison.OrdinalIgnoreCase)
                    || modelId.Contains("transcribe", StringComparison.OrdinalIgnoreCase);
+        }
+
+        private static bool IsOpenRouterSttModel(string modelId)
+        {
+            // Match audio/speech/whisper-class models available via OpenRouter
+            return modelId.Contains("whisper",    StringComparison.OrdinalIgnoreCase)
+                || modelId.Contains("transcri",   StringComparison.OrdinalIgnoreCase)
+                || modelId.Contains("audio",      StringComparison.OrdinalIgnoreCase)
+                || modelId.Contains("speech",     StringComparison.OrdinalIgnoreCase)
+                || modelId.Contains("asr",        StringComparison.OrdinalIgnoreCase);
         }
 
         private static bool IsOpenAiRefinementModel(string modelId)

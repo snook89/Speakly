@@ -14,6 +14,12 @@ namespace Speakly
 {
     public partial class App : Application
     {
+        private static readonly string[] BaseThemeDictionaryUris =
+        {
+            "/Themes/LightTheme.xaml",
+            "/Themes/DarkTheme.xaml"
+        };
+
         public static MainViewModel ViewModel { get; private set; } = null!;
 
         private GlobalHotkeyService? _hotkeyService;
@@ -69,8 +75,11 @@ namespace Speakly
             }
             catch { }
             
-            _overlay = new FloatingOverlay();
-            _overlay.Show();
+            if (ConfigManager.Config.ShowOverlay)
+            {
+                _overlay = new FloatingOverlay();
+                _overlay.Show();
+            }
 
             MainWindow.Show();
         }
@@ -285,8 +294,9 @@ namespace Speakly
                     _audioBuffer = null;
                 }
 
-                // Always recover overlay state after stopping recording.
-                _overlay?.SetStatus("READY", Brushes.Aqua);
+                // Do NOT set READY here – OnTranscriptionReceived handles the final READY
+                // state (and toast). Setting it here would cause RECORDING→TRANSCRIBING→READY
+                // to fire before REFINING, producing the wrong sequence.
             }
         }
 
@@ -392,6 +402,43 @@ namespace Speakly
             });
         }
 
+        public async Task ToggleRecordingFromOverlayAsync()
+        {
+            if (_recorder == null) return;
+
+            if (_recorder.IsRecording)
+            {
+                _isToggleRecording = false;
+                await StopRecordingAsync();
+                return;
+            }
+
+            _lastActiveWindow = TextInserter.GetForegroundWindow();
+            Logger.Log($"Overlay Recording Started. Captured active window: {_lastActiveWindow}");
+            AutoAdjustRefinementPromptForLanguage();
+            _overlay?.SetActiveLanguage(ResolveOverlayLanguageDisplay());
+            _isToggleRecording = true;
+            _overlay?.SetStatus("RECORDING", Brushes.OrangeRed);
+            _startSound?.Play();
+
+            var connectTask = _transcriber != null ? _transcriber.ConnectAsync() : Task.CompletedTask;
+
+            if (ConfigManager.Config.SaveDebugRecords)
+            {
+                _audioBuffer = new System.IO.MemoryStream();
+            }
+
+            _recorder.StartRecording();
+            await connectTask;
+        }
+
+        public async Task StopRecordingFromOverlayAsync()
+        {
+            if (_recorder == null || !_recorder.IsRecording) return;
+            _isToggleRecording = false;
+            await StopRecordingAsync();
+        }
+
         protected override void OnExit(ExitEventArgs e)
         {
             _hotkeyService?.Dispose();
@@ -456,7 +503,7 @@ namespace Speakly
                 for (int i = merged.Count - 1; i >= 0; i--)
                 {
                     var src = merged[i].Source?.ToString() ?? string.Empty;
-                    if (src.Contains("/Themes/", StringComparison.OrdinalIgnoreCase))
+                    if (IsBaseThemeDictionary(src))
                         merged.RemoveAt(i);
                 }
                 merged.Add(overlayDict);
@@ -465,6 +512,73 @@ namespace Speakly
             {
                 System.Diagnostics.Debug.WriteLine($"Overlay theme load failed: {ex.Message}");
             }
+
+            SetOverlaySkin(ConfigManager.Config.OverlaySkin);
+        }
+
+        public static void SetOverlaySkin(string skinName)
+        {
+            var merged = Application.Current.Resources.MergedDictionaries;
+            var normalizedSkin = NormalizeOverlaySkinName(skinName);
+            string dictUri = $"pack://application:,,,/Themes/OverlaySkins/{normalizedSkin}.xaml";
+
+            try
+            {
+                var skinDict = new ResourceDictionary { Source = new Uri(dictUri, UriKind.Absolute) };
+                for (int i = merged.Count - 1; i >= 0; i--)
+                {
+                    var src = merged[i].Source?.ToString() ?? string.Empty;
+                    if (src.Contains("/Themes/OverlaySkins/", StringComparison.OrdinalIgnoreCase))
+                        merged.RemoveAt(i);
+                }
+
+                merged.Add(skinDict);
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"Overlay skin load failed: {ex.Message}");
+            }
+
+            // Push new brush values to the overlay immediately (manual bindings break DynamicResource)
+            if (Application.Current is App app)
+                app._overlay?.RefreshSkin();
+        }
+
+        public static void SetOverlayVisible(bool visible)
+        {
+            if (Application.Current is not App app) return;
+
+            if (visible)
+            {
+                if (app._overlay == null || !app._overlay.IsLoaded)
+                {
+                    app._overlay = new FloatingOverlay();
+                    app._overlay.Show();
+                }
+            }
+            else
+            {
+                app._overlay?.Close();
+                app._overlay = null;
+            }
+        }
+
+        private static bool IsBaseThemeDictionary(string source)
+        {
+            return BaseThemeDictionaryUris.Any(
+                uri => source.Contains(uri, StringComparison.OrdinalIgnoreCase));
+        }
+
+        private static string NormalizeOverlaySkinName(string? skinName)
+        {
+            if (string.IsNullOrWhiteSpace(skinName)) return "Lavender";
+
+            if (string.Equals(skinName, "Midnight", StringComparison.OrdinalIgnoreCase)) return "Midnight";
+            if (string.Equals(skinName, "Sakura", StringComparison.OrdinalIgnoreCase)) return "Sakura";
+            if (string.Equals(skinName, "Forest", StringComparison.OrdinalIgnoreCase)) return "Forest";
+            if (string.Equals(skinName, "Ember", StringComparison.OrdinalIgnoreCase)) return "Ember";
+
+            return "Lavender";
         }
     }
 }

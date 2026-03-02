@@ -2,86 +2,143 @@
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         Title="Speakly Overlay"
-        Width="260" Height="90"
+        Width="420"
+        Height="96"
         WindowStyle="None"
         AllowsTransparency="True"
         Background="Transparent"
         Topmost="True"
         ShowInTaskbar="False"
-        ResizeMode="CanResizeWithGrip"
-        MinWidth="180" MinHeight="70">
+        ResizeMode="CanResize"
+        MinWidth="80"
+        MinHeight="40"
+        MaxWidth="1800"
+        MaxHeight="600">
 
-    <!-- Draggable container -->
-    <Border x:Name="Container"
-            Background="{DynamicResource OverlayContainerBrush}"
-            CornerRadius="18"
-            Padding="14,10"
-            MouseDown="Container_MouseDown"
-            Cursor="SizeAll">
+    <!-- Toast sits above the pillow, top-left, auto-sized -->
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+        </Grid.RowDefinitions>
 
-        <Grid>
-            <Grid.RowDefinitions>
-                <RowDefinition Height="Auto"/>
-                <RowDefinition Height="*"/>
-            </Grid.RowDefinitions>
+        <Border x:Name="ToastBorder"
+                Grid.Row="0"
+                HorizontalAlignment="Left"
+                Margin="12,0,0,6"
+                Padding="12,5"
+                CornerRadius="10"
+                BorderThickness="1.5"
+                Background="{DynamicResource OverlaySkin.ToastBrush}"
+                BorderBrush="{DynamicResource OverlaySkin.ToastBorderBrush}"
+                Visibility="Collapsed">
+            <TextBlock x:Name="ToastText"
+                       Text="Transcription complete"
+                       Foreground="{DynamicResource OverlaySkin.ToastForegroundBrush}"
+                       FontFamily="Segoe UI"
+                       FontSize="11"
+                       FontWeight="Bold"/>
+        </Border>
 
-            <!-- Top Row: indicator dot + status text + timer -->
-            <Grid Grid.Row="0">
-                <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="Auto"/>
-                    <ColumnDefinition Width="*"/>
-                    <ColumnDefinition Width="Auto"/>
-                    <ColumnDefinition Width="Auto"/>
-                </Grid.ColumnDefinitions>
+        <Grid Grid.Row="1">
 
-                <Ellipse x:Name="StatusIndicator"
-                         Grid.Column="0"
-                         Width="9" Height="9"
-                         Fill="{DynamicResource AppAccentBrush}"
-                         VerticalAlignment="Center"
-                         Margin="0,0,8,0"/>
+            <Border x:Name="Container"
+                    CornerRadius="22"
+                    BorderThickness="1.5"
+                    Background="{DynamicResource OverlaySkin.PillowIdleBrush}"
+                    BorderBrush="{DynamicResource OverlaySkin.PillowIdleBorderBrush}"
+                    Padding="0"
+                    ClipToBounds="True"
+                    MouseDown="Container_MouseDown">
+                <Border.Effect>
+                    <DropShadowEffect x:Name="PillowShadow"
+                                      Color="{DynamicResource OverlaySkin.ShadowColor}"
+                                      Direction="315"
+                                      ShadowDepth="5"
+                                      BlurRadius="14"
+                                      Opacity="0.55"/>
+                </Border.Effect>
 
-                <TextBlock x:Name="StatusText"
-                           Grid.Column="1"
-                           Text="READY"
-                           Foreground="{DynamicResource OverlayPrimaryTextBrush}"
-                           FontSize="12"
-                           FontWeight="Bold"
-                           FontFamily="Segoe UI"
-                           VerticalAlignment="Center"/>
+                <Grid>
+                    <!-- Sheen highlight, non-interactive -->
+                    <Border VerticalAlignment="Top"
+                            HorizontalAlignment="Stretch"
+                            Height="18"
+                            Margin="12,2,12,0"
+                            Opacity="0.65"
+                            IsHitTestVisible="False"
+                            Background="{DynamicResource OverlaySkin.PillowSheenBrush}"/>
 
-                <Border x:Name="LanguageBadge"
-                        Grid.Column="2"
-                        Background="{DynamicResource OverlayLanguageBadgeBrush}"
-                        CornerRadius="6"
-                        Padding="6,1"
-                        Margin="8,0,0,0"
-                        VerticalAlignment="Center"
-                        Visibility="Collapsed">
-                    <TextBlock x:Name="LanguageText"
-                               Text="EN"
-                               Foreground="{DynamicResource OverlayLanguageTextBrush}"
-                               FontSize="10"
-                               FontWeight="SemiBold"
-                               FontFamily="Segoe UI"/>
-                </Border>
+                    <!-- Wave canvas fills the ENTIRE container so bars are centred in full floater height -->
+                    <Canvas x:Name="WaveCanvas" ClipToBounds="True"/>
 
-                <TextBlock x:Name="TimerText"
-                           Grid.Column="3"
-                           Text=""
-                           Foreground="{DynamicResource OverlayMutedTextBrush}"
-                           FontSize="11"
-                           FontFamily="Segoe UI Semibold"
-                           VerticalAlignment="Center"
-                           Margin="8,0,0,0"/>
-            </Grid>
+                    <!-- Status row — hidden; wave fills full height -->
+                    <Grid VerticalAlignment="Top" Margin="14,8,14,4" Visibility="Collapsed">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
 
-            <!-- Bottom Row: Waveform canvas -->
-            <Canvas x:Name="WaveCanvas"
-                    Grid.Row="1"
-                    Height="28"
-                    Margin="0,6,0,0"
-                    ClipToBounds="True"/>
+                        <TextBlock x:Name="StatusText"
+                                   Grid.Column="0"
+                                   Text="READY"
+                                   Foreground="{DynamicResource OverlaySkin.StatusForegroundBrush}"
+                                   FontFamily="Segoe UI"
+                                   FontSize="12"
+                                   FontWeight="Bold"
+                                   TextTrimming="CharacterEllipsis"
+                                   VerticalAlignment="Center"/>
+
+                        <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+                            <Border x:Name="TimerBadge"
+                                    Background="{DynamicResource OverlaySkin.TimerBackgroundBrush}"
+                                    CornerRadius="7"
+                                    Padding="8,3"
+                                    Margin="6,0,0,0"
+                                    Visibility="Collapsed">
+                                <TextBlock x:Name="TimerText"
+                                           Text="0:00"
+                                           Foreground="{DynamicResource OverlaySkin.TimerForegroundBrush}"
+                                           FontFamily="Courier New"
+                                           FontSize="12"
+                                           FontWeight="Bold"/>
+                            </Border>
+
+                            <Border x:Name="LanguageBadge"
+                                    Background="{DynamicResource OverlaySkin.LanguageBadgeBrush}"
+                                    BorderBrush="{DynamicResource OverlaySkin.LanguageBadgeBorderBrush}"
+                                    BorderThickness="1"
+                                    CornerRadius="7"
+                                    Padding="8,3"
+                                    Margin="6,0,0,0"
+                                    Visibility="Collapsed">
+                                <TextBlock x:Name="LanguageText"
+                                           Text="EN"
+                                           Foreground="{DynamicResource OverlaySkin.LanguageBadgeForegroundBrush}"
+                                           FontFamily="Courier New"
+                                           FontSize="11"
+                                           FontWeight="Bold"/>
+                            </Border>
+                        </StackPanel>
+                    </Grid>
+
+                    <Grid.ContextMenu>
+                        <ContextMenu Background="{DynamicResource OverlaySkin.MenuBrush}"
+                                     BorderBrush="{DynamicResource OverlaySkin.MenuBorderBrush}"
+                                     BorderThickness="1.5"
+                                     Foreground="{DynamicResource OverlaySkin.MenuForegroundBrush}">
+                            <MenuItem x:Name="StartStopMenuItem"
+                                      Header="Start Recording"
+                                      Click="StartStopMenuItem_Click"/>
+                            <Separator/>
+                            <MenuItem Header="⚙ Settings"
+                                      Click="SettingsMenuItem_Click"/>
+                            <MenuItem Header="👁 Hide for now"
+                                      Click="HideMenuItem_Click"/>
+                        </ContextMenu>
+                    </Grid.ContextMenu>
+                </Grid>
+            </Border>
         </Grid>
-    </Border>
+    </Grid>
 </Window>

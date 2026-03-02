@@ -19,26 +19,46 @@
                     </ComboBox>
 
                     <TextBlock Text="Target Model" Style="{StaticResource FieldLabel}"/>
-                    <ComboBox ItemsSource="{Binding AvailableRefinementModels}"
-                              Text="{Binding SelectedRefinementModelString}"
-                              IsEditable="True"
-                              Margin="0,0,0,14">
-                        <ComboBox.ItemContainerStyle>
-                            <Style TargetType="ComboBoxItem" BasedOn="{StaticResource {x:Type ComboBoxItem}}">
-                                <!-- Tag carries the ViewModel so ContextMenu can reach it -->
-                                <Setter Property="Tag" Value="{Binding DataContext, RelativeSource={RelativeSource AncestorType=UserControl}}"/>
-                                <Setter Property="ContextMenu">
-                                    <Setter.Value>
-                                        <ContextMenu>
-                                            <MenuItem Header="★ Toggle Favorite (OpenRouter)"
-                                                      Command="{Binding PlacementTarget.Tag.ToggleFavoriteModelCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
-                                                      CommandParameter="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource AncestorType=ContextMenu}}"/>
-                                        </ContextMenu>
-                                    </Setter.Value>
-                                </Setter>
-                            </Style>
-                        </ComboBox.ItemContainerStyle>
-                    </ComboBox>
+                    <Grid x:Name="ModelRow">
+                        <ComboBox ItemsSource="{Binding AvailableRefinementModels}"
+                                  Text="{Binding SelectedRefinementModelString}"
+                                  IsEditable="True"
+                                  Margin="0,0,0,12">
+                            <ComboBox.ItemContainerStyle>
+                                <Style TargetType="ComboBoxItem" BasedOn="{StaticResource {x:Type ComboBoxItem}}">
+                                    <!-- Tag carries the ViewModel so ContextMenu can reach it -->
+                                    <Setter Property="Tag" Value="{Binding DataContext, RelativeSource={RelativeSource AncestorType=UserControl}}"/>
+                                    <Setter Property="ContextMenu">
+                                        <Setter.Value>
+                                            <ContextMenu>
+                                                <MenuItem Header="★ Toggle Favorite (OpenRouter)"
+                                                          Command="{Binding PlacementTarget.Tag.ToggleFavoriteModelCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
+                                                          CommandParameter="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource AncestorType=ContextMenu}}"/>
+                                            </ContextMenu>
+                                        </Setter.Value>
+                                    </Setter>
+                                </Style>
+                            </ComboBox.ItemContainerStyle>
+                        </ComboBox>
+                        <Border x:Name="ModelGlow"
+                                BorderThickness="2" IsHitTestVisible="False" Opacity="0" Panel.ZIndex="10"
+                                Margin="0,0,0,12">
+                            <Border.Effect><DropShadowEffect x:Name="ModelGlowFx" BlurRadius="18" ShadowDepth="0" Opacity="0.95"/></Border.Effect>
+                        </Border>
+                    </Grid>
+
+                    <ui:Button Content="Refresh models"
+                               Command="{Binding RefreshModelsCommand}"
+                               HorizontalAlignment="Left"
+                               Padding="14,7"
+                               Style="{StaticResource SecondaryButton}"
+                               Margin="0,0,0,10"/>
+
+                    <ui:InfoBar Title="Model status"
+                                Message="{Binding ModelRefreshStatus}"
+                                Severity="Informational"
+                                IsOpen="{Binding HasModelRefreshStatus}"
+                                Margin="0,0,0,12"/>
 
                     <TextBlock Text="Prompt Presets" Style="{StaticResource FieldLabel}"/>
                     <StackPanel Orientation="Horizontal" Margin="0,0,0,14">

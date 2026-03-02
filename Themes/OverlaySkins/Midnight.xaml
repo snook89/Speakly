@@ -1,0 +1,78 @@
+<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+    <LinearGradientBrush x:Key="OverlaySkin.PillowIdleBrush" StartPoint="0.15,0.15" EndPoint="0.85,0.85">
+        <GradientStop Color="#1E2240" Offset="0"/>
+        <GradientStop Color="#161A30" Offset="0.45"/>
+        <GradientStop Color="#0E1020" Offset="1"/>
+    </LinearGradientBrush>
+
+    <LinearGradientBrush x:Key="OverlaySkin.PillowHoverBrush" StartPoint="0.15,0.15" EndPoint="0.85,0.85">
+        <GradientStop Color="#242848" Offset="0"/>
+        <GradientStop Color="#1C2038" Offset="0.45"/>
+        <GradientStop Color="#141828" Offset="1"/>
+    </LinearGradientBrush>
+
+    <LinearGradientBrush x:Key="OverlaySkin.PillowRecordingBrush" StartPoint="0.15,0.15" EndPoint="0.85,0.85">
+        <GradientStop Color="#3A2060" Offset="0"/>
+        <GradientStop Color="#2A1448" Offset="0.45"/>
+        <GradientStop Color="#1A0C30" Offset="1"/>
+    </LinearGradientBrush>
+
+    <LinearGradientBrush x:Key="OverlaySkin.PillowProcessingBrush" StartPoint="0.15,0.15" EndPoint="0.85,0.85">
+        <GradientStop Color="#103050" Offset="0"/>
+        <GradientStop Color="#0A2040" Offset="0.45"/>
+        <GradientStop Color="#061428" Offset="1"/>
+    </LinearGradientBrush>
+
+    <LinearGradientBrush x:Key="OverlaySkin.PillowSheenBrush" StartPoint="0,0" EndPoint="0,1">
+        <GradientStop Color="#307C6CF0" Offset="0"/>
+        <GradientStop Color="#007C6CF0" Offset="1"/>
+    </LinearGradientBrush>
+
+    <SolidColorBrush x:Key="OverlaySkin.PillowIdleBorderBrush" Color="#2A2E50"/>
+    <SolidColorBrush x:Key="OverlaySkin.PillowRecordingBorderBrush" Color="#502870"/>
+    <SolidColorBrush x:Key="OverlaySkin.PillowProcessingBorderBrush" Color="#184868"/>
+
+    <SolidColorBrush x:Key="OverlaySkin.IconIdleBrush" Color="#7C6CF0"/>
+    <SolidColorBrush x:Key="OverlaySkin.IconRecordingBrush" Color="#B0A8FF"/>
+    <SolidColorBrush x:Key="OverlaySkin.IconProcessingBrush" Color="#A090FF"/>
+
+    <SolidColorBrush x:Key="OverlaySkin.TimerBackgroundBrush" Color="#337C6CF0"/>
+    <SolidColorBrush x:Key="OverlaySkin.TimerForegroundBrush" Color="#B0A8FF"/>
+
+    <LinearGradientBrush x:Key="OverlaySkin.LanguageBadgeBrush" StartPoint="0.15,0.15" EndPoint="0.85,0.85">
+        <GradientStop Color="#1E2240" Offset="0"/>
+        <GradientStop Color="#161A32" Offset="1"/>
+    </LinearGradientBrush>
+    <SolidColorBrush x:Key="OverlaySkin.LanguageBadgeBorderBrush" Color="#2E3258"/>
+    <SolidColorBrush x:Key="OverlaySkin.LanguageBadgeForegroundBrush" Color="#8880CC"/>
+
+    <LinearGradientBrush x:Key="OverlaySkin.CancelBrush" StartPoint="0.15,0.15" EndPoint="0.85,0.85">
+        <GradientStop Color="#301010" Offset="0"/>
+        <GradientStop Color="#280808" Offset="1"/>
+    </LinearGradientBrush>
+    <SolidColorBrush x:Key="OverlaySkin.CancelBorderBrush" Color="#501818"/>
+    <SolidColorBrush x:Key="OverlaySkin.CancelForegroundBrush" Color="#F08080"/>
+
+    <LinearGradientBrush x:Key="OverlaySkin.ToastBrush" StartPoint="0.15,0.15" EndPoint="0.85,0.85">
+        <GradientStop Color="#0E2818" Offset="0"/>
+        <GradientStop Color="#0A2010" Offset="1"/>
+    </LinearGradientBrush>
+    <SolidColorBrush x:Key="OverlaySkin.ToastBorderBrush" Color="#1A5030"/>
+    <SolidColorBrush x:Key="OverlaySkin.ToastForegroundBrush" Color="#60D890"/>
+
+    <LinearGradientBrush x:Key="OverlaySkin.MenuBrush" StartPoint="0,0" EndPoint="1,1">
+        <GradientStop Color="#161A30" Offset="0"/>
+        <GradientStop Color="#111428" Offset="1"/>
+    </LinearGradientBrush>
+    <SolidColorBrush x:Key="OverlaySkin.MenuBorderBrush" Color="#2A2E54"/>
+    <SolidColorBrush x:Key="OverlaySkin.MenuItemHoverBrush" Color="#1A7C6CF0"/>
+    <SolidColorBrush x:Key="OverlaySkin.MenuForegroundBrush" Color="#C0B8FF"/>
+
+    <SolidColorBrush x:Key="OverlaySkin.StatusForegroundBrush" Color="#E8E4FF"/>
+    <SolidColorBrush x:Key="OverlaySkin.SubtleTextBrush" Color="#7060C0"/>
+    <SolidColorBrush x:Key="OverlaySkin.AccentBrush" Color="#7C6CF0"/>
+    <Color x:Key="OverlaySkin.ShadowColor">#503060</Color>
+
+</ResourceDictionary>

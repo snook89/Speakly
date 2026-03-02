@@ -15,6 +15,12 @@
                         <ComboBoxItem Content="Dark"/>
                         <ComboBoxItem Content="Light"/>
                     </ComboBox>
+                    <TextBlock Text="Overlay Skin" Style="{StaticResource FieldLabel}"/>
+                    <ComboBox ItemsSource="{Binding AvailableOverlaySkins}"
+                              SelectedItem="{Binding OverlaySkin}"
+                              Margin="0,0,0,6"
+                              MaxWidth="300"
+                              HorizontalAlignment="Left"/>
                     <TextBlock Text="Theme changes apply instantly." Style="{StaticResource HintText}"/>
                 </StackPanel>
             </Border>
@@ -22,6 +28,7 @@
             <Border Style="{StaticResource SectionCard}">
                 <StackPanel>
                     <TextBlock Text="Behavior" Style="{StaticResource SectionTitle}"/>
+                    <ui:ToggleSwitch Content="Show Floating Overlay" IsChecked="{Binding ShowOverlay}" Margin="0,0,0,10"/>
                     <ui:ToggleSwitch Content="Minimize to Tray on Close" IsChecked="{Binding MinimizeToTray}" Margin="0,0,0,10"/>
                     <ui:ToggleSwitch Content="Enable Debug Logs" IsChecked="{Binding EnableDebugLogs}"/>
                 </StackPanel>

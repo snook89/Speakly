@@ -100,6 +100,7 @@ Both are configurable and support modifiers (`Ctrl`, `Alt`, `Shift`, `Win`).
 Speakly stores data in a few locations:
 
 - Main config: `%AppData%\Speakly\config.json`
+- Debug logs: `%AppData%\Speakly\Logs\speakly_debug.log`
 - Prompt library: `prompts.json` (next to executable)
 - History: `history.json` and `history.log` (next to executable)
 - Session metrics: `metrics.json` (next to executable)

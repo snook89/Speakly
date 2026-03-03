@@ -65,7 +65,7 @@ namespace Speakly.Services
             {
                 DeviceNumber = deviceNumber,
                 WaveFormat = new WaveFormat(ConfigManager.Config.SampleRate, 16, ConfigManager.Config.Channels),
-                BufferMilliseconds = 50 
+                BufferMilliseconds = ResolveBufferMilliseconds()
             };
             
             _waveIn.DataAvailable += OnDataAvailable;
@@ -123,6 +123,19 @@ namespace Speakly.Services
                 _waveIn = null;
             }
             GC.SuppressFinalize(this);
+        }
+
+        private static int ResolveBufferMilliseconds()
+        {
+            var sampleRate = Math.Clamp(ConfigManager.Config.SampleRate, 8000, 48000);
+            var channels = Math.Clamp(ConfigManager.Config.Channels, 1, 2);
+            var chunkSize = Math.Clamp(ConfigManager.Config.ChunkSize, 256, 32768);
+
+            int bytesPerSecond = sampleRate * channels * 2; // 16-bit PCM
+            if (bytesPerSecond <= 0) return 50;
+
+            var estimatedMs = (int)Math.Round(chunkSize * 1000.0 / bytesPerSecond);
+            return Math.Clamp(estimatedMs, 10, 200);
         }
 
         private static bool TryParseUnnamedDeviceIndex(string targetDevice, out int deviceIndex)

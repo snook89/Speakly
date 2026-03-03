@@ -6,7 +6,7 @@ namespace Speakly.Services
 {
     public static class Logger
     {
-        private static readonly string LogFile = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "speakly_debug.log");
+        private static readonly string LogFile = ResolveLogFilePath();
         private static readonly object _lock = new object();
         public static string LogFilePath => LogFile;
 
@@ -49,6 +49,32 @@ namespace Speakly.Services
         public static void LogException(string context, Exception ex)
         {
             Log($"ERROR in {context}: {ex.Message}{Environment.NewLine}{ex.StackTrace}");
+        }
+
+        private static string ResolveLogFilePath()
+        {
+            var candidates = new[]
+            {
+                Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "Speakly", "Logs"),
+                Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Speakly", "Logs"),
+                AppDomain.CurrentDomain.BaseDirectory
+            };
+
+            foreach (var directory in candidates)
+            {
+                if (string.IsNullOrWhiteSpace(directory)) continue;
+                try
+                {
+                    Directory.CreateDirectory(directory);
+                    return Path.Combine(directory, "speakly_debug.log");
+                }
+                catch
+                {
+                    // Try next candidate.
+                }
+            }
+
+            return Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "speakly_debug.log");
         }
     }
 }

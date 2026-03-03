@@ -20,7 +20,7 @@
 
                     <TextBlock Text="Chunk Size (Bytes)" Style="{StaticResource FieldLabel}"/>
                     <ui:NumberBox Value="{Binding ChunkSize}" Margin="0,0,0,4"/>
-                    <TextBlock Text="4096 is a common balance between latency and CPU usage. Allowed range: 256–32768." Style="{StaticResource HintText}" Margin="0,0,0,14"/>
+                    <TextBlock Text="Controls capture frame size used for streaming. 4096 is a common balance between latency and CPU usage. Allowed range: 256–32768." Style="{StaticResource HintText}" Margin="0,0,0,14"/>
 
                     <TextBlock Text="Channels" Style="{StaticResource FieldLabel}"/>
                     <ui:NumberBox Value="{Binding Channels}" Margin="0,0,0,4"/>

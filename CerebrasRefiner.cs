@@ -15,12 +15,7 @@ namespace Speakly.Services
 {
     public class CerebrasRefiner : ITextRefiner
     {
-        private static readonly HttpClient _httpClient = new HttpClient();
-
-        public CerebrasRefiner()
-        {
-            _httpClient.Timeout = Timeout.InfiniteTimeSpan;
-        }
+        private static readonly HttpClient _httpClient = new HttpClient { Timeout = Timeout.InfiniteTimeSpan };
 
         public async Task<string> RefineTextAsync(string text, string prompt)
         {

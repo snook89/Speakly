@@ -10,12 +10,7 @@ namespace Speakly.Services
 {
     public class OpenRouterRefiner : ITextRefiner
     {
-        private static readonly HttpClient _httpClient = new HttpClient();
-
-        public OpenRouterRefiner()
-        {
-            _httpClient.Timeout = TimeSpan.FromSeconds(30);
-        }
+        private static readonly HttpClient _httpClient = new HttpClient { Timeout = TimeSpan.FromSeconds(30) };
 
         public async Task<string> RefineTextAsync(string text, string prompt)
         {

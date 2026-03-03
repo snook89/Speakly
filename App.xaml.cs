@@ -51,7 +51,9 @@ namespace Speakly
         private readonly object _sessionLock = new();
         private SessionState _sessionState = SessionState.Idle;
         private CancellationTokenSource? _pendingPttReleaseStopCts;
-        private static readonly TimeSpan PttReleaseDebounce = TimeSpan.FromMilliseconds(60);
+        private static readonly TimeSpan PttReleaseDebounce = TimeSpan.FromMilliseconds(120);
+        private static readonly TimeSpan PttReleaseConfirmInterval = TimeSpan.FromMilliseconds(40);
+        private const int PttReleaseConfirmChecks = 2;
         private readonly DispatcherTimer _overlayIdleTimer = new();
         private DateTime _overlayLastActivityUtc = DateTime.UtcNow;
         private bool _overlayHiddenByIdle;
@@ -77,8 +79,15 @@ namespace Speakly
         private int _insertMs;
         private readonly object _audioChunkLock = new();
         private readonly List<byte[]> _sessionAudioChunks = new();
+        private readonly object _finalSegmentLock = new();
+        private readonly List<string> _finalTranscriptSegments = new();
         private bool _finalTranscriptionProcessed;
+        private bool _stopRequested;
         private bool _sttFailoverAttempted;
+        private string _sessionSttProvider = string.Empty;
+        private string _sessionSttModel = string.Empty;
+        private string _latestTranscriberErrorCode = string.Empty;
+        private string _latestTranscriberErrorMessage = string.Empty;
         private AppProfile? _activeSessionProfile;
         private string _failoverFromProvider = string.Empty;
         private string _failoverToProvider = string.Empty;
@@ -590,7 +599,7 @@ namespace Speakly
                 else
                 {
                     _isToggleRecording = false;
-                    await StopRecordingAsync();
+                    await StopRecordingAsync("toggle_hotkey");
                 }
             }
         }
@@ -620,14 +629,23 @@ namespace Speakly
                                 return;
                             }
 
-                            if (IsKeyCurrentlyDown(mainKey))
+                            for (int i = 0; i < PttReleaseConfirmChecks; i++)
                             {
-                                Logger.Log($"Ignoring transient PTT key-up for {mainKey}; key is still physically down.");
-                                return;
+                                bool stillDown = IsKeyCurrentlyDown(mainKey) || (_hotkeyService?.IsKeyPressed(mainKey) ?? false);
+                                if (stillDown)
+                                {
+                                    Logger.Log($"Ignoring transient PTT key-up for {mainKey}; key is still physically down.");
+                                    return;
+                                }
+
+                                if (i < PttReleaseConfirmChecks - 1)
+                                {
+                                    await Task.Delay(PttReleaseConfirmInterval, releaseCts.Token);
+                                }
                             }
 
                             MarkOverlayActivity(showOverlayIfNeeded: false);
-                            await StopRecordingAsync();
+                            await StopRecordingAsync("ptt_release");
                         }
                         catch (TaskCanceledException)
                         {
@@ -644,14 +662,23 @@ namespace Speakly
             }
         }
 
-        private async Task StopRecordingAsync()
+        private async Task StopRecordingAsync(string reason)
         {
-            if (_recorder == null || !TryEnterTranscribing()) return;
-            Logger.Log("Stopping recording.");
-            TrackSessionEvent("transcribing_start");
+            if (_recorder == null) return;
+            if (!_recorder.IsRecording) return;
+            if (!TryEnterTranscribing()) return;
+
+            _stopRequested = true;
+            Logger.Log($"Stopping recording (reason={reason}).");
+            TrackSessionEvent(
+                "transcribing_start",
+                data: new Dictionary<string, string>
+                {
+                    ["reason"] = reason
+                });
             _overlay?.SetStatus("TRANSCRIBING", Brushes.Yellow);
-            _stopSound?.Play();
             _recorder.StopRecording();
+            _stopSound?.Play();
             _recordMs = (int)Math.Max(0, (DateTime.UtcNow - _recordingStartedUtc).TotalMilliseconds);
             _transcribingStartedUtc = DateTime.UtcNow;
 
@@ -670,6 +697,8 @@ namespace Speakly
             }
             catch (Exception ex)
             {
+                _latestTranscriberErrorMessage = ex.Message;
+                _latestTranscriberErrorCode = ErrorClassifier.Classify(ex.Message);
                 Logger.LogException("StopRecordingAsync", ex);
             }
             finally
@@ -681,15 +710,28 @@ namespace Speakly
                     _audioBuffer = null;
                 }
 
-                // Normally OnTranscriptionReceived/OnTranscriberError finishes the session.
-                // If provider callbacks never arrive, force-recover so hotkeys don't deadlock.
-                await RecoverIfNoFinalResultAsync();
+                await FinalizeSessionAfterStopAsync();
             }
+        }
+
+        private async Task FinalizeSessionAfterStopAsync()
+        {
+            await Task.Delay(PostStopFinalResultGrace);
+            if (_finalTranscriptionProcessed) return;
+
+            var mergedTranscript = BuildMergedFinalTranscript();
+            if (!string.IsNullOrWhiteSpace(mergedTranscript))
+            {
+                Logger.Log($"Finalizing session from buffered segments (count={SnapshotFinalSegmentCount()}).");
+                await HandleFinalTranscriptionAsync(mergedTranscript, ResolveSessionSttProvider(), ResolveSessionSttModel());
+                return;
+            }
+
+            await RecoverIfNoFinalResultAsync();
         }
 
         private async Task RecoverIfNoFinalResultAsync()
         {
-            await Task.Delay(PostStopFinalResultGrace);
             if (_finalTranscriptionProcessed)
             {
                 return;
@@ -706,6 +748,16 @@ namespace Speakly
                 return;
             }
 
+            var failoverCode = string.IsNullOrWhiteSpace(_latestTranscriberErrorCode)
+                ? NoFinalResultErrorCode
+                : _latestTranscriberErrorCode;
+
+            var failoverSucceeded = await TryRunSttFailoverAsync(failoverCode);
+            if (failoverSucceeded || _finalTranscriptionProcessed)
+            {
+                return;
+            }
+
             Logger.Log("No final transcription callback received after stop; forcing session recovery.");
             TrackSessionEvent(
                 name: "session_end",
@@ -718,7 +770,9 @@ namespace Speakly
                 data: new Dictionary<string, string>
                 {
                     ["stt_provider"] = ConfigManager.Config.SttModel,
-                    ["stt_model"] = ResolveActiveSttModel()
+                    ["stt_model"] = ResolveActiveSttModel(),
+                    ["last_error_code"] = _latestTranscriberErrorCode,
+                    ["last_error"] = _latestTranscriberErrorMessage
                 });
 
             Dispatcher.Invoke(() =>
@@ -789,15 +843,16 @@ namespace Speakly
             }
         }
 
-        private async void OnTranscriptionReceived(object? sender, TranscriptionEventArgs e)
+        private void OnTranscriptionReceived(object? sender, TranscriptionEventArgs e)
         {
             if (!e.IsFinal || string.IsNullOrWhiteSpace(e.Text) || _finalTranscriptionProcessed) return;
-            Logger.Log($"App received transcription: isFinal={e.IsFinal}, Text='{e.Text}'");
+
+            BufferFinalTranscriptSegment(e.Text, ConfigManager.Config.SttModel, ResolveActiveSttModel());
+            Logger.Log($"Buffered final transcription segment (stopRequested={_stopRequested}): '{e.Text}'");
             TrackSessionEvent("transcriber_final", data: new Dictionary<string, string>
             {
                 ["text"] = e.Text
             });
-            await HandleFinalTranscriptionAsync(e.Text, ConfigManager.Config.SttModel, ResolveActiveSttModel());
         }
 
         private void CaptureSessionAudio(byte[] data)
@@ -825,11 +880,52 @@ namespace Speakly
             }
         }
 
+        private void BufferFinalTranscriptSegment(string text, string provider, string model)
+        {
+            var normalized = text?.Trim();
+            if (string.IsNullOrWhiteSpace(normalized)) return;
+
+            lock (_finalSegmentLock)
+            {
+                _finalTranscriptSegments.Add(normalized);
+                if (!string.IsNullOrWhiteSpace(provider))
+                {
+                    _sessionSttProvider = provider;
+                }
+
+                if (!string.IsNullOrWhiteSpace(model))
+                {
+                    _sessionSttModel = model;
+                }
+            }
+        }
+
+        private int SnapshotFinalSegmentCount()
+        {
+            lock (_finalSegmentLock)
+            {
+                return _finalTranscriptSegments.Count;
+            }
+        }
+
+        private string BuildMergedFinalTranscript()
+        {
+            List<string> snapshot;
+            lock (_finalSegmentLock)
+            {
+                snapshot = _finalTranscriptSegments.ToList();
+            }
+
+            return SessionTranscriptAssembler.MergeFinalSegments(snapshot);
+        }
+
         private async void OnTranscriberError(object? sender, string error)
         {
             if (_finalTranscriptionProcessed) return;
 
             var errorCode = ErrorClassifier.Classify(error);
+            _latestTranscriberErrorCode = errorCode;
+            _latestTranscriberErrorMessage = error;
             Logger.Log($"Transcriber error classified as '{errorCode}': {error}");
             TrackSessionEvent(
                 name: "transcriber_error",
@@ -839,6 +935,12 @@ namespace Speakly
                 errorCode: errorCode,
                 errorClass: errorCode,
                 data: new Dictionary<string, string> { ["error"] = error });
+
+            if (_recorder?.IsRecording == true && !_stopRequested)
+            {
+                Logger.Log("Transcriber error received while recording is active; deferring failover until explicit stop.");
+                return;
+            }
 
             var failoverSucceeded = await TryRunSttFailoverAsync(errorCode);
             if (failoverSucceeded) return;
@@ -1021,7 +1123,8 @@ namespace Speakly
                     ["stt_model"] = sttModel,
                     ["refinement_provider"] = ConfigManager.Config.EnableRefinement ? ConfigManager.Config.RefinementModel : "Disabled",
                     ["refinement_model"] = ConfigManager.Config.EnableRefinement ? ResolveActiveRefinementModel() : string.Empty,
-                    ["insertion_method"] = insertResult.Method
+                    ["insertion_method"] = insertResult.Method,
+                    ["final_segment_count"] = SnapshotFinalSegmentCount().ToString()
                 });
             SetSessionState(SessionState.Idle);
         }
@@ -1030,7 +1133,9 @@ namespace Speakly
         {
             if (_sttFailoverAttempted || _finalTranscriptionProcessed) return false;
             if (!ConfigManager.Config.EnableSttFailover) return false;
-            if (!ErrorClassifier.IsTransient(errorCode)) return false;
+            var allowFailover = ErrorClassifier.IsTransient(errorCode)
+                || string.Equals(errorCode, NoFinalResultErrorCode, StringComparison.OrdinalIgnoreCase);
+            if (!allowFailover) return false;
 
             var fallbackProvider = ResolveFallbackProvider();
             if (string.IsNullOrWhiteSpace(fallbackProvider)) return false;
@@ -1216,7 +1321,7 @@ namespace Speakly
             if (_recorder.IsRecording)
             {
                 _isToggleRecording = false;
-                await StopRecordingAsync();
+                await StopRecordingAsync("overlay_toggle");
                 return;
             }
 
@@ -1250,7 +1355,7 @@ namespace Speakly
         {
             if (_recorder == null || !_recorder.IsRecording) return;
             _isToggleRecording = false;
-            await StopRecordingAsync();
+            await StopRecordingAsync("overlay_stop");
         }
 
         protected override void OnExit(ExitEventArgs e)
@@ -1431,12 +1536,21 @@ namespace Speakly
             _refineMs = 0;
             _insertMs = 0;
             _finalTranscriptionProcessed = false;
+            _stopRequested = false;
             _sttFailoverAttempted = false;
             _failoverFromProvider = string.Empty;
             _failoverToProvider = string.Empty;
+            _latestTranscriberErrorCode = string.Empty;
+            _latestTranscriberErrorMessage = string.Empty;
             lock (_audioChunkLock)
             {
                 _sessionAudioChunks.Clear();
+            }
+            lock (_finalSegmentLock)
+            {
+                _finalTranscriptSegments.Clear();
+                _sessionSttProvider = ConfigManager.Config.SttModel;
+                _sessionSttModel = ResolveActiveSttModel();
             }
             TrackSessionEvent("session_start", data: new Dictionary<string, string>
             {
@@ -1453,6 +1567,11 @@ namespace Speakly
                 ConfigManager.SetActiveProfile(_activeSessionProfile.Id);
                 ConfigManager.EnsureProfileSyncToLegacyFields(_activeSessionProfile);
                 InitializeTranscriptionAndRefinement();
+                lock (_finalSegmentLock)
+                {
+                    _sessionSttProvider = ConfigManager.Config.SttModel;
+                    _sessionSttModel = ResolveActiveSttModel();
+                }
                 TrackSessionEvent("profile_resolved", data: new Dictionary<string, string>
                 {
                     ["profile_id"] = _activeSessionProfile.Id,
@@ -1481,6 +1600,26 @@ namespace Speakly
         private static string ResolveActiveSttModel()
         {
             return ResolveSttModelForProvider(ConfigManager.Config.SttModel);
+        }
+
+        private string ResolveSessionSttProvider()
+        {
+            lock (_finalSegmentLock)
+            {
+                return string.IsNullOrWhiteSpace(_sessionSttProvider)
+                    ? ConfigManager.Config.SttModel
+                    : _sessionSttProvider;
+            }
+        }
+
+        private string ResolveSessionSttModel()
+        {
+            lock (_finalSegmentLock)
+            {
+                return string.IsNullOrWhiteSpace(_sessionSttModel)
+                    ? ResolveActiveSttModel()
+                    : _sessionSttModel;
+            }
         }
 
         private static string ResolveSttModelForProvider(string provider)
@@ -1519,6 +1658,12 @@ namespace Speakly
         {
             lock (_sessionLock)
             {
+                if (_sessionState == SessionState.Idle && _recorder?.IsRecording == true)
+                {
+                    _sessionState = SessionState.Transcribing;
+                    return true;
+                }
+
                 if (_sessionState != SessionState.Recording && _sessionState != SessionState.Refining && _sessionState != SessionState.Transcribing)
                     return false;
                 _sessionState = SessionState.Transcribing;

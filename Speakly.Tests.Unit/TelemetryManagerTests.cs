@@ -15,6 +15,7 @@ namespace Speakly.Tests.Unit
 
             ConfigManager.Config.TelemetryEnabled = true;
             ConfigManager.Config.TelemetryRedactionMode = "strict";
+            ConfigManager.Config.TelemetryLevel = "normal";
             try
             {
                 var before = TelemetryManager.GetSummary(1).TotalEvents;

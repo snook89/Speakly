@@ -1,5 +1,6 @@
 using System;
 using System.Diagnostics;
+using System.Collections.Generic;
 using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Input;
@@ -27,6 +28,8 @@ namespace Speakly.Services
 
         private LowLevelKeyboardProc? _proc;
         private IntPtr _hookID = IntPtr.Zero;
+        private readonly object _pressedKeysLock = new();
+        private readonly HashSet<Key> _pressedKeys = new();
 
         public event EventHandler<HotkeyEventArgs>? KeyDown;
         public event EventHandler<HotkeyEventArgs>? KeyUp;
@@ -60,18 +63,41 @@ namespace Speakly.Services
 
                 if (wParam == (IntPtr)WM_KEYDOWN || wParam == (IntPtr)WM_SYSKEYDOWN)
                 {
+                    lock (_pressedKeysLock)
+                    {
+                        _pressedKeys.Add(key);
+                    }
+
                     KeyDown?.Invoke(this, new HotkeyEventArgs(key, wParam == (IntPtr)WM_SYSKEYDOWN ? key : Key.None));
                 }
                 else if (wParam == (IntPtr)WM_KEYUP || wParam == (IntPtr)WM_SYSKEYUP)
                 {
+                    lock (_pressedKeysLock)
+                    {
+                        _pressedKeys.Remove(key);
+                    }
+
                     KeyUp?.Invoke(this, new HotkeyEventArgs(key, wParam == (IntPtr)WM_SYSKEYUP ? key : Key.None));
                 }
             }
             return CallNextHookEx(_hookID, nCode, wParam, lParam);
         }
 
+        public bool IsKeyPressed(Key key)
+        {
+            lock (_pressedKeysLock)
+            {
+                return _pressedKeys.Contains(key);
+            }
+        }
+
         public void Dispose()
         {
+            lock (_pressedKeysLock)
+            {
+                _pressedKeys.Clear();
+            }
+
             UnhookWindowsHookEx(_hookID);
             GC.SuppressFinalize(this);
         }

@@ -207,8 +207,19 @@ namespace Speakly
                 _updateCheckStarted = true;
             }
 
-            if (!await _updateCheckGate.WaitAsync(0))
-                return "Update check is already running.";
+            bool lockAcquired;
+            if (userInitiated)
+            {
+                // If startup check is in-flight, wait a bit so the manual action can still complete.
+                lockAcquired = await _updateCheckGate.WaitAsync(TimeSpan.FromSeconds(20));
+            }
+            else
+            {
+                lockAcquired = await _updateCheckGate.WaitAsync(0);
+            }
+
+            if (!lockAcquired)
+                return "Another update check is still running. Please try again in a few seconds.";
 
             try
             {
@@ -222,7 +233,7 @@ namespace Speakly
                 if (!updateManager.IsInstalled)
                 {
                     Logger.Log("Skipping update check: app is not running from a Velopack installation.");
-                    return "This build is not installed via Speakly updater yet.";
+                    return "Auto-update works only for Speakly installed via Setup. This local publish build cannot self-update.";
                 }
 
                 var pending = updateManager.UpdatePendingRestart;

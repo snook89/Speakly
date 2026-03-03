@@ -8,6 +8,25 @@ namespace Speakly.Services
     {
         private static readonly string LogFile = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "speakly_debug.log");
         private static readonly object _lock = new object();
+        public static string LogFilePath => LogFile;
+
+        public static void EnsureLogFileExists()
+        {
+            try
+            {
+                var directory = Path.GetDirectoryName(LogFile);
+                if (!string.IsNullOrWhiteSpace(directory))
+                {
+                    Directory.CreateDirectory(directory);
+                }
+
+                using var _ = File.Open(LogFile, FileMode.OpenOrCreate, FileAccess.Write, FileShare.ReadWrite);
+            }
+            catch
+            {
+                // Ignore file creation errors to keep app stable
+            }
+        }
 
         public static void Log(string message)
         {

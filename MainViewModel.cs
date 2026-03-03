@@ -2,6 +2,8 @@ using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.ComponentModel;
+using System.Diagnostics;
+using System.IO;
 using System.Linq;
 using System.Net.Http;
 using System.Net.Http.Headers;
@@ -52,6 +54,7 @@ namespace Speakly.ViewModels
         public ICommand CreateProfileCommand { get; }
         public ICommand SaveProfileCommand { get; }
         public ICommand DeleteProfileCommand { get; }
+        public ICommand OpenDebugLogsCommand { get; }
 
         public bool IsRefreshingModels
         {
@@ -847,6 +850,38 @@ namespace Speakly.ViewModels
                 });
         }
 
+        private void OpenDebugLogs()
+        {
+            var logPath = Logger.LogFilePath;
+            var logDirectory = Path.GetDirectoryName(logPath);
+
+            try
+            {
+                Logger.EnsureLogFileExists();
+
+                if (File.Exists(logPath))
+                {
+                    Process.Start(new ProcessStartInfo("explorer.exe", $"/select,\"{logPath}\"")
+                    {
+                        UseShellExecute = true
+                    });
+                    return;
+                }
+
+                if (!string.IsNullOrWhiteSpace(logDirectory))
+                {
+                    Process.Start(new ProcessStartInfo("explorer.exe", $"\"{logDirectory}\"")
+                    {
+                        UseShellExecute = true
+                    });
+                }
+            }
+            catch (Exception ex)
+            {
+                Logger.LogException("OpenDebugLogs", ex);
+            }
+        }
+
         private void RefreshFromConfig()
         {
             UpdateSttModelList();
@@ -975,6 +1010,8 @@ namespace Speakly.ViewModels
             DeleteProfileCommand = new RelayCommand(
                 _ => DeleteSelectedProfile(),
                 _ => CanDeleteSelectedProfile);
+
+            OpenDebugLogsCommand = new RelayCommand(_ => OpenDebugLogs());
 
             SetProfileByIdCommand = new RelayCommand(obj =>
             {

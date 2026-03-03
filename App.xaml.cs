@@ -280,24 +280,34 @@ namespace Speakly
             }
         }
 
-        private void EnsureOverlayVisibleInternal(bool activate)
+        private void EnsureOverlayVisibleInternal(bool activate, bool forceClampToVisibleArea = false)
         {
             if (!ConfigManager.Config.ShowOverlay)
             {
                 return;
             }
 
+            bool wasShownByThisCall = false;
+
             if (_overlay == null || !_overlay.IsLoaded)
             {
                 _overlay = new FloatingOverlay();
                 _overlay.Show();
+                wasShownByThisCall = true;
             }
             else if (!_overlay.IsVisible)
             {
                 _overlay.Show();
+                wasShownByThisCall = true;
             }
 
-            _overlay.EnsureVisibleOnScreen();
+            // Preserve exact user placement while overlay is already visible.
+            // Clamp only when newly shown or when an explicit recovery asks for it.
+            if (forceClampToVisibleArea || wasShownByThisCall)
+            {
+                _overlay.EnsureVisibleOnScreen();
+            }
+
             _overlay.Topmost = true;
             if (activate)
             {
@@ -1376,7 +1386,7 @@ namespace Speakly
             if (Application.Current is not App app) return;
 
             app.MarkOverlayActivity(showOverlayIfNeeded: true);
-            app.EnsureOverlayVisibleInternal(activate: true);
+            app.EnsureOverlayVisibleInternal(activate: true, forceClampToVisibleArea: true);
         }
 
         public static void SetOverlayAutoHideEnabled(bool enabled)

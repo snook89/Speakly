@@ -47,7 +47,11 @@
                             <ui:ToggleSwitch Content="Copy result to clipboard" IsChecked="{Binding CopyToClipboard}" Margin="0,0,0,10"/>
                             <TextBlock Text="After each transcription the final text is also placed on the clipboard, so you can Ctrl+V it anywhere even if the target window was not focused." Style="{StaticResource HintText}" Margin="0,0,0,10"/>
                             <ui:ToggleSwitch Content="Enable STT failover on transient errors" IsChecked="{Binding EnableSttFailover}" Margin="0,0,0,10"/>
-                            <ui:ToggleSwitch Content="Enable Debug Logs" IsChecked="{Binding EnableDebugLogs}" Margin="0,0,0,14"/>
+                            <ui:ToggleSwitch Content="Enable Debug Logs" IsChecked="{Binding EnableDebugLogs}" Margin="0,0,0,8"/>
+                            <ui:Button Content="Open Debug Logs"
+                                       Command="{Binding OpenDebugLogsCommand}"
+                                       HorizontalAlignment="Left"
+                                       Margin="0,0,0,14"/>
 
                             <TextBlock Text="Telemetry" Style="{StaticResource FieldLabel}"/>
                             <ui:ToggleSwitch Content="Enable Local Telemetry" IsChecked="{Binding TelemetryEnabled}" Margin="0,0,0,10"/>

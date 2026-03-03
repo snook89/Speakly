@@ -130,7 +130,7 @@ namespace Speakly.Pages
             glow.BeginAnimation(OpacityProperty, anim);
         }
 
-        // Keep config updated as user types so Save just calls ConfigManager.Save()
+        // Keep config updated as user types; persistence is debounced automatically.
         private void DeepgramPwdBox_PasswordChanged(object sender, RoutedEventArgs e)
         {
             UpdateKeyFromPasswordBox(

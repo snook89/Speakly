@@ -24,6 +24,14 @@
                 <StackPanel>
                     <TextBlock Text="Stage Latency Averages" Style="{StaticResource SectionTitle}"/>
                     <TextBlock x:Name="LatencyText" Style="{StaticResource HintText}"/>
+                    <TextBlock x:Name="FailoverText" Style="{StaticResource HintText}" Margin="0,6,0,0"/>
+                </StackPanel>
+            </Border>
+
+            <Border Style="{StaticResource SectionCard}">
+                <StackPanel>
+                    <TextBlock Text="Top Errors" Style="{StaticResource SectionTitle}"/>
+                    <TextBlock x:Name="ErrorText" Style="{StaticResource HintText}" TextWrapping="Wrap"/>
                 </StackPanel>
             </Border>
 

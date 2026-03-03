@@ -21,6 +21,13 @@ namespace Speakly.Services
         public bool Succeeded { get; set; } = true;
         public string ErrorCode { get; set; } = string.Empty;
         public string InsertionMethod { get; set; } = string.Empty;
+        public string ProfileId { get; set; } = string.Empty;
+        public string ProfileName { get; set; } = string.Empty;
+        public bool FailoverAttempted { get; set; }
+        public string FailoverFrom { get; set; } = string.Empty;
+        public string FailoverTo { get; set; } = string.Empty;
+        public string FinalProviderUsed { get; set; } = string.Empty;
+        public bool Pinned { get; set; }
     }
 
     public static class HistoryManager
@@ -41,8 +48,19 @@ namespace Speakly.Services
             int insertMs = 0,
             bool succeeded = true,
             string errorCode = "",
-            string insertionMethod = "")
+            string insertionMethod = "",
+            string profileId = "",
+            string profileName = "",
+            bool failoverAttempted = false,
+            string failoverFrom = "",
+            string failoverTo = "",
+            string finalProviderUsed = "")
         {
+            if (Config.ConfigManager.Config.PrivacyMode == "no_history")
+            {
+                return;
+            }
+
             _history.Add(new HistoryEntry 
             { 
                 Timestamp = DateTime.Now, 
@@ -58,7 +76,13 @@ namespace Speakly.Services
                 InsertMs = insertMs,
                 Succeeded = succeeded,
                 ErrorCode = errorCode,
-                InsertionMethod = insertionMethod
+                InsertionMethod = insertionMethod,
+                ProfileId = profileId,
+                ProfileName = profileName,
+                FailoverAttempted = failoverAttempted,
+                FailoverFrom = failoverFrom,
+                FailoverTo = failoverTo,
+                FinalProviderUsed = finalProviderUsed
             });
 
             // Keep the last 100 entries
@@ -66,6 +90,8 @@ namespace Speakly.Services
             {
                 _history.RemoveAt(0);
             }
+
+            PurgeByRetention();
 
             Save();
         }
@@ -112,6 +138,13 @@ namespace Speakly.Services
             {
                 Console.WriteLine($"Failed to save history: {ex.Message}");
             }
+        }
+
+        private static void PurgeByRetention()
+        {
+            int days = Math.Clamp(Config.ConfigManager.Config.HistoryRetentionDays, 1, 3650);
+            var cutoff = DateTime.Now.AddDays(-days);
+            _history = _history.Where(h => h.Timestamp >= cutoff || h.Pinned).ToList();
         }
     }
 }

@@ -478,6 +478,17 @@ namespace Speakly
             _toastTimer.Start();
         }
 
+        private void ToggleRefinementMenuItem_Click(object sender, RoutedEventArgs e)
+        {
+            App.ViewModel.ToggleRefinementQuickCommand.Execute(null);
+        }
+
+        private void NextProfileMenuItem_Click(object sender, RoutedEventArgs e)
+        {
+            App.ViewModel.CycleProfileCommand.Execute(null);
+            ShowToast($"Profile: {App.ViewModel.ActiveProfileName}");
+        }
+
         private void UpdateContainerClip()
         {
             if (ContainerContent == null || Container == null) return;

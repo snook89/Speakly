@@ -23,6 +23,8 @@ namespace Speakly.Pages
 
                 StatusFilterBox.SelectedIndex = 0;
                 ProviderFilterBox.SelectedIndex = 0;
+                LoadProfileFilters();
+                ProfileFilterBox.SelectedIndex = 0;
             };
         }
 
@@ -61,7 +63,34 @@ namespace Speakly.Pages
                 return false;
             }
 
+            var profileTag = (ProfileFilterBox.SelectedItem as ComboBoxItem)?.Tag?.ToString() ?? "all";
+            if (!string.Equals(profileTag, "all", System.StringComparison.OrdinalIgnoreCase) &&
+                !string.Equals(profileTag, entry.ProfileName, System.StringComparison.OrdinalIgnoreCase))
+            {
+                return false;
+            }
+
             return true;
+        }
+
+        private void LoadProfileFilters()
+        {
+            while (ProfileFilterBox.Items.Count > 1)
+            {
+                ProfileFilterBox.Items.RemoveAt(ProfileFilterBox.Items.Count - 1);
+            }
+
+            var existing = App.ViewModel.HistoryEntries
+                .Select(h => h.ProfileName)
+                .Where(name => !string.IsNullOrWhiteSpace(name))
+                .Distinct(System.StringComparer.OrdinalIgnoreCase)
+                .OrderBy(x => x)
+                .ToList();
+
+            foreach (var profile in existing)
+            {
+                ProfileFilterBox.Items.Add(new ComboBoxItem { Content = profile, Tag = profile });
+            }
         }
     }
 }

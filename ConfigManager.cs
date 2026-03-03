@@ -1,14 +1,17 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using System.Threading;
 using Speakly.Services;
 
 namespace Speakly.Config
 {
     public class AppConfig
     {
+        public const int CurrentConfigVersion = 2;
         public const string DefaultRefinementPrompt =
             "Role and Objective:\n" +
             "You refine speech-to-text transcripts for clarity, grammatical correctness, and formatting compliance.\n\n" +
@@ -22,6 +25,24 @@ namespace Speakly.Config
             "7) If input is mixed, noisy, or unclear, return the original transcript unchanged.\n\n" +
             "Output contract:\n" +
             "Return only the refined final text as a single plain string. No explanations, no labels, no markdown fences.";
+
+        [JsonPropertyName("config_version")]
+        public int ConfigVersion { get; set; } = CurrentConfigVersion;
+
+        [JsonPropertyName("first_run_completed")]
+        public bool FirstRunCompleted { get; set; }
+
+        [JsonPropertyName("active_profile_id")]
+        public string ActiveProfileId { get; set; } = string.Empty;
+
+        [JsonPropertyName("profiles")]
+        public List<AppProfile> Profiles { get; set; } = new();
+
+        [JsonPropertyName("history_retention_days")]
+        public int HistoryRetentionDays { get; set; } = 30;
+
+        [JsonPropertyName("privacy_mode")]
+        public string PrivacyMode { get; set; } = "normal";
 
         [JsonPropertyName("hotkey")]
         public string Hotkey { get; set; } = "Space"; // Legacy: maps to PTT
@@ -224,12 +245,24 @@ namespace Speakly.Config
 
     public static class ConfigManager
     {
+        private static readonly string AppDataDirectory = Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
+            "Speakly"
+        );
+
         private static readonly string ConfigPath = Path.Combine(
+            AppDataDirectory,
+            "config.json"
+        );
+
+        private static readonly string LegacyConfigPath = Path.Combine(
             AppContext.BaseDirectory,
             "config.json"
         );
 
         private static AppConfig? _currentConfig;
+        private static readonly object SaveLock = new();
+        private static Timer? _saveDebounceTimer;
 
         public static AppConfig Config
         {
@@ -249,13 +282,18 @@ namespace Speakly.Config
             {
                 if (File.Exists(ConfigPath))
                 {
-                    string json = File.ReadAllText(ConfigPath);
-                    _currentConfig = JsonSerializer.Deserialize<AppConfig>(json) ?? new AppConfig();
-                    HydrateSecrets(_currentConfig);
+                    _currentConfig = LoadFromPath(ConfigPath);
+                }
+                else if (File.Exists(LegacyConfigPath))
+                {
+                    // Migrate legacy config from executable directory to %AppData%\Speakly.
+                    _currentConfig = LoadFromPath(LegacyConfigPath);
+                    Save();
                 }
                 else
                 {
                     _currentConfig = new AppConfig();
+                    MigrateConfig(_currentConfig);
                     PrepareSecrets(_currentConfig);
                     Save();
                 }
@@ -263,6 +301,16 @@ namespace Speakly.Config
             catch
             {
                 _currentConfig = new AppConfig();
+                MigrateConfig(_currentConfig);
+            }
+        }
+
+        public static void SaveDebounced(int delayMs = 400)
+        {
+            lock (SaveLock)
+            {
+                _saveDebounceTimer ??= new Timer(_ => Save(), null, Timeout.Infinite, Timeout.Infinite);
+                _saveDebounceTimer.Change(Math.Max(100, delayMs), Timeout.Infinite);
             }
         }
 
@@ -278,6 +326,7 @@ namespace Speakly.Config
 
                 if (_currentConfig == null) return;
 
+                MigrateConfig(_currentConfig);
                 PrepareSecrets(_currentConfig);
 
                 var options = new JsonSerializerOptions
@@ -289,6 +338,156 @@ namespace Speakly.Config
                 File.WriteAllText(ConfigPath, json);
             }
             catch { }
+        }
+
+        private static AppConfig LoadFromPath(string path)
+        {
+            string json = File.ReadAllText(path);
+            var config = JsonSerializer.Deserialize<AppConfig>(json) ?? new AppConfig();
+            HydrateSecrets(config);
+            MigrateConfig(config);
+            return config;
+        }
+
+        public static AppProfile BuildDefaultProfile(AppConfig config)
+        {
+            return new AppProfile
+            {
+                Id = Guid.NewGuid().ToString("N"),
+                Name = "Default",
+                SttProvider = config.SttModel,
+                SttModel = ResolveSttModel(config),
+                RefinementEnabled = config.EnableRefinement,
+                RefinementProvider = config.RefinementModel,
+                RefinementModel = ResolveRefinementModel(config),
+                RefinementPrompt = config.RefinementPrompt,
+                Language = config.Language,
+                CopyToClipboard = config.CopyToClipboard,
+                EnableSttFailover = config.EnableSttFailover,
+                SttFailoverOrder = config.SttFailoverOrder?.ToList() ?? new List<string> { "Deepgram", "OpenAI", "OpenRouter" }
+            };
+        }
+
+        public static AppProfile GetActiveProfile()
+        {
+            var config = Config;
+            MigrateConfig(config);
+            var active = config.Profiles.FirstOrDefault(p =>
+                string.Equals(p.Id, config.ActiveProfileId, StringComparison.OrdinalIgnoreCase));
+            return active ?? config.Profiles[0];
+        }
+
+        public static void SetActiveProfile(string? profileId)
+        {
+            if (string.IsNullOrWhiteSpace(profileId)) return;
+            var config = Config;
+            var match = config.Profiles.FirstOrDefault(p =>
+                string.Equals(p.Id, profileId, StringComparison.OrdinalIgnoreCase));
+            if (match == null) return;
+            config.ActiveProfileId = match.Id;
+            SaveDebounced();
+        }
+
+        public static void EnsureProfileSyncToLegacyFields(AppProfile profile)
+        {
+            if (profile == null) return;
+            var config = Config;
+
+            config.SttModel = profile.SttProvider;
+            config.EnableRefinement = profile.RefinementEnabled;
+            config.RefinementModel = profile.RefinementProvider;
+            config.RefinementPrompt = profile.RefinementPrompt;
+            config.Language = profile.Language;
+            config.CopyToClipboard = profile.CopyToClipboard;
+            config.EnableSttFailover = profile.EnableSttFailover;
+            config.SttFailoverOrder = profile.SttFailoverOrder?.ToList() ?? new List<string>();
+
+            switch (profile.SttProvider)
+            {
+                case "OpenAI":
+                    config.OpenAISttModel = profile.SttModel;
+                    break;
+                case "OpenRouter":
+                    config.OpenRouterSttModel = profile.SttModel;
+                    break;
+                default:
+                    config.DeepgramModel = profile.SttModel;
+                    break;
+            }
+
+            switch (profile.RefinementProvider)
+            {
+                case "OpenRouter":
+                    config.OpenRouterRefinementModel = profile.RefinementModel;
+                    break;
+                case "Cerebras":
+                    config.CerebrasRefinementModel = profile.RefinementModel;
+                    break;
+                default:
+                    config.OpenAIRefinementModel = profile.RefinementModel;
+                    break;
+            }
+        }
+
+        private static void MigrateConfig(AppConfig config)
+        {
+            config.ConfigVersion = AppConfig.CurrentConfigVersion;
+            config.HistoryRetentionDays = Math.Clamp(config.HistoryRetentionDays, 1, 3650);
+            if (string.IsNullOrWhiteSpace(config.PrivacyMode))
+                config.PrivacyMode = "normal";
+
+            if (config.Profiles == null)
+                config.Profiles = new List<AppProfile>();
+
+            if (config.Profiles.Count == 0)
+            {
+                config.Profiles.Add(BuildDefaultProfile(config));
+            }
+
+            foreach (var profile in config.Profiles)
+            {
+                if (string.IsNullOrWhiteSpace(profile.Id))
+                    profile.Id = Guid.NewGuid().ToString("N");
+                if (string.IsNullOrWhiteSpace(profile.Name))
+                    profile.Name = "Profile";
+                if (profile.ProcessNames == null)
+                    profile.ProcessNames = new List<string>();
+                profile.ProcessNames = profile.ProcessNames
+                    .Select(ProfileHelpers.NormalizeProcessName)
+                    .Where(p => !string.IsNullOrWhiteSpace(p))
+                    .Distinct(StringComparer.OrdinalIgnoreCase)
+                    .ToList();
+                if (profile.SttFailoverOrder == null || profile.SttFailoverOrder.Count == 0)
+                    profile.SttFailoverOrder = new List<string> { "Deepgram", "OpenAI", "OpenRouter" };
+                if (string.IsNullOrWhiteSpace(profile.RefinementPrompt))
+                    profile.RefinementPrompt = AppConfig.DefaultRefinementPrompt;
+            }
+
+            if (string.IsNullOrWhiteSpace(config.ActiveProfileId) ||
+                !config.Profiles.Any(p => string.Equals(p.Id, config.ActiveProfileId, StringComparison.OrdinalIgnoreCase)))
+            {
+                config.ActiveProfileId = config.Profiles[0].Id;
+            }
+        }
+
+        private static string ResolveSttModel(AppConfig config)
+        {
+            return config.SttModel switch
+            {
+                "OpenAI" => config.OpenAISttModel,
+                "OpenRouter" => config.OpenRouterSttModel,
+                _ => config.DeepgramModel
+            };
+        }
+
+        private static string ResolveRefinementModel(AppConfig config)
+        {
+            return config.RefinementModel switch
+            {
+                "OpenRouter" => config.OpenRouterRefinementModel,
+                "Cerebras" => config.CerebrasRefinementModel,
+                _ => config.OpenAIRefinementModel
+            };
         }
 
         private static void HydrateSecrets(AppConfig config)

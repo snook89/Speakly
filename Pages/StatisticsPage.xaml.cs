@@ -43,6 +43,11 @@ namespace Speakly.Pages
 
             LatencyText.Text =
                 $"Record: {summary.AverageRecordMs} ms | Transcribe: {summary.AverageTranscribeMs} ms | Refine: {summary.AverageRefineMs} ms | Insert: {summary.AverageInsertMs} ms";
+            FailoverText.Text = $"Failover sessions: {summary.FailoverSessions} | Failover rate: {summary.FailoverRate:0.0}%";
+
+            ErrorText.Text = summary.ErrorCounts.Count == 0
+                ? "No errors in selected range."
+                : string.Join(" | ", summary.ErrorCounts.Select(kv => $"{kv.Key}: {kv.Value}"));
 
             var rows = summary.ByProvider
                 .Select(x => new ProviderRow

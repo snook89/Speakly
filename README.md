@@ -73,7 +73,7 @@ Or run the compiled `Speakly.exe` from the `bin/Release/net9.0-windows/` directo
 
 ### 4. Configure API Keys
 
-On first launch, open the **Settings** window and enter your API keys in the **API Keys** tab. Click **Save Settings**.
+On first launch, open the **Settings** window and enter your API keys in the **API Keys** tab. Changes are saved automatically.
 
 ---
 

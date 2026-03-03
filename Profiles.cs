@@ -1,0 +1,47 @@
+using System;
+using System.Collections.Generic;
+using System.Linq;
+
+namespace Speakly.Config
+{
+    public class AppProfile
+    {
+        public string Id { get; set; } = Guid.NewGuid().ToString("N");
+        public string Name { get; set; } = "Default";
+        public List<string> ProcessNames { get; set; } = new();
+
+        public string SttProvider { get; set; } = "Deepgram";
+        public string SttModel { get; set; } = "nova-2";
+
+        public bool RefinementEnabled { get; set; } = true;
+        public string RefinementProvider { get; set; } = "OpenAI";
+        public string RefinementModel { get; set; } = "gpt-4o-mini";
+        public string RefinementPrompt { get; set; } = AppConfig.DefaultRefinementPrompt;
+
+        public string Language { get; set; } = "en";
+        public bool CopyToClipboard { get; set; }
+
+        public bool EnableSttFailover { get; set; } = true;
+        public List<string> SttFailoverOrder { get; set; } = new() { "Deepgram", "OpenAI", "OpenRouter" };
+    }
+
+    public static class ProfileHelpers
+    {
+        public static string NormalizeProcessName(string? processName)
+        {
+            if (string.IsNullOrWhiteSpace(processName)) return string.Empty;
+            var normalized = processName.Trim().ToLowerInvariant();
+            return normalized.EndsWith(".exe", StringComparison.OrdinalIgnoreCase)
+                ? normalized[..^4]
+                : normalized;
+        }
+
+        public static bool MatchesProcess(AppProfile profile, string processName)
+        {
+            var candidate = NormalizeProcessName(processName);
+            if (string.IsNullOrWhiteSpace(candidate)) return false;
+            return profile.ProcessNames.Any(p =>
+                string.Equals(NormalizeProcessName(p), candidate, StringComparison.OrdinalIgnoreCase));
+        }
+    }
+}

@@ -65,10 +65,14 @@ namespace Speakly
         private readonly List<byte[]> _sessionAudioChunks = new();
         private bool _finalTranscriptionProcessed;
         private bool _sttFailoverAttempted;
+        private AppProfile? _activeSessionProfile;
+        private string _failoverFromProvider = string.Empty;
+        private string _failoverToProvider = string.Empty;
 
         protected override void OnStartup(StartupEventArgs e)
         {
             base.OnStartup(e);
+            ShutdownMode = ShutdownMode.OnExplicitShutdown;
 
             ConfigManager.Load();
             SetTheme(ConfigManager.Config.Theme);
@@ -97,13 +101,26 @@ namespace Speakly
 
             ViewModel = new MainViewModel();
             ViewModel.RunHealthChecks();
+
+            if (!ConfigManager.Config.FirstRunCompleted)
+            {
+                var onboarding = new OnboardingWindow(ViewModel);
+                var onboardingResult = onboarding.ShowDialog();
+                if (onboardingResult != true || !ConfigManager.Config.FirstRunCompleted)
+                {
+                    Shutdown();
+                    return;
+                }
+            }
+
             MainWindow = new MainWindow();
+            ShutdownMode = ShutdownMode.OnMainWindowClose;
             _trayService = new TrayIconService(MainWindow);
             
-            // Set window icon via PNG (WPF can decode PNG natively)
+            // Set window icon for the taskbar/window chrome.
             try
             {
-                var iconUri = new Uri("pack://application:,,,/Resources/speakly.png");
+                var iconUri = new Uri("pack://application:,,,/Resources/Speakly_new_logo.ico");
                 MainWindow.Icon = System.Windows.Media.Imaging.BitmapFrame.Create(iconUri);
             }
             catch { }
@@ -228,6 +245,7 @@ namespace Speakly
                 {
                     BeginSessionTiming();
                     _lastActiveWindow = TextInserter.GetForegroundWindow();
+                    PrepareSessionContext();
                     Logger.Log($"PTT Hotkey Pressed. Captured active window: {_lastActiveWindow}");
                     _sessionText.Clear();
                     _sessionHasInserted = false;
@@ -257,6 +275,7 @@ namespace Speakly
                     BeginSessionTiming();
 
                     _lastActiveWindow = TextInserter.GetForegroundWindow();
+                    PrepareSessionContext();
                     Logger.Log($"Toggle Recording Started. Captured active window: {_lastActiveWindow}");
                     _sessionText.Clear();
                     _sessionHasInserted = false;
@@ -515,7 +534,13 @@ namespace Speakly
                 insertMs: _insertMs,
                 succeeded: true,
                 errorCode: string.Empty,
-                insertionMethod: insertResult.Method);
+                insertionMethod: insertResult.Method,
+                profileId: _activeSessionProfile?.Id ?? string.Empty,
+                profileName: _activeSessionProfile?.Name ?? "Default",
+                failoverAttempted: _sttFailoverAttempted,
+                failoverFrom: _failoverFromProvider,
+                failoverTo: _failoverToProvider,
+                finalProviderUsed: sttProvider);
 
             StatisticsManager.RecordSession(new SessionMetricEntry
             {
@@ -529,7 +554,13 @@ namespace Speakly
                 RefineMs = _refineMs,
                 InsertMs = _insertMs,
                 Succeeded = true,
-                ErrorCode = string.Empty
+                ErrorCode = string.Empty,
+                ProfileId = _activeSessionProfile?.Id ?? string.Empty,
+                ProfileName = _activeSessionProfile?.Name ?? "Default",
+                FailoverAttempted = _sttFailoverAttempted,
+                FailoverFrom = _failoverFromProvider,
+                FailoverTo = _failoverToProvider,
+                FinalProviderUsed = sttProvider
             });
 
             Dispatcher.Invoke(() =>
@@ -549,7 +580,13 @@ namespace Speakly
                     RefineMs = _refineMs,
                     InsertMs = _insertMs,
                     Succeeded = true,
-                    InsertionMethod = insertResult.Method
+                    InsertionMethod = insertResult.Method,
+                    ProfileId = _activeSessionProfile?.Id ?? string.Empty,
+                    ProfileName = _activeSessionProfile?.Name ?? "Default",
+                    FailoverAttempted = _sttFailoverAttempted,
+                    FailoverFrom = _failoverFromProvider,
+                    FailoverTo = _failoverToProvider,
+                    FinalProviderUsed = sttProvider
                 });
                 vm?.SetLastInsertionStatus(insertResult.Method, insertResult.Success, insertResult.ErrorCode);
             });
@@ -571,7 +608,9 @@ namespace Speakly
             if (audioSnapshot.Count == 0) return false;
 
             _sttFailoverAttempted = true;
-            _overlay?.SetStatus("FAILOVER", Brushes.Orange);
+            _failoverFromProvider = ConfigManager.Config.SttModel;
+            _failoverToProvider = fallbackProvider;
+            _overlay?.SetStatus($"FAILOVER:{fallbackProvider}", Brushes.Orange);
             Logger.Log($"Attempting STT failover to {fallbackProvider}.");
 
             ITranscriber? fallback = null;
@@ -638,7 +677,13 @@ namespace Speakly
                 insertMs: _insertMs,
                 succeeded: false,
                 errorCode: errorCode,
-                insertionMethod: "None");
+                insertionMethod: "None",
+                profileId: _activeSessionProfile?.Id ?? string.Empty,
+                profileName: _activeSessionProfile?.Name ?? "Default",
+                failoverAttempted: _sttFailoverAttempted,
+                failoverFrom: _failoverFromProvider,
+                failoverTo: _failoverToProvider,
+                finalProviderUsed: string.Empty);
 
             StatisticsManager.RecordSession(new SessionMetricEntry
             {
@@ -652,7 +697,12 @@ namespace Speakly
                 RefineMs = _refineMs,
                 InsertMs = _insertMs,
                 Succeeded = false,
-                ErrorCode = errorCode
+                ErrorCode = errorCode,
+                ProfileId = _activeSessionProfile?.Id ?? string.Empty,
+                ProfileName = _activeSessionProfile?.Name ?? "Default",
+                FailoverAttempted = _sttFailoverAttempted,
+                FailoverFrom = _failoverFromProvider,
+                FailoverTo = _failoverToProvider
             });
 
             Dispatcher.Invoke(() =>
@@ -714,6 +764,7 @@ namespace Speakly
             BeginSessionTiming();
 
             _lastActiveWindow = TextInserter.GetForegroundWindow();
+            PrepareSessionContext();
             Logger.Log($"Overlay Recording Started. Captured active window: {_lastActiveWindow}");
             _sessionText.Clear();
             _sessionHasInserted = false;
@@ -919,9 +970,37 @@ namespace Speakly
             _insertMs = 0;
             _finalTranscriptionProcessed = false;
             _sttFailoverAttempted = false;
+            _failoverFromProvider = string.Empty;
+            _failoverToProvider = string.Empty;
             lock (_audioChunkLock)
             {
                 _sessionAudioChunks.Clear();
+            }
+        }
+
+        private void PrepareSessionContext()
+        {
+            try
+            {
+                _activeSessionProfile = ProfileResolverService.ResolveForForegroundWindow(_lastActiveWindow);
+                ConfigManager.SetActiveProfile(_activeSessionProfile.Id);
+                ConfigManager.EnsureProfileSyncToLegacyFields(_activeSessionProfile);
+                InitializeTranscriptionAndRefinement();
+
+                Dispatcher.Invoke(() =>
+                {
+                    var match = ViewModel?.Profiles.FirstOrDefault(p =>
+                        string.Equals(p.Id, _activeSessionProfile.Id, StringComparison.OrdinalIgnoreCase));
+                    if (match != null && ViewModel != null)
+                    {
+                        ViewModel.SelectedProfile = match;
+                    }
+                });
+            }
+            catch (Exception ex)
+            {
+                Logger.LogException("PrepareSessionContext", ex);
+                _activeSessionProfile = ConfigManager.GetActiveProfile();
             }
         }
 

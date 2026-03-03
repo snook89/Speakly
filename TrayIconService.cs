@@ -26,7 +26,7 @@ namespace Speakly.Services
             // Create the NotifyIcon (TaskbarIcon)
             _notifyIcon = new TaskbarIcon
             {
-                IconSource = new System.Windows.Media.Imaging.BitmapImage(new Uri("pack://application:,,,/Resources/speakly_HQ.ico")),
+                IconSource = new System.Windows.Media.Imaging.BitmapImage(new Uri("pack://application:,,,/Resources/Speakly_new_logo.ico")),
                 ToolTipText = "Speakly"
             };
 
@@ -45,12 +45,34 @@ namespace Speakly.Services
 
             MenuItem showOverlayItem = new MenuItem { Header = "Show Overlay" };
             showOverlayItem.Click += OnShowOverlayClick;
+
+            MenuItem toggleRefinement = new MenuItem { Header = "Toggle Refinement" };
+            toggleRefinement.Click += (_, _) => App.ViewModel.ToggleRefinementQuickCommand.Execute(null);
+
+            MenuItem nextProfile = new MenuItem { Header = "Next Profile" };
+            nextProfile.Click += (_, _) => App.ViewModel.CycleProfileCommand.Execute(null);
+
+            var profilesMenu = new MenuItem { Header = "Profiles" };
+            foreach (var profile in App.ViewModel.Profiles)
+            {
+                var item = new MenuItem { Header = profile.Name, Tag = profile.Id, IsCheckable = true };
+                item.Click += (_, _) =>
+                {
+                    App.ViewModel.SetProfileByIdCommand.Execute(item.Tag?.ToString());
+                    RefreshProfileChecks(profilesMenu);
+                };
+                profilesMenu.Items.Add(item);
+            }
+            RefreshProfileChecks(profilesMenu);
             
             MenuItem exitItem = new MenuItem { Header = "Exit" };
             exitItem.Click += OnExitClick;
 
             _contextMenu.Items.Add(settingsItem);
             _contextMenu.Items.Add(showOverlayItem);
+            _contextMenu.Items.Add(toggleRefinement);
+            _contextMenu.Items.Add(nextProfile);
+            _contextMenu.Items.Add(profilesMenu);
             _contextMenu.Items.Add(new Separator());
             _contextMenu.Items.Add(exitItem);
 
@@ -128,6 +150,16 @@ namespace Speakly.Services
         public void Dispose()
         {
             _notifyIcon?.Dispose();
+        }
+
+        private static void RefreshProfileChecks(MenuItem profilesMenu)
+        {
+            foreach (var entry in profilesMenu.Items)
+            {
+                if (entry is not MenuItem profileItem) continue;
+                var id = profileItem.Tag?.ToString() ?? string.Empty;
+                profileItem.IsChecked = string.Equals(id, App.ViewModel.SelectedProfile?.Id, StringComparison.OrdinalIgnoreCase);
+            }
         }
     }
 }

@@ -9,25 +9,10 @@
     Width="1160"
     MinHeight="680"
     MinWidth="980"
+    Icon="Resources/Speakly_new_logo.ico"
     WindowStartupLocation="CenterScreen"
     Background="{DynamicResource ApplicationBackgroundBrush}"
     FontFamily="Segoe UI Variable Text">
-
-    <Window.Resources>
-        <!-- Green glow pulse played when settings are saved -->
-        <Storyboard x:Key="SaveGlowStoryboard">
-            <DoubleAnimationUsingKeyFrames Storyboard.TargetName="SaveGlowBorder"
-                                          Storyboard.TargetProperty="Opacity">
-                <EasingDoubleKeyFrame Value="1"  KeyTime="0:0:0.15">
-                    <EasingDoubleKeyFrame.EasingFunction><CubicEase EasingMode="EaseOut"/></EasingDoubleKeyFrame.EasingFunction>
-                </EasingDoubleKeyFrame>
-                <EasingDoubleKeyFrame Value="1"  KeyTime="0:0:0.55"/>
-                <EasingDoubleKeyFrame Value="0"  KeyTime="0:0:1.4">
-                    <EasingDoubleKeyFrame.EasingFunction><CubicEase EasingMode="EaseIn"/></EasingDoubleKeyFrame.EasingFunction>
-                </EasingDoubleKeyFrame>
-            </DoubleAnimationUsingKeyFrames>
-        </Storyboard>
-    </Window.Resources>
 
     <Grid>
         <!-- NavigationView is self-contained: its own pane (left) + content area (right).
@@ -40,6 +25,12 @@
                            OpenPaneLength="220"
                            CompactPaneLength="52">
             <ui:NavigationView.MenuItems>
+                <ui:NavigationViewItem Content="Home"
+                                       TargetPageType="{x:Type pages:HomePage}">
+                    <ui:NavigationViewItem.Icon>
+                        <ui:SymbolIcon Symbol="Home20"/>
+                    </ui:NavigationViewItem.Icon>
+                </ui:NavigationViewItem>
                 <ui:NavigationViewItem Content="General"
                                        TargetPageType="{x:Type pages:GeneralPage}">
                     <ui:NavigationViewItem.Icon>
@@ -99,27 +90,6 @@
                 </ui:NavigationViewItem>
             </ui:NavigationView.FooterMenuItems>
 
-            <ui:NavigationView.PaneFooter>
-                <ui:Button Content="Save Settings"
-                           Command="{Binding SaveCommand}"
-                           Margin="8,4,8,12"
-                           HorizontalAlignment="Stretch"
-                           Appearance="Primary"/>
-            </ui:NavigationView.PaneFooter>
         </ui:NavigationView>
-
-        <!-- Green border glow overlay — pointer-transparent, sits above everything -->
-        <Border x:Name="SaveGlowBorder"
-                BorderThickness="4"
-                IsHitTestVisible="False"
-                Opacity="0"
-                Panel.ZIndex="999">
-            <Border.BorderBrush>
-                <SolidColorBrush Color="#22C55E"/>
-            </Border.BorderBrush>
-            <Border.Effect>
-                <DropShadowEffect Color="#22C55E" BlurRadius="28" ShadowDepth="0" Opacity="0.9"/>
-            </Border.Effect>
-        </Border>
     </Grid>
 </Window>

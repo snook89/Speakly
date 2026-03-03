@@ -43,14 +43,6 @@
                     <TextBlock Text="Insertion Reliability" Style="{StaticResource FieldLabel}" Margin="0,14,0,6"/>
                     <TextBlock Text="{Binding LastInsertionStatus}" Style="{StaticResource HintText}"/>
                     <TextBlock Text="{Binding LastInsertionMethod, StringFormat=Method: {0}}" Style="{StaticResource HintText}"/>
-
-                    <TextBlock Text="Startup Health" Style="{StaticResource FieldLabel}" Margin="0,14,0,6"/>
-                    <TextBlock Text="{Binding HealthSummary}" Style="{StaticResource HintText}" TextWrapping="Wrap"/>
-                    <TextBlock Text="{Binding HealthDetails}" Style="{StaticResource HintText}" TextWrapping="Wrap" Margin="0,6,0,8"/>
-                    <ui:Button Content="Run health checks"
-                               Command="{Binding RunHealthCheckCommand}"
-                               HorizontalAlignment="Left"
-                               Style="{StaticResource SecondaryButton}"/>
                 </StackPanel>
             </Border>
         </StackPanel>

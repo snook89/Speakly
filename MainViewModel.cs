@@ -31,16 +31,17 @@ namespace Speakly.ViewModels
         private string _healthSummary = "Health checks not run yet.";
         private string _healthDetails = string.Empty;
 
-        public event Action? SaveSucceeded;
         public event Action<string, string, string, string>? ApiTestCompleted;
         public event Action<bool>? RefreshModelsCompleted;
 
-        public ICommand SaveCommand { get; }
         public ICommand RefreshModelsCommand { get; }
         public ICommand SaveCurrentPromptCommand { get; }
         public ICommand DeleteSelectedPromptCommand { get; }
         public ICommand RecoverOverlayCommand { get; }
         public ICommand RunHealthCheckCommand { get; }
+        public ICommand ToggleRefinementQuickCommand { get; }
+        public ICommand CycleProfileCommand { get; }
+        public ICommand SetProfileByIdCommand { get; }
 
         public bool IsRefreshingModels
         {
@@ -135,6 +136,7 @@ namespace Speakly.ViewModels
             { 
                 ConfigManager.Config.SttModel = value; 
                 UpdateSttModelList();
+                SyncActiveProfileFromLegacy();
                 OnPropertyChanged(); 
                 OnPropertyChanged(nameof(SelectedSttModelString));
             }
@@ -180,6 +182,7 @@ namespace Speakly.ViewModels
                 if (SttModel == "Deepgram") ConfigManager.Config.DeepgramModel = normalized;
                 else if (SttModel == "OpenAI") ConfigManager.Config.OpenAISttModel = normalized;
                 else if (SttModel == "OpenRouter") ConfigManager.Config.OpenRouterSttModel = normalized;
+                SyncActiveProfileFromLegacy();
                 OnPropertyChanged();
             }
         }
@@ -187,7 +190,7 @@ namespace Speakly.ViewModels
         public bool EnableSttFailover
         {
             get => ConfigManager.Config.EnableSttFailover;
-            set { ConfigManager.Config.EnableSttFailover = value; OnPropertyChanged(); }
+            set { ConfigManager.Config.EnableSttFailover = value; SyncActiveProfileFromLegacy(); OnPropertyChanged(); }
         }
 
         public string SelectedRefinementModelString
@@ -211,6 +214,7 @@ namespace Speakly.ViewModels
                 if (RefinementModel == "OpenAI") ConfigManager.Config.OpenAIRefinementModel = normalized;
                 else if (RefinementModel == "Cerebras") ConfigManager.Config.CerebrasRefinementModel = normalized;
                 else if (RefinementModel == "OpenRouter") ConfigManager.Config.OpenRouterRefinementModel = normalized;
+                SyncActiveProfileFromLegacy();
                 OnPropertyChanged();
             }
         }
@@ -246,6 +250,7 @@ namespace Speakly.ViewModels
             { 
                 ConfigManager.Config.RefinementModel = value; 
                 UpdateRefinementModelList();
+                SyncActiveProfileFromLegacy();
                 OnPropertyChanged(); 
                 OnPropertyChanged(nameof(SelectedRefinementModelString));
             }
@@ -257,6 +262,7 @@ namespace Speakly.ViewModels
             set
             {
                 ConfigManager.Config.RefinementPrompt = value;
+                SyncActiveProfileFromLegacy();
                 OnPropertyChanged();
                 OnPropertyChanged(nameof(IsRefinementPromptMissing));
                 OnPropertyChanged(nameof(RefinementTabHeader));
@@ -322,22 +328,43 @@ namespace Speakly.ViewModels
         public bool EnableRefinement
         {
             get => ConfigManager.Config.EnableRefinement;
-            set { ConfigManager.Config.EnableRefinement = value; OnPropertyChanged(); }
+            set { ConfigManager.Config.EnableRefinement = value; SyncActiveProfileFromLegacy(); OnPropertyChanged(); }
         }
 
         public bool CopyToClipboard
         {
             get => ConfigManager.Config.CopyToClipboard;
-            set { ConfigManager.Config.CopyToClipboard = value; OnPropertyChanged(); }
+            set { ConfigManager.Config.CopyToClipboard = value; SyncActiveProfileFromLegacy(); OnPropertyChanged(); }
         }
 
         public string Language
         {
             get => ConfigManager.Config.Language;
-            set { ConfigManager.Config.Language = value; OnPropertyChanged(); }
+            set { ConfigManager.Config.Language = value; SyncActiveProfileFromLegacy(); OnPropertyChanged(); }
         }
 
         public ObservableCollection<HistoryEntry> HistoryEntries { get; } = new ObservableCollection<HistoryEntry>();
+        public ObservableCollection<AppProfile> Profiles { get; } = new ObservableCollection<AppProfile>();
+
+        private AppProfile? _selectedProfile;
+        public AppProfile? SelectedProfile
+        {
+            get => _selectedProfile;
+            set
+            {
+                _selectedProfile = value;
+                if (value != null)
+                {
+                    ConfigManager.SetActiveProfile(value.Id);
+                    ApplyProfileToLegacyConfig(value);
+                    RefreshFromConfig();
+                }
+                OnPropertyChanged();
+                OnPropertyChanged(nameof(ActiveProfileName));
+            }
+        }
+
+        public string ActiveProfileName => SelectedProfile?.Name ?? "Default";
 
         // ── Prompt Library ────────────────────────────────────────────────────
 
@@ -375,6 +402,65 @@ namespace Speakly.ViewModels
             SavedPrompts.Clear();
             foreach (var p in _promptList)
                 SavedPrompts.Add(p);
+        }
+
+        private void LoadProfiles()
+        {
+            Profiles.Clear();
+            foreach (var profile in ConfigManager.Config.Profiles)
+            {
+                Profiles.Add(profile);
+            }
+
+            var active = ConfigManager.GetActiveProfile();
+            SelectedProfile = Profiles.FirstOrDefault(p => string.Equals(p.Id, active.Id, StringComparison.OrdinalIgnoreCase))
+                              ?? Profiles.FirstOrDefault();
+        }
+
+        private void ApplyProfileToLegacyConfig(AppProfile profile)
+        {
+            ConfigManager.EnsureProfileSyncToLegacyFields(profile);
+        }
+
+        private void SyncActiveProfileFromLegacy()
+        {
+            var active = SelectedProfile ?? ConfigManager.GetActiveProfile();
+            if (active == null) return;
+
+            active.SttProvider = ConfigManager.Config.SttModel;
+            active.SttModel = SelectedSttModelString;
+            active.RefinementEnabled = ConfigManager.Config.EnableRefinement;
+            active.RefinementProvider = ConfigManager.Config.RefinementModel;
+            active.RefinementModel = SelectedRefinementModelString;
+            active.RefinementPrompt = ConfigManager.Config.RefinementPrompt;
+            active.Language = ConfigManager.Config.Language;
+            active.CopyToClipboard = ConfigManager.Config.CopyToClipboard;
+            active.EnableSttFailover = ConfigManager.Config.EnableSttFailover;
+            active.SttFailoverOrder = ConfigManager.Config.SttFailoverOrder.ToList();
+        }
+
+        private void CycleProfile()
+        {
+            if (Profiles.Count == 0) return;
+            int index = SelectedProfile == null ? 0 : Profiles.IndexOf(SelectedProfile);
+            if (index < 0) index = 0;
+            int next = (index + 1) % Profiles.Count;
+            SelectedProfile = Profiles[next];
+        }
+
+        private void RefreshFromConfig()
+        {
+            UpdateSttModelList();
+            UpdateRefinementModelList();
+            OnPropertyChanged(nameof(SttModel));
+            OnPropertyChanged(nameof(SelectedSttModelString));
+            OnPropertyChanged(nameof(EnableRefinement));
+            OnPropertyChanged(nameof(RefinementModel));
+            OnPropertyChanged(nameof(SelectedRefinementModelString));
+            OnPropertyChanged(nameof(RefinementPrompt));
+            OnPropertyChanged(nameof(Language));
+            OnPropertyChanged(nameof(CopyToClipboard));
+            OnPropertyChanged(nameof(EnableSttFailover));
         }
 
         public ICommand ToggleFavoriteModelCommand => ToggleRefinementFavoriteModelCommand;
@@ -453,6 +539,7 @@ namespace Speakly.ViewModels
 
         public MainViewModel()
         {
+            LoadProfiles();
             LoadAudioDevices();
             UpdateSttModelList();
             UpdateRefinementModelList();
@@ -463,9 +550,20 @@ namespace Speakly.ViewModels
                 HistoryEntries.Add(entry);
             }
 
-            SaveCommand = new RelayCommand(_ => {
-                ConfigManager.Save();
-                SaveSucceeded?.Invoke();
+            ToggleRefinementQuickCommand = new RelayCommand(_ =>
+            {
+                EnableRefinement = !EnableRefinement;
+            });
+
+            CycleProfileCommand = new RelayCommand(_ => CycleProfile());
+
+            SetProfileByIdCommand = new RelayCommand(obj =>
+            {
+                if (obj is string profileId)
+                {
+                    var match = Profiles.FirstOrDefault(p => string.Equals(p.Id, profileId, StringComparison.OrdinalIgnoreCase));
+                    if (match != null) SelectedProfile = match;
+                }
             });
 
             RecoverOverlayCommand = new RelayCommand(_ =>
@@ -511,6 +609,14 @@ namespace Speakly.ViewModels
             _ => CanDeleteSelectedPrompt);
 
             RunHealthChecks();
+
+            PropertyChanged += (_, args) =>
+            {
+                if (args.PropertyName is nameof(LastInsertionMethod) or nameof(LastInsertionStatus) or nameof(HealthSummary) or nameof(HealthDetails) or nameof(ApiTestStatus))
+                    return;
+
+                ConfigManager.SaveDebounced();
+            };
         }
 
         private void LoadAudioDevices()
@@ -521,7 +627,21 @@ namespace Speakly.ViewModels
             for (int i = 0; i < WaveInEvent.DeviceCount; i++)
             {
                 var capabilities = WaveInEvent.GetCapabilities(i);
-                AvailableAudioDevices.Add(capabilities.ProductName);
+                var deviceName = capabilities.ProductName?.Trim() ?? string.Empty;
+                if (string.IsNullOrWhiteSpace(deviceName))
+                {
+                    deviceName = $"(Unnamed input device {i + 1})";
+                }
+
+                if (!AvailableAudioDevices.Any(x => string.Equals(x, deviceName, StringComparison.OrdinalIgnoreCase)))
+                {
+                    AvailableAudioDevices.Add(deviceName);
+                }
+            }
+
+            if (string.IsNullOrWhiteSpace(ConfigManager.Config.AudioDevice))
+            {
+                ConfigManager.Config.AudioDevice = "Default";
             }
         }
 
@@ -613,7 +733,7 @@ namespace Speakly.ViewModels
 
             ToggleFavoriteEntry(favorites, modelId.Trim());
             UpdateSttModelList();
-            ConfigManager.Save();
+            ConfigManager.SaveDebounced();
         }
 
         public void ToggleRefinementFavorite(string modelId)
@@ -625,7 +745,7 @@ namespace Speakly.ViewModels
 
             ToggleFavoriteEntry(favorites, modelId.Trim());
             UpdateRefinementModelList();
-            ConfigManager.Save();
+            ConfigManager.SaveDebounced();
         }
 
         public bool IsSttModelFavorite(string modelId)

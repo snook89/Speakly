@@ -6,14 +6,13 @@
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <UseWPF>true</UseWPF>
-    <ApplicationIcon>Resources\speakly_HQ.ico</ApplicationIcon>
+    <ApplicationIcon>Resources\Speakly_new_logo.ico</ApplicationIcon>
     <Version>1.0.0</Version>
     <AssemblyVersion>1.0.0.0</AssemblyVersion>
   </PropertyGroup>
 
   <ItemGroup>
-    <Resource Include="Resources\speakly_HQ.ico" />
-    <Resource Include="Resources\speakly.png" />
+    <Resource Include="Resources\Speakly_new_logo.ico" />
     <Resource Include="Resources\Speakly_banner.png" />
     <Resource Include="Resources\start_feedback.wav" />
     <Resource Include="Resources\stop_feedback.wav" />

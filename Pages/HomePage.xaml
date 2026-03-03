@@ -1,0 +1,52 @@
+<UserControl x:Class="Speakly.Pages.HomePage"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
+             FontFamily="Segoe UI Variable Text">
+    <ScrollViewer VerticalScrollBarVisibility="Auto">
+        <StackPanel Margin="24,16,24,24">
+            <TextBlock Text="Home" Style="{StaticResource PageTitle}"/>
+
+            <Border Style="{StaticResource SectionCard}">
+                <StackPanel>
+                    <TextBlock Text="Session Status" Style="{StaticResource SectionTitle}"/>
+                    <TextBlock Text="{Binding ActiveProfileName, StringFormat=Active profile: {0}}" Style="{StaticResource FieldLabel}"/>
+                    <TextBlock Text="{Binding LastInsertionStatus}" Style="{StaticResource HintText}" Margin="0,2,0,2"/>
+                    <TextBlock Text="{Binding LastInsertionMethod, StringFormat=Insertion method: {0}}" Style="{StaticResource HintText}"/>
+                </StackPanel>
+            </Border>
+
+            <Border Style="{StaticResource SectionCard}">
+                <StackPanel>
+                    <TextBlock Text="Quick Actions" Style="{StaticResource SectionTitle}"/>
+                    <WrapPanel>
+                        <ui:Button Content="Run health checks"
+                                   Command="{Binding RunHealthCheckCommand}"
+                                   Margin="0,0,8,8"
+                                   Style="{StaticResource SecondaryButton}"/>
+                        <ui:Button Content="Refresh models"
+                                   Command="{Binding RefreshModelsCommand}"
+                                   Margin="0,0,8,8"
+                                   Style="{StaticResource SecondaryButton}"/>
+                        <ui:Button Content="Toggle refinement"
+                                   Command="{Binding ToggleRefinementQuickCommand}"
+                                   Margin="0,0,8,8"
+                                   Style="{StaticResource SecondaryButton}"/>
+                        <ui:Button Content="Next profile"
+                                   Command="{Binding CycleProfileCommand}"
+                                   Margin="0,0,8,8"
+                                   Style="{StaticResource SecondaryButton}"/>
+                    </WrapPanel>
+                </StackPanel>
+            </Border>
+
+            <Border Style="{StaticResource SectionCard}">
+                <StackPanel>
+                    <TextBlock Text="Startup Health" Style="{StaticResource SectionTitle}"/>
+                    <TextBlock Text="{Binding HealthSummary}" Style="{StaticResource HintText}" TextWrapping="Wrap"/>
+                    <TextBlock Text="{Binding HealthDetails}" Style="{StaticResource HintText}" Margin="0,8,0,0" TextWrapping="Wrap"/>
+                </StackPanel>
+            </Border>
+        </StackPanel>
+    </ScrollViewer>
+</UserControl>

@@ -17,6 +17,7 @@
                 <ColumnDefinition Width="2*"/>
                 <ColumnDefinition Width="Auto"/>
                 <ColumnDefinition Width="Auto"/>
+                <ColumnDefinition Width="Auto"/>
             </Grid.ColumnDefinitions>
             <ui:TextBox x:Name="SearchBox"
                         Grid.Column="0"
@@ -39,6 +40,14 @@
                 <ComboBoxItem Content="All providers" Tag="all"/>
                 <ComboBoxItem Content="Deepgram" Tag="Deepgram"/>
                 <ComboBoxItem Content="OpenAI" Tag="OpenAI"/>
+                <ComboBoxItem Content="OpenRouter" Tag="OpenRouter"/>
+            </ComboBox>
+            <ComboBox x:Name="ProfileFilterBox"
+                      Grid.Column="3"
+                      SelectionChanged="Filter_SelectionChanged"
+                      Width="150"
+                      Margin="8,0,0,0">
+                <ComboBoxItem Content="All profiles" Tag="all"/>
             </ComboBox>
         </Grid>
 
@@ -68,6 +77,12 @@
                                            FontSize="11"
                                            Foreground="{DynamicResource TextFillColorSecondaryBrush}"
                                            Margin="0,0,0,4"/>
+                                <TextBlock Text="{Binding ProfileName, StringFormat=Profile: {0}}"
+                                           FontSize="11"
+                                           Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
+                                <TextBlock Text="{Binding FailoverAttempted, StringFormat=Failover: {0}}"
+                                           FontSize="11"
+                                           Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
                                 <TextBlock Text="{Binding RefinedText}"
                                            TextWrapping="Wrap"
                                            FontSize="14"

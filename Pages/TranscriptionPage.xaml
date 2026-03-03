@@ -20,7 +20,7 @@
 
                     <TextBlock Text="Language (ISO code)" Style="{StaticResource FieldLabel}"/>
                     <ui:TextBox Text="{Binding Language}" Margin="0,0,0,4" MaxWidth="300" HorizontalAlignment="Left"/>
-                    <TextBlock Text="Examples: en, uk, es. Use layout to follow the keyboard layout. Use auto for multilingual mode." Style="{StaticResource HintText}" Margin="0,0,0,14"/>
+                    <TextBlock Text="Examples: en, uk, es. Use layout to follow the keyboard layout. Use multi for multilingual mode." Style="{StaticResource HintText}" Margin="0,0,0,14"/>
 
                     <TextBlock Text="Target Model" Style="{StaticResource FieldLabel}"/>
                     <Grid x:Name="ModelRow">

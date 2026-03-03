@@ -121,6 +121,10 @@
                                       Header="Start Recording"
                                       Click="StartStopMenuItem_Click"/>
                             <Separator/>
+                            <MenuItem Header="Toggle Refinement"
+                                      Click="ToggleRefinementMenuItem_Click"/>
+                            <MenuItem Header="Next Profile"
+                                      Click="NextProfileMenuItem_Click"/>
                             <MenuItem Header="⚙ Settings"
                                       Click="SettingsMenuItem_Click"/>
                             <MenuItem Header="👁 Hide for now"

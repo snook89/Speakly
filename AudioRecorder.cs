@@ -42,6 +42,14 @@ namespace Speakly.Services
 
             if (!string.IsNullOrEmpty(targetDevice) && targetDevice != "Default")
             {
+                if (TryParseUnnamedDeviceIndex(targetDevice, out var unnamedDeviceIndex))
+                {
+                    if (unnamedDeviceIndex >= 0 && unnamedDeviceIndex < WaveInEvent.DeviceCount)
+                    {
+                        deviceNumber = unnamedDeviceIndex;
+                    }
+                }
+
                 for (int i = 0; i < WaveInEvent.DeviceCount; i++)
                 {
                     var capabilities = WaveInEvent.GetCapabilities(i);
@@ -115,6 +123,26 @@ namespace Speakly.Services
                 _waveIn = null;
             }
             GC.SuppressFinalize(this);
+        }
+
+        private static bool TryParseUnnamedDeviceIndex(string targetDevice, out int deviceIndex)
+        {
+            deviceIndex = -1;
+            const string prefix = "(Unnamed input device ";
+            const string suffix = ")";
+
+            if (!targetDevice.StartsWith(prefix, StringComparison.OrdinalIgnoreCase) ||
+                !targetDevice.EndsWith(suffix, StringComparison.Ordinal))
+            {
+                return false;
+            }
+
+            var numericPart = targetDevice.Substring(prefix.Length, targetDevice.Length - prefix.Length - suffix.Length);
+            if (!int.TryParse(numericPart, out var oneBased)) return false;
+            if (oneBased <= 0) return false;
+
+            deviceIndex = oneBased - 1;
+            return true;
         }
     }
 }

@@ -19,6 +19,12 @@ namespace Speakly.Services
         public int InsertMs { get; set; }
         public bool Succeeded { get; set; }
         public string ErrorCode { get; set; } = string.Empty;
+        public string ProfileId { get; set; } = string.Empty;
+        public string ProfileName { get; set; } = string.Empty;
+        public bool FailoverAttempted { get; set; }
+        public string FailoverFrom { get; set; } = string.Empty;
+        public string FailoverTo { get; set; } = string.Empty;
+        public string FinalProviderUsed { get; set; } = string.Empty;
     }
 
     public class ProviderStats
@@ -40,6 +46,9 @@ namespace Speakly.Services
         public int AverageTranscribeMs { get; set; }
         public int AverageRefineMs { get; set; }
         public int AverageInsertMs { get; set; }
+        public int FailoverSessions { get; set; }
+        public double FailoverRate { get; set; }
+        public Dictionary<string, int> ErrorCounts { get; set; } = new();
         public List<ProviderStats> ByProvider { get; set; } = new();
     }
 
@@ -105,6 +114,13 @@ namespace Speakly.Services
                     AverageTranscribeMs = (int)entries.Average(x => x.TranscribeMs),
                     AverageRefineMs = (int)entries.Average(x => x.RefineMs),
                     AverageInsertMs = (int)entries.Average(x => x.InsertMs),
+                    FailoverSessions = entries.Count(x => x.FailoverAttempted),
+                    FailoverRate = Math.Round(entries.Count(x => x.FailoverAttempted) * 100.0 / total, 1),
+                    ErrorCounts = entries
+                        .Where(x => !string.IsNullOrWhiteSpace(x.ErrorCode))
+                        .GroupBy(x => x.ErrorCode)
+                        .OrderByDescending(g => g.Count())
+                        .ToDictionary(g => g.Key, g => g.Count()),
                     ByProvider = byProvider
                 };
             }

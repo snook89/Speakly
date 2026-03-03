@@ -24,15 +24,12 @@ namespace Speakly.Config
     }
 
     /// <summary>
-    /// Manages the persistent prompt library stored in prompts.json beside the executable.
+    /// Manages the persistent prompt library stored in %AppData%\Speakly\prompts.json.
     /// Built-in prompts (General / Ukrainian) are seeded on first load and are always
     /// shown at the top of the list; user prompts follow.
     /// </summary>
     public static class PromptLibraryManager
     {
-        private static readonly string PromptsPath = Path.Combine(
-            AppContext.BaseDirectory, "prompts.json");
-
         private static readonly JsonSerializerOptions _jsonOptions =
             new JsonSerializerOptions { WriteIndented = true };
 
@@ -73,24 +70,21 @@ namespace Speakly.Config
         /// </summary>
         public static List<PromptEntry> Load()
         {
-            List<PromptEntry> userPrompts = new();
+            var promptsPath = ResolvePromptsPath();
+            var legacyPromptsPath = ResolveLegacyPromptsPath();
 
-            if (File.Exists(PromptsPath))
-            {
-                try
-                {
-                    var json   = File.ReadAllText(PromptsPath);
-                    var loaded = JsonSerializer.Deserialize<List<PromptEntry>>(json) ?? new List<PromptEntry>();
-                    // Keep only user-defined entries from disk; built-ins are always re-injected.
-                    userPrompts = loaded.Where(p => !p.IsBuiltIn).ToList();
-                }
-                catch { /* corrupt file — start fresh */ }
-            }
+            var appDataUserPrompts = LoadUserPromptsFromFile(promptsPath);
+            var legacyUserPrompts = string.Equals(promptsPath, legacyPromptsPath, StringComparison.OrdinalIgnoreCase)
+                ? new List<PromptEntry>()
+                : LoadUserPromptsFromFile(legacyPromptsPath);
+
+            // Prefer prompts from AppData. Pull in legacy prompts only when names don't already exist.
+            var userPrompts = MergeUserPrompts(appDataUserPrompts, legacyUserPrompts);
 
             var result = BuiltInPrompts.ToList<PromptEntry>();
             result.AddRange(userPrompts);
 
-            // Persist to ensure the file always reflects the current built-ins.
+            // Persist to ensure file location is normalized to AppData and built-ins stay current.
             SaveInternal(result);
             return result;
         }
@@ -144,10 +138,90 @@ namespace Speakly.Config
         {
             try
             {
+                var promptsPath = ResolvePromptsPath();
+                var directory = Path.GetDirectoryName(promptsPath);
+                if (!string.IsNullOrWhiteSpace(directory))
+                {
+                    Directory.CreateDirectory(directory);
+                }
+
                 string json = JsonSerializer.Serialize(prompts, _jsonOptions);
-                File.WriteAllText(PromptsPath, json);
+                File.WriteAllText(promptsPath, json);
             }
             catch { /* best-effort */ }
+        }
+
+        private static string ResolvePromptsPath()
+        {
+            var overridePath = Environment.GetEnvironmentVariable("SPEAKLY_PROMPTS_PATH");
+            if (!string.IsNullOrWhiteSpace(overridePath))
+            {
+                return overridePath.Trim();
+            }
+
+            var appDataDirectory = Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
+                "Speakly");
+            return Path.Combine(appDataDirectory, "prompts.json");
+        }
+
+        private static string ResolveLegacyPromptsPath()
+        {
+            var overridePath = Environment.GetEnvironmentVariable("SPEAKLY_PROMPTS_LEGACY_PATH");
+            if (!string.IsNullOrWhiteSpace(overridePath))
+            {
+                return overridePath.Trim();
+            }
+
+            return Path.Combine(AppContext.BaseDirectory, "prompts.json");
+        }
+
+        private static List<PromptEntry> LoadUserPromptsFromFile(string path)
+        {
+            if (!File.Exists(path))
+            {
+                return new List<PromptEntry>();
+            }
+
+            try
+            {
+                var json = File.ReadAllText(path);
+                var loaded = JsonSerializer.Deserialize<List<PromptEntry>>(json) ?? new List<PromptEntry>();
+                return loaded
+                    .Where(p => !p.IsBuiltIn && !string.IsNullOrWhiteSpace(p.Name))
+                    .ToList();
+            }
+            catch
+            {
+                // Corrupt file: ignore and continue with defaults/other sources.
+                return new List<PromptEntry>();
+            }
+        }
+
+        private static List<PromptEntry> MergeUserPrompts(
+            List<PromptEntry> primary,
+            List<PromptEntry> secondary)
+        {
+            var result = primary.ToList();
+            var seen = new HashSet<string>(result.Select(p => p.Name), StringComparer.OrdinalIgnoreCase);
+
+            foreach (var entry in secondary)
+            {
+                if (seen.Contains(entry.Name))
+                {
+                    continue;
+                }
+
+                result.Add(new PromptEntry
+                {
+                    Name = entry.Name,
+                    Text = entry.Text,
+                    IsBuiltIn = false
+                });
+                seen.Add(entry.Name);
+            }
+
+            return result;
         }
     }
 }

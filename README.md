@@ -101,7 +101,7 @@ Speakly stores data in a few locations:
 
 - Main config: `%AppData%\Speakly\config.json`
 - Debug logs: `%AppData%\Speakly\Logs\speakly_debug.log`
-- Prompt library: `prompts.json` (next to executable)
+- Prompt library: `%AppData%\Speakly\prompts.json` (auto-migrated from legacy install-folder `prompts.json` on first launch)
 - History: `history.json` and `history.log` (next to executable)
 - Session metrics: `metrics.json` (next to executable)
 - Optional debug recordings: `Records/` folder (next to executable)

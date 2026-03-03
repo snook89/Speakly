@@ -1,0 +1,110 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  package-and-publish:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 9.0.x
+
+      - name: Resolve Version
+        id: version
+        shell: pwsh
+        run: |
+          $versionRaw = "${{ github.ref_name }}"
+          $version = $versionRaw
+          if ([string]::IsNullOrWhiteSpace($versionRaw)) {
+            throw "Unable to resolve release version from github.ref_name."
+          }
+          if ($version.StartsWith("v")) {
+            $version = $version.Substring(1)
+          }
+          if ($version -notmatch '^\d+\.\d+\.\d+$') {
+            throw "Tag '$versionRaw' must be semantic version like v1.2.3."
+          }
+          "value=$version" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
+
+      - name: Restore
+        run: dotnet restore .\Speakly.sln
+
+      - name: Build
+        run: dotnet build .\Speakly.sln -c Release --no-restore
+
+      - name: Publish App
+        shell: pwsh
+        run: >
+          dotnet publish .\Speakly.csproj
+          -c Release
+          -r win-x64
+          --self-contained true
+          --no-restore
+          /p:Version=${{ steps.version.outputs.value }}
+          /p:AssemblyVersion=${{ steps.version.outputs.value }}.0
+          /p:FileVersion=${{ steps.version.outputs.value }}.0
+          -o .\artifacts\publish
+
+      - name: Install Velopack CLI
+        shell: pwsh
+        run: dotnet tool install --global vpk
+
+      - name: Add .NET tools to PATH
+        shell: pwsh
+        run: |
+          "$env:USERPROFILE\.dotnet\tools" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+
+      - name: Download Existing Releases (for delta packages)
+        shell: pwsh
+        run: >
+          vpk download github
+          --repoUrl https://github.com/${{ github.repository }}
+          --token ${{ secrets.GITHUB_TOKEN }}
+          --channel win
+          --outputDir .\artifacts\releases
+        continue-on-error: true
+
+      - name: Package Release
+        shell: pwsh
+        run: >
+          vpk pack
+          --packId Speakly
+          --packVersion ${{ steps.version.outputs.value }}
+          --packDir .\artifacts\publish
+          --mainExe Speakly.exe
+          --packTitle Speakly
+          --channel win
+          --outputDir .\artifacts\releases
+          --icon .\Resources\Speakly_new_logo.ico
+
+      - name: Publish Release to GitHub
+        shell: pwsh
+        run: >
+          vpk upload github
+          --repoUrl https://github.com/${{ github.repository }}
+          --token ${{ secrets.GITHUB_TOKEN }}
+          --channel win
+          --outputDir .\artifacts\releases
+          --tag ${{ github.ref_name }}
+          --releaseName Speakly v${{ steps.version.outputs.value }}
+          --publish
+          --merge
+
+      - name: Upload Packaged Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: speakly-release-${{ steps.version.outputs.value }}
+          path: .\artifacts\releases\*

@@ -7,6 +7,8 @@ using System.Diagnostics;
 using System.Windows;
 using System.Windows.Input;
 using System.Windows.Media;
+using Velopack;
+using Velopack.Sources;
 using Wpf.Ui.Appearance;
 using Speakly.Config;
 using Speakly.Services;
@@ -16,6 +18,8 @@ namespace Speakly
 {
     public partial class App : Application
     {
+        private const string GitHubUpdateRepoUrl = "https://github.com/snook89/Speakly";
+
         private enum SessionState
         {
             Idle,
@@ -70,6 +74,12 @@ namespace Speakly
         private string _failoverToProvider = string.Empty;
         private string _activeSessionId = string.Empty;
         private string _activeOperationId = string.Empty;
+        private bool _updateCheckStarted;
+
+        public App()
+        {
+            VelopackApp.Build().Run();
+        }
 
         protected override void OnStartup(StartupEventArgs e)
         {
@@ -146,6 +156,65 @@ namespace Speakly
                     ["stt_provider"] = ConfigManager.Config.SttModel,
                     ["refinement_provider"] = ConfigManager.Config.RefinementModel
                 });
+
+            _ = CheckForAppUpdatesAsync();
+        }
+
+        private async Task CheckForAppUpdatesAsync()
+        {
+            if (_updateCheckStarted) return;
+            _updateCheckStarted = true;
+
+            try
+            {
+                await Task.Delay(TimeSpan.FromSeconds(8));
+
+                string? githubToken = Environment.GetEnvironmentVariable("SPEAKLY_GITHUB_TOKEN");
+                var source = new GithubSource(GitHubUpdateRepoUrl, githubToken, prerelease: false);
+                var updateManager = new UpdateManager(source);
+
+                if (!updateManager.IsInstalled)
+                {
+                    Logger.Log("Skipping update check: app is not running from a Velopack installation.");
+                    return;
+                }
+
+                var pending = updateManager.UpdatePendingRestart;
+                if (pending != null)
+                {
+                    Logger.Log($"Applying pending update {pending.Version}.");
+                    updateManager.ApplyUpdatesAndRestart(pending);
+                    return;
+                }
+
+                var updates = await updateManager.CheckForUpdatesAsync();
+                if (updates == null)
+                {
+                    Logger.Log("No app updates found.");
+                    return;
+                }
+
+                Logger.Log($"Update available: {updates.TargetFullRelease.Version}. Downloading package.");
+                await updateManager.DownloadUpdatesAsync(updates);
+
+                await Dispatcher.InvokeAsync(() =>
+                {
+                    var applyNow = MessageBox.Show(
+                        $"Update {updates.TargetFullRelease.Version} is ready. Restart now to apply?",
+                        "Speakly Update Ready",
+                        MessageBoxButton.YesNo,
+                        MessageBoxImage.Information);
+
+                    if (applyNow == MessageBoxResult.Yes)
+                    {
+                        updateManager.ApplyUpdatesAndRestart(updates.TargetFullRelease);
+                    }
+                });
+            }
+            catch (Exception ex)
+            {
+                Logger.LogException("CheckForAppUpdatesAsync", ex);
+            }
         }
 
         private void InitializeTranscriptionAndRefinement()

@@ -100,55 +100,63 @@
                                 IsOpen="{Binding HasModelRefreshStatus}"
                                 Margin="0,0,0,12"/>
 
-                    <StackPanel Margin="0,0,0,14">
-                        <StackPanel.Style>
-                            <Style TargetType="StackPanel">
-                                <Setter Property="Visibility" Value="Collapsed"/>
-                                <Style.Triggers>
-                                    <DataTrigger Binding="{Binding IsCerebrasRefinementProvider}" Value="True">
-                                        <Setter Property="Visibility" Value="Visible"/>
-                                    </DataTrigger>
-                                </Style.Triggers>
-                            </Style>
-                        </StackPanel.Style>
+                    <Expander Header="Advanced Settings" IsExpanded="False" Margin="0,0,0,14">
+                        <StackPanel Margin="0,10,0,0">
+                            <TextBlock Text="For power users. Defaults are safe for most setups."
+                                       Style="{StaticResource HintText}"
+                                       Margin="0,0,0,10"/>
 
-                        <TextBlock Text="Cerebras Request Tuning" Style="{StaticResource FieldLabel}"/>
-                        <TextBlock Text="These settings improve reliability during rate limits and transient service errors."
-                                   Style="{StaticResource HintText}"
-                                   Margin="0,0,0,10"
-                                   TextWrapping="Wrap"/>
+                            <StackPanel>
+                                <StackPanel.Style>
+                                    <Style TargetType="StackPanel">
+                                        <Setter Property="Visibility" Value="Collapsed"/>
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding IsCerebrasRefinementProvider}" Value="True">
+                                                <Setter Property="Visibility" Value="Visible"/>
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </StackPanel.Style>
 
-                        <TextBlock Text="Max Completion Tokens" Style="{StaticResource FieldLabel}"/>
-                        <ui:NumberBox Value="{Binding CerebrasMaxCompletionTokens}" Margin="0,0,0,4"/>
-                        <TextBlock Text="Lower values reduce rate-limit pressure. Recommended: 128–512."
-                                   Style="{StaticResource HintText}"
-                                   Margin="0,0,0,10"/>
+                                <TextBlock Text="Cerebras Request Tuning" Style="{StaticResource FieldLabel}"/>
+                                <TextBlock Text="These settings improve reliability during rate limits and transient service errors."
+                                           Style="{StaticResource HintText}"
+                                           Margin="0,0,0,10"
+                                           TextWrapping="Wrap"/>
 
-                        <TextBlock Text="Request Timeout (seconds)" Style="{StaticResource FieldLabel}"/>
-                        <ui:NumberBox Value="{Binding CerebrasTimeoutSeconds}" Margin="0,0,0,4"/>
-                        <TextBlock Text="Recommended: 45–90 seconds depending on model size."
-                                   Style="{StaticResource HintText}"
-                                   Margin="0,0,0,10"/>
+                                <TextBlock Text="Max Completion Tokens" Style="{StaticResource FieldLabel}"/>
+                                <ui:NumberBox Value="{Binding CerebrasMaxCompletionTokens}" Margin="0,0,0,4"/>
+                                <TextBlock Text="Lower values reduce rate-limit pressure. Recommended: 128–512."
+                                           Style="{StaticResource HintText}"
+                                           Margin="0,0,0,10"/>
 
-                        <TextBlock Text="Max Retries" Style="{StaticResource FieldLabel}"/>
-                        <ui:NumberBox Value="{Binding CerebrasMaxRetries}" Margin="0,0,0,4"/>
-                        <TextBlock Text="Retries are used for transient failures (429/5xx/timeouts)."
-                                   Style="{StaticResource HintText}"
-                                   Margin="0,0,0,10"/>
+                                <TextBlock Text="Request Timeout (seconds)" Style="{StaticResource FieldLabel}"/>
+                                <ui:NumberBox Value="{Binding CerebrasTimeoutSeconds}" Margin="0,0,0,4"/>
+                                <TextBlock Text="Recommended: 45–90 seconds depending on model size."
+                                           Style="{StaticResource HintText}"
+                                           Margin="0,0,0,10"/>
 
-                        <TextBlock Text="Retry Base Delay (ms)" Style="{StaticResource FieldLabel}"/>
-                        <ui:NumberBox Value="{Binding CerebrasRetryBaseDelayMs}" Margin="0,0,0,4"/>
-                        <TextBlock Text="Exponential backoff starts from this delay value."
-                                   Style="{StaticResource HintText}"
-                                   Margin="0,0,0,10"/>
+                                <TextBlock Text="Max Retries" Style="{StaticResource FieldLabel}"/>
+                                <ui:NumberBox Value="{Binding CerebrasMaxRetries}" Margin="0,0,0,4"/>
+                                <TextBlock Text="Retries are used for transient failures (429/5xx/timeouts)."
+                                           Style="{StaticResource HintText}"
+                                           Margin="0,0,0,10"/>
 
-                        <TextBlock Text="Version Patch Header (optional)" Style="{StaticResource FieldLabel}"/>
-                        <ui:TextBox Text="{Binding CerebrasVersionPatch, UpdateSourceTrigger=PropertyChanged}"
-                                    PlaceholderText="e.g. 2025-08-28"
-                                    Margin="0,0,0,4"/>
-                        <TextBlock Text="If set, Speakly sends X-Cerebras-Version-Patch with each Cerebras request."
-                                   Style="{StaticResource HintText}"/>
-                    </StackPanel>
+                                <TextBlock Text="Retry Base Delay (ms)" Style="{StaticResource FieldLabel}"/>
+                                <ui:NumberBox Value="{Binding CerebrasRetryBaseDelayMs}" Margin="0,0,0,4"/>
+                                <TextBlock Text="Exponential backoff starts from this delay value."
+                                           Style="{StaticResource HintText}"
+                                           Margin="0,0,0,10"/>
+
+                                <TextBlock Text="Version Patch Header (optional)" Style="{StaticResource FieldLabel}"/>
+                                <ui:TextBox Text="{Binding CerebrasVersionPatch, UpdateSourceTrigger=PropertyChanged}"
+                                            PlaceholderText="e.g. 2025-08-28"
+                                            Margin="0,0,0,4"/>
+                                <TextBlock Text="If set, Speakly sends X-Cerebras-Version-Patch with each Cerebras request."
+                                           Style="{StaticResource HintText}"/>
+                            </StackPanel>
+                        </StackPanel>
+                    </Expander>
 
                     <TextBlock Text="Prompt Presets" Style="{StaticResource FieldLabel}"/>
                     <Grid Margin="0,0,0,14">

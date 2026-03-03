@@ -27,10 +27,6 @@
                                 IsOpen="{Binding HasDeepgramLanguageGuard}"
                                 Margin="0,0,0,14"/>
 
-                    <TextBlock Text="Deepgram API Base URL" Style="{StaticResource FieldLabel}"/>
-                    <ui:TextBox Text="{Binding DeepgramApiBaseUrl}" Margin="0,0,0,4" MaxWidth="520" HorizontalAlignment="Left"/>
-                    <TextBlock Text="Default: https://api.deepgram.com. For EU use https://api.eu.deepgram.com, or set your dedicated/self-hosted endpoint." Style="{StaticResource HintText}" Margin="0,0,0,14"/>
-
                     <TextBlock Text="Target Model" Style="{StaticResource FieldLabel}"/>
                     <Grid x:Name="ModelRow">
                         <ComboBox x:Name="SttModelCombo"
@@ -95,6 +91,19 @@
                                 Message="{Binding ModelRefreshStatus}"
                                 Severity="Informational"
                                 IsOpen="{Binding HasModelRefreshStatus}"/>
+
+                    <Expander Header="Advanced Settings" IsExpanded="False" Margin="0,14,0,0">
+                        <StackPanel Margin="0,10,0,0">
+                            <TextBlock Text="For power users. Defaults are safe for most setups."
+                                       Style="{StaticResource HintText}"
+                                       Margin="0,0,0,10"/>
+
+                            <TextBlock Text="Deepgram API Base URL" Style="{StaticResource FieldLabel}"/>
+                            <ui:TextBox Text="{Binding DeepgramApiBaseUrl}" Margin="0,0,0,4" MaxWidth="520" HorizontalAlignment="Left"/>
+                            <TextBlock Text="Default: https://api.deepgram.com. For EU use https://api.eu.deepgram.com, or set your dedicated/self-hosted endpoint."
+                                       Style="{StaticResource HintText}"/>
+                        </StackPanel>
+                    </Expander>
                 </StackPanel>
             </Border>
         </StackPanel>

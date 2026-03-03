@@ -60,6 +60,8 @@ namespace Speakly
         private static readonly TimeSpan OverlayIdleHideAfter = TimeSpan.FromSeconds(90);
         private static readonly TimeSpan PostStopFinalResultGrace = TimeSpan.FromMilliseconds(350);
         private const string NoFinalResultErrorCode = "stt_no_final_result";
+        private SingleInstanceManager? _singleInstanceManager;
+        private TargetWindowContext _targetWindowContext = TargetWindowContext.Empty;
         private IntPtr _lastActiveWindow = IntPtr.Zero;
         private System.IO.MemoryStream? _audioBuffer; // For debug records
         // Serializes text insertions: only one InsertText may run at a time to prevent
@@ -105,6 +107,14 @@ namespace Speakly
         {
             base.OnStartup(e);
             ShutdownMode = ShutdownMode.OnExplicitShutdown;
+
+            _singleInstanceManager = new SingleInstanceManager();
+            if (!_singleInstanceManager.TryAcquirePrimaryInstance())
+            {
+                SingleInstanceManager.SignalPrimaryInstance();
+                Shutdown();
+                return;
+            }
 
             ConfigManager.Load();
             SetTheme(ConfigManager.Config.Theme);
@@ -166,6 +176,8 @@ namespace Speakly
             }
 
             MainWindow.Show();
+            _singleInstanceManager.StartActivationListener(() =>
+                Dispatcher.BeginInvoke(new Action(ActivateFromSecondaryInstance)));
             ConfigureOverlayIdleBehavior();
             // Re-apply theme after main window handle exists so title bar chrome matches app theme.
             SetTheme(ConfigManager.Config.Theme);
@@ -216,6 +228,51 @@ namespace Speakly
             }
 
             return AppVersion;
+        }
+
+        private void ActivateFromSecondaryInstance()
+        {
+            try
+            {
+                if (MainWindow == null)
+                {
+                    return;
+                }
+
+                if (!MainWindow.IsVisible)
+                {
+                    MainWindow.Show();
+                }
+
+                if (MainWindow.WindowState == WindowState.Minimized)
+                {
+                    MainWindow.WindowState = WindowState.Normal;
+                }
+
+                MainWindow.Topmost = true;
+                MainWindow.Activate();
+                MainWindow.Topmost = false;
+                MainWindow.Focus();
+
+                if (ConfigManager.Config.ShowOverlay)
+                {
+                    EnsureOverlayVisibleInternal(activate: false);
+                }
+
+                MarkOverlayActivity(showOverlayIfNeeded: false);
+            }
+            catch (Exception ex)
+            {
+                Logger.LogException("ActivateFromSecondaryInstance", ex);
+            }
+        }
+
+        private void CaptureTargetWindowContext(string triggerSource)
+        {
+            _targetWindowContext = TextInserter.CaptureForegroundWindowContext();
+            _lastActiveWindow = _targetWindowContext.Handle;
+
+            Logger.Log($"{triggerSource}. Captured target window: {_targetWindowContext}");
         }
 
         private void ConfigureOverlayIdleBehavior()
@@ -543,9 +600,8 @@ namespace Speakly
                 if (_recorder != null && TryEnterRecording())
                 {
                     BeginSessionTiming();
-                    _lastActiveWindow = TextInserter.GetForegroundWindow();
+                    CaptureTargetWindowContext("PTT Hotkey Pressed");
                     PrepareSessionContext();
-                    Logger.Log($"PTT Hotkey Pressed. Captured active window: {_lastActiveWindow}");
                     _sessionText.Clear();
                     _sessionHasInserted = false;
                     AutoAdjustRefinementPromptForLanguage();
@@ -575,9 +631,8 @@ namespace Speakly
                     if (!TryEnterRecording()) return;
                     BeginSessionTiming();
 
-                    _lastActiveWindow = TextInserter.GetForegroundWindow();
+                    CaptureTargetWindowContext("Toggle Recording Started");
                     PrepareSessionContext();
-                    Logger.Log($"Toggle Recording Started. Captured active window: {_lastActiveWindow}");
                     _sessionText.Clear();
                     _sessionHasInserted = false;
                     AutoAdjustRefinementPromptForLanguage();
@@ -1000,7 +1055,7 @@ namespace Speakly
                 _refineMs = 0;
             }
 
-            Logger.Log($"Inserting text into window {_lastActiveWindow}: '{textToInsert}'");
+            Logger.Log($"Inserting text into target {_targetWindowContext}: '{textToInsert}'");
             TrackSessionEvent("insert_attempt");
             var toType = _sessionHasInserted ? " " + textToInsert : textToInsert;
             InsertResult insertResult = new InsertResult { Success = false, Method = "Unknown", ErrorCode = "NotExecuted" };
@@ -1008,7 +1063,7 @@ namespace Speakly
             try
             {
                 var swInsert = Stopwatch.StartNew();
-                insertResult = await Task.Run(() => TextInserter.InsertText(toType, _lastActiveWindow));
+                insertResult = await Task.Run(() => TextInserter.InsertText(toType, _targetWindowContext));
                 swInsert.Stop();
                 _insertMs = (int)swInsert.ElapsedMilliseconds;
             }
@@ -1023,7 +1078,7 @@ namespace Speakly
                 if (string.IsNullOrWhiteSpace(insertResult.ErrorCode))
                     insertResult.ErrorCode = $"refine_{refinementFallbackCode}";
             }
-            _sessionHasInserted = true;
+            _sessionHasInserted = insertResult.Success;
 
             if (ConfigManager.Config.CopyToClipboard)
             {
@@ -1032,6 +1087,27 @@ namespace Speakly
                 var fullSessionText = _sessionText.ToString();
                 Dispatcher.Invoke(() => Clipboard.SetText(fullSessionText));
                 Logger.Log($"Copied full session text to clipboard (length={fullSessionText.Length}).");
+            }
+
+            if (!insertResult.Success)
+            {
+                var targetName = string.IsNullOrWhiteSpace(_targetWindowContext.ProcessName)
+                    ? "target app"
+                    : _targetWindowContext.ProcessName;
+                var recoveryMessage =
+                    $"Speakly could not safely insert text into the original target ({targetName})." + Environment.NewLine +
+                    "The latest result was copied to your clipboard." + Environment.NewLine +
+                    "Focus the target app and press Ctrl+V to paste." + Environment.NewLine + Environment.NewLine +
+                    $"Reason: {insertResult.ErrorCode}";
+
+                Dispatcher.Invoke(() =>
+                {
+                    MessageBox.Show(
+                        recoveryMessage,
+                        "Speakly: Insertion Recovery",
+                        MessageBoxButton.OK,
+                        MessageBoxImage.Warning);
+                });
             }
 
             TrackSessionEvent(
@@ -1053,8 +1129,8 @@ namespace Speakly
                 transcribeMs: _transcribeMs,
                 refineMs: _refineMs,
                 insertMs: _insertMs,
-                succeeded: true,
-                errorCode: string.Empty,
+                succeeded: insertResult.Success,
+                errorCode: insertResult.Success ? string.Empty : insertResult.ErrorCode,
                 insertionMethod: insertResult.Method,
                 profileId: _activeSessionProfile?.Id ?? string.Empty,
                 profileName: _activeSessionProfile?.Name ?? "Default",
@@ -1074,8 +1150,8 @@ namespace Speakly
                 TranscribeMs = _transcribeMs,
                 RefineMs = _refineMs,
                 InsertMs = _insertMs,
-                Succeeded = true,
-                ErrorCode = string.Empty,
+                Succeeded = insertResult.Success,
+                ErrorCode = insertResult.Success ? string.Empty : insertResult.ErrorCode,
                 ProfileId = _activeSessionProfile?.Id ?? string.Empty,
                 ProfileName = _activeSessionProfile?.Name ?? "Default",
                 FailoverAttempted = _sttFailoverAttempted,
@@ -1100,8 +1176,9 @@ namespace Speakly
                     TranscribeMs = _transcribeMs,
                     RefineMs = _refineMs,
                     InsertMs = _insertMs,
-                    Succeeded = true,
+                    Succeeded = insertResult.Success,
                     InsertionMethod = insertResult.Method,
+                    ErrorCode = insertResult.Success ? string.Empty : insertResult.ErrorCode,
                     ProfileId = _activeSessionProfile?.Id ?? string.Empty,
                     ProfileName = _activeSessionProfile?.Name ?? "Default",
                     FailoverAttempted = _sttFailoverAttempted,
@@ -1116,7 +1193,7 @@ namespace Speakly
             MarkOverlayActivity(showOverlayIfNeeded: false);
             TrackSessionEvent(
                 name: "session_end",
-                result: "success",
+                result: insertResult.Success ? "success" : "insert_failed",
                 durationMs: _recordMs + _transcribeMs + _refineMs + _insertMs,
                 data: new Dictionary<string, string>
                 {
@@ -1329,9 +1406,8 @@ namespace Speakly
             if (!TryEnterRecording()) return;
             BeginSessionTiming();
 
-            _lastActiveWindow = TextInserter.GetForegroundWindow();
+            CaptureTargetWindowContext("Overlay Recording Started");
             PrepareSessionContext();
-            Logger.Log($"Overlay Recording Started. Captured active window: {_lastActiveWindow}");
             _sessionText.Clear();
             _sessionHasInserted = false;
             AutoAdjustRefinementPromptForLanguage();
@@ -1365,6 +1441,7 @@ namespace Speakly
             CancelPendingPttReleaseStop();
             _hotkeyService?.Dispose();
             _trayService?.Dispose();
+            _singleInstanceManager?.Dispose();
             _recorder?.Dispose();
             _transcriber?.Dispose();
             _overlay?.Close();
@@ -1564,7 +1641,10 @@ namespace Speakly
         {
             try
             {
-                _activeSessionProfile = ProfileResolverService.ResolveForForegroundWindow(_lastActiveWindow);
+                var windowForProfile = _targetWindowContext.IsValid
+                    ? _targetWindowContext.Handle
+                    : _lastActiveWindow;
+                _activeSessionProfile = ProfileResolverService.ResolveForForegroundWindow(windowForProfile);
                 ConfigManager.SetActiveProfile(_activeSessionProfile.Id);
                 ConfigManager.EnsureProfileSyncToLegacyFields(_activeSessionProfile);
                 InitializeTranscriptionAndRefinement();

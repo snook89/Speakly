@@ -58,7 +58,13 @@ namespace Speakly.Services
                         .GetProperty("content")
                         .GetString();
 
-                    return RefinementSafety.CoerceToEditOnlyOutput(text, refinedText);
+                    var safeRefined = RefinementSafety.CoerceToEditOnlyOutput(text, refinedText);
+                    if (!string.Equals(safeRefined, refinedText?.Trim(), StringComparison.Ordinal))
+                    {
+                        Logger.Log("OpenRouter refinement output rejected by safety guard; using original transcription.");
+                    }
+
+                    return safeRefined;
                 }
             }
             catch (Exception ex)

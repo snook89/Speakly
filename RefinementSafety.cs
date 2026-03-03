@@ -50,6 +50,7 @@ namespace Speakly.Services
             "- You are an editor, not a conversational assistant.\n" +
             "- Never ask questions, never provide help text, and never explain.\n" +
             "- Do not add disclaimers or meta commentary.\n" +
+            "- Preserve all substantive content from the transcript; do not summarize, omit, or shorten it.\n" +
             "- If the transcript is unclear, noisy, or nonsensical, return the original input unchanged.\n" +
             "- Return only the final refined transcript text.";
 
@@ -103,6 +104,11 @@ namespace Speakly.Services
                 return originalText;
             }
 
+            if (IsLikelyLossyShortening(originalText, candidate))
+            {
+                return originalText;
+            }
+
             return candidate;
         }
 
@@ -128,6 +134,72 @@ namespace Speakly.Services
             if (candidateAsksQuestion && original.Length > 0 && candidate.Length > original.Length * 2.2)
             {
                 return true;
+            }
+
+            return false;
+        }
+
+        private static bool IsLikelyLossyShortening(string original, string candidate)
+        {
+            var originalNorm = NormalizeWhitespace(original);
+            var candidateNorm = NormalizeWhitespace(candidate);
+
+            if (string.IsNullOrWhiteSpace(originalNorm) || string.IsNullOrWhiteSpace(candidateNorm))
+            {
+                return false;
+            }
+
+            int originalWords = CountWords(originalNorm);
+            int candidateWords = CountWords(candidateNorm);
+            if (originalWords == 0 || candidateWords == 0)
+            {
+                return false;
+            }
+
+            double wordRatio = (double)candidateWords / originalWords;
+            double charRatio = (double)candidateNorm.Length / originalNorm.Length;
+
+            // Strong signal: response is dramatically shorter than input.
+            if (originalWords >= 40 && wordRatio <= 0.55)
+            {
+                return true;
+            }
+
+            if (originalNorm.Length >= 320 && charRatio <= 0.50)
+            {
+                return true;
+            }
+
+            // Likely cut-off output: notably shorter and no sentence terminator.
+            if (originalWords >= 30 && wordRatio <= 0.70 && !EndsWithSentenceTerminator(candidateNorm))
+            {
+                return true;
+            }
+
+            return false;
+        }
+
+        private static string NormalizeWhitespace(string value)
+        {
+            return string.Join(" ", value.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries));
+        }
+
+        private static int CountWords(string value)
+        {
+            return value.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries).Length;
+        }
+
+        private static bool EndsWithSentenceTerminator(string value)
+        {
+            for (int i = value.Length - 1; i >= 0; i--)
+            {
+                var ch = value[i];
+                if (char.IsWhiteSpace(ch) || ch == '"' || ch == '\'' || ch == ')' || ch == ']')
+                {
+                    continue;
+                }
+
+                return ch == '.' || ch == '!' || ch == '?' || ch == ':' || ch == ';';
             }
 
             return false;

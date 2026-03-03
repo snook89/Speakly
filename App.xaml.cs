@@ -985,6 +985,7 @@ namespace Speakly
                 }
                 swRefine.Stop();
                 _refineMs = (int)swRefine.ElapsedMilliseconds;
+                Logger.Log($"Refinement stats: inputChars={originalText.Length}, outputChars={textToInsert.Length}, inputWords={CountWords(originalText)}, outputWords={CountWords(textToInsert)}");
                 Logger.Log($"Refinement complete: '{textToInsert}'");
                 TrackSessionEvent(
                     name: "refiner_result",
@@ -1642,6 +1643,16 @@ namespace Speakly
                 "OpenAI" => ConfigManager.Config.OpenAIRefinementModel,
                 _ => string.Empty
             };
+        }
+
+        private static int CountWords(string? value)
+        {
+            if (string.IsNullOrWhiteSpace(value))
+            {
+                return 0;
+            }
+
+            return value.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries).Length;
         }
 
         private bool TryEnterRecording()

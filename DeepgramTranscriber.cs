@@ -29,6 +29,7 @@ namespace Speakly.Services
         private int _hasSentAudio;
         private int _isFinishing;
         private const string Version = "1.7.0-Reliability";
+        private static readonly TimeSpan FinalResultWaitTimeout = TimeSpan.FromSeconds(12);
 
         // Accumulates is_final=true segments until speech_final=true signals a natural
         // utterance boundary, or until the stream closes (Metadata flush).
@@ -319,12 +320,12 @@ namespace Speakly.Services
         {
             if (_finalResultTcs != null)
             {
-                // Timeout after 5 seconds to prevent getting stuck
-                var timeoutTask = Task.Delay(5000);
+                // Allow additional time for final segment flush on long utterances.
+                var timeoutTask = Task.Delay(FinalResultWaitTimeout);
                 var completedTask = await Task.WhenAny(_finalResultTcs.Task, timeoutTask);
                 if (completedTask == timeoutTask)
                 {
-                    Logger.Log("WARNING: WaitForFinalResultAsync timed out.");
+                    Logger.Log($"WARNING: WaitForFinalResultAsync timed out after {FinalResultWaitTimeout.TotalSeconds:0}s.");
                 }
             }
         }

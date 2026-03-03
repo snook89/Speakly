@@ -30,7 +30,7 @@ namespace Speakly.Services
             var maxAttempts = 1 + maxRetries;
             var timeoutSeconds = Math.Clamp(config.CerebrasTimeoutSeconds, 10, 300);
             var baseDelayMs = Math.Clamp(config.CerebrasRetryBaseDelayMs, 100, 5000);
-            var maxTokens = Math.Clamp(config.CerebrasMaxCompletionTokens, 16, 65536);
+            var maxTokens = ResolveCompletionBudget(text, config.CerebrasMaxCompletionTokens);
 
             var safePrompt = RefinementSafety.BuildSafeSystemPrompt(prompt);
             var userMessage = RefinementSafety.BuildRefinementUserMessage(text);
@@ -77,7 +77,13 @@ namespace Speakly.Services
                             break;
                         }
 
-                        return RefinementSafety.CoerceToEditOnlyOutput(text, refinedText);
+                        var safeRefined = RefinementSafety.CoerceToEditOnlyOutput(text, refinedText);
+                        if (!string.Equals(safeRefined, refinedText.Trim(), StringComparison.Ordinal))
+                        {
+                            Logger.Log("Cerebras refinement output rejected by safety guard; using original transcription.");
+                        }
+
+                        return safeRefined;
                     }
 
                     var apiMessage = ExtractApiErrorMessage(responseBody);
@@ -264,6 +270,23 @@ namespace Speakly.Services
 
             var compact = body.Replace('\r', ' ').Replace('\n', ' ').Trim();
             return compact.Length <= 180 ? compact : compact[..180] + "...";
+        }
+
+        private static int ResolveCompletionBudget(string text, int configuredMaxTokens)
+        {
+            var configured = Math.Clamp(configuredMaxTokens, 16, 65536);
+            var normalizedChars = string.IsNullOrWhiteSpace(text) ? 0 : text.Trim().Length;
+            if (normalizedChars == 0)
+            {
+                return configured;
+            }
+
+            // Conservative estimate for edit-style outputs to avoid truncation on long dictation.
+            // Approximate ~3 chars/token and keep headroom for punctuation and minor rewrites.
+            var estimated = (int)Math.Ceiling((normalizedChars / 3.0) + 96);
+            estimated = Math.Clamp(estimated, 64, 65536);
+
+            return Math.Max(configured, estimated);
         }
 
     }

@@ -98,7 +98,7 @@ namespace Speakly.Config
         public string CerebrasRefinementModel { get; set; } = "llama3.1-8b";
 
         [JsonPropertyName("cerebras_max_completion_tokens")]
-        public int CerebrasMaxCompletionTokens { get; set; } = 256;
+        public int CerebrasMaxCompletionTokens { get; set; } = 1024;
 
         [JsonPropertyName("cerebras_timeout_seconds")]
         public int CerebrasTimeoutSeconds { get; set; } = 60;

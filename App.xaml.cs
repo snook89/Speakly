@@ -472,6 +472,8 @@ namespace Speakly
 
             string textToInsert = originalText;
             _transcribeMs = (int)Math.Max(0, (DateTime.UtcNow - _transcribingStartedUtc).TotalMilliseconds);
+            bool refinementFallbackUsed = false;
+            string refinementFallbackCode = string.Empty;
 
             if (_refiner != null && ConfigManager.Config.EnableRefinement)
             {
@@ -485,7 +487,18 @@ namespace Speakly
                 Logger.Log($"Refining text using {ConfigManager.Config.RefinementModel} (model={activeRefinementModel})");
                 _overlay?.SetStatus("REFINING", Brushes.Cyan);
                 var swRefine = Stopwatch.StartNew();
-                textToInsert = await _refiner.RefineTextAsync(originalText, ConfigManager.Config.RefinementPrompt);
+                try
+                {
+                    textToInsert = await _refiner.RefineTextAsync(originalText, ConfigManager.Config.RefinementPrompt);
+                }
+                catch (Exception ex)
+                {
+                    refinementFallbackUsed = true;
+                    refinementFallbackCode = ErrorClassifier.Classify(ex.Message);
+                    textToInsert = originalText;
+                    Logger.LogException("HandleFinalTranscriptionAsync.Refinement", ex);
+                    Logger.Log($"Refinement fallback engaged ({ConfigManager.Config.RefinementModel}, code={refinementFallbackCode}).");
+                }
                 swRefine.Stop();
                 _refineMs = (int)swRefine.ElapsedMilliseconds;
                 Logger.Log($"Refinement complete: '{textToInsert}'");
@@ -509,6 +522,13 @@ namespace Speakly
             finally
             {
                 _insertionGate.Release();
+            }
+
+            if (refinementFallbackUsed)
+            {
+                insertResult.Method = $"{insertResult.Method}+RefineFallback";
+                if (string.IsNullOrWhiteSpace(insertResult.ErrorCode))
+                    insertResult.ErrorCode = $"refine_{refinementFallbackCode}";
             }
             _sessionHasInserted = true;
 

@@ -42,6 +42,30 @@ namespace Speakly.Services
             if (config.EnableRefinement && !HasApiKeyForRefinement(config, config.RefinementModel))
                 issues.Add($"Selected refinement provider \"{config.RefinementModel}\" is missing its API key.");
 
+            if (config.EnableRefinement && string.Equals(config.RefinementModel, "Cerebras", StringComparison.OrdinalIgnoreCase))
+            {
+                if (string.IsNullOrWhiteSpace(config.CerebrasRefinementModel))
+                    issues.Add("Cerebras refinement model is empty.");
+
+                if (config.CerebrasMaxCompletionTokens < 16 || config.CerebrasMaxCompletionTokens > 65536)
+                    issues.Add("Cerebras max completion tokens should be between 16 and 65536.");
+
+                if (config.CerebrasTimeoutSeconds < 10 || config.CerebrasTimeoutSeconds > 300)
+                    issues.Add("Cerebras timeout should be between 10 and 300 seconds.");
+
+                if (config.CerebrasMaxRetries < 0 || config.CerebrasMaxRetries > 6)
+                    issues.Add("Cerebras max retries should be between 0 and 6.");
+
+                if (config.CerebrasRetryBaseDelayMs < 100 || config.CerebrasRetryBaseDelayMs > 5000)
+                    issues.Add("Cerebras retry base delay should be between 100 and 5000 ms.");
+
+                if (!string.IsNullOrWhiteSpace(config.CerebrasVersionPatch) &&
+                    !DateTime.TryParse(config.CerebrasVersionPatch, out _))
+                {
+                    issues.Add("Cerebras version patch header should be a valid date string (for example: 2025-08-28) or empty.");
+                }
+            }
+
             if (config.OverlayWidth > 0 && config.OverlayWidth < 120)
                 issues.Add("Overlay width is very small and may hide controls.");
             if (config.OverlayHeight > 0 && config.OverlayHeight < 40)

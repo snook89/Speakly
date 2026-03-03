@@ -276,6 +276,60 @@ namespace Speakly.ViewModels
                 SyncActiveProfileFromLegacy();
                 OnPropertyChanged(); 
                 OnPropertyChanged(nameof(SelectedRefinementModelString));
+                OnPropertyChanged(nameof(IsCerebrasRefinementProvider));
+            }
+        }
+
+        public bool IsCerebrasRefinementProvider =>
+            string.Equals(RefinementModel, "Cerebras", StringComparison.OrdinalIgnoreCase);
+
+        public int CerebrasMaxCompletionTokens
+        {
+            get => ConfigManager.Config.CerebrasMaxCompletionTokens;
+            set
+            {
+                ConfigManager.Config.CerebrasMaxCompletionTokens = Clamp(value, 16, 65536);
+                OnPropertyChanged();
+            }
+        }
+
+        public int CerebrasTimeoutSeconds
+        {
+            get => ConfigManager.Config.CerebrasTimeoutSeconds;
+            set
+            {
+                ConfigManager.Config.CerebrasTimeoutSeconds = Clamp(value, 10, 300);
+                OnPropertyChanged();
+            }
+        }
+
+        public int CerebrasMaxRetries
+        {
+            get => ConfigManager.Config.CerebrasMaxRetries;
+            set
+            {
+                ConfigManager.Config.CerebrasMaxRetries = Clamp(value, 0, 6);
+                OnPropertyChanged();
+            }
+        }
+
+        public int CerebrasRetryBaseDelayMs
+        {
+            get => ConfigManager.Config.CerebrasRetryBaseDelayMs;
+            set
+            {
+                ConfigManager.Config.CerebrasRetryBaseDelayMs = Clamp(value, 100, 5000);
+                OnPropertyChanged();
+            }
+        }
+
+        public string CerebrasVersionPatch
+        {
+            get => ConfigManager.Config.CerebrasVersionPatch;
+            set
+            {
+                ConfigManager.Config.CerebrasVersionPatch = (value ?? string.Empty).Trim();
+                OnPropertyChanged();
             }
         }
 
@@ -678,7 +732,13 @@ namespace Speakly.ViewModels
             OnPropertyChanged(nameof(DeepgramApiBaseUrl));
             OnPropertyChanged(nameof(EnableRefinement));
             OnPropertyChanged(nameof(RefinementModel));
+            OnPropertyChanged(nameof(IsCerebrasRefinementProvider));
             OnPropertyChanged(nameof(SelectedRefinementModelString));
+            OnPropertyChanged(nameof(CerebrasMaxCompletionTokens));
+            OnPropertyChanged(nameof(CerebrasTimeoutSeconds));
+            OnPropertyChanged(nameof(CerebrasMaxRetries));
+            OnPropertyChanged(nameof(CerebrasRetryBaseDelayMs));
+            OnPropertyChanged(nameof(CerebrasVersionPatch));
             OnPropertyChanged(nameof(RefinementPrompt));
             OnPropertyChanged(nameof(Language));
             OnPropertyChanged(nameof(CopyToClipboard));
@@ -950,7 +1010,11 @@ namespace Speakly.ViewModels
             else if (RefinementModel == "Cerebras")
             {
                 AvailableRefinementModels.Add("llama3.1-8b");
-                AvailableRefinementModels.Add("llama3.1-70b");
+                AvailableRefinementModels.Add("llama-3.3-70b");
+                AvailableRefinementModels.Add("qwen-3-32b");
+                AvailableRefinementModels.Add("qwen-3-235b-a22b-instruct-2507");
+                AvailableRefinementModels.Add("gpt-oss-120b");
+                AvailableRefinementModels.Add("zai-glm-4.7");
             }
             else if (RefinementModel == "OpenRouter")
             {
@@ -1146,6 +1210,8 @@ namespace Speakly.ViewModels
             try
             {
                 var config = ConfigManager.Config;
+                bool cerebrasSelectedModelMissing = false;
+                var selectedCerebrasModel = config.CerebrasRefinementModel?.Trim() ?? string.Empty;
 
                 if (!string.IsNullOrWhiteSpace(config.DeepgramApiKey))
                 {
@@ -1185,15 +1251,31 @@ namespace Speakly.ViewModels
 
                 if (!string.IsNullOrWhiteSpace(config.CerebrasApiKey))
                 {
+                    Dictionary<string, string>? cerebrasHeaders = null;
+                    if (!string.IsNullOrWhiteSpace(config.CerebrasVersionPatch))
+                    {
+                        cerebrasHeaders = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+                        {
+                            ["X-Cerebras-Version-Patch"] = config.CerebrasVersionPatch.Trim()
+                        };
+                    }
+
                     var cerebrasModels = await FetchModelsFromEndpointAsync(
                         "https://api.cerebras.ai/v1/models",
-                        new AuthenticationHeaderValue("Bearer", config.CerebrasApiKey.Trim()));
+                        new AuthenticationHeaderValue("Bearer", config.CerebrasApiKey.Trim()),
+                        cerebrasHeaders);
 
                     if (cerebrasModels.Count > 0)
                     {
                         _dynamicRefinementModels["Cerebras"] = cerebrasModels
                             .OrderBy(m => m, StringComparer.OrdinalIgnoreCase)
                             .ToList();
+
+                        if (!string.IsNullOrWhiteSpace(selectedCerebrasModel) &&
+                            !cerebrasModels.Any(m => string.Equals(m, selectedCerebrasModel, StringComparison.OrdinalIgnoreCase)))
+                        {
+                            cerebrasSelectedModelMissing = true;
+                        }
                     }
                 }
 
@@ -1223,6 +1305,11 @@ namespace Speakly.ViewModels
                 ModelRefreshStatus = activeSources.Count > 0
                     ? $"Model list refreshed from: {string.Join(", ", activeSources)}"
                     : "Model list: using built-in defaults";
+
+                if (cerebrasSelectedModelMissing && string.Equals(config.RefinementModel, "Cerebras", StringComparison.OrdinalIgnoreCase))
+                {
+                    ModelRefreshStatus += $" | Warning: selected Cerebras model \"{selectedCerebrasModel}\" was not returned by the current model catalog.";
+                }
 
                 if (userInitiated)
                 {
@@ -1365,10 +1452,21 @@ namespace Speakly.ViewModels
             return ExtractDeepgramStreamingSttModelIds(json);
         }
 
-        private async Task<List<string>> FetchModelsFromEndpointAsync(string url, AuthenticationHeaderValue authHeader)
+        private async Task<List<string>> FetchModelsFromEndpointAsync(
+            string url,
+            AuthenticationHeaderValue authHeader,
+            IDictionary<string, string>? extraHeaders = null)
         {
             using var request = new HttpRequestMessage(HttpMethod.Get, url);
             request.Headers.Authorization = authHeader;
+            if (extraHeaders != null)
+            {
+                foreach (var entry in extraHeaders)
+                {
+                    if (string.IsNullOrWhiteSpace(entry.Key) || string.IsNullOrWhiteSpace(entry.Value)) continue;
+                    request.Headers.TryAddWithoutValidation(entry.Key, entry.Value);
+                }
+            }
 
             using var response = await _httpClient.SendAsync(request);
             if (!response.IsSuccessStatusCode)
@@ -1517,7 +1615,11 @@ namespace Speakly.ViewModels
             var oa = await ApiTester.TestOpenAIAsync(OpenAIApiKey);
             sb.AppendLine($"OpenAI: {oa}");
 
-            var cr = await ApiTester.TestCerebrasAsync(CerebrasApiKey);
+            var cr = await ApiTester.TestCerebrasAsync(
+                CerebrasApiKey,
+                ConfigManager.Config.CerebrasRefinementModel,
+                ConfigManager.Config.CerebrasMaxCompletionTokens,
+                ConfigManager.Config.CerebrasVersionPatch);
             sb.AppendLine($"Cerebras: {cr}");
 
             var or = await ApiTester.TestOpenRouterAsync(OpenRouterApiKey);

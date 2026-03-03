@@ -16,6 +16,8 @@ namespace Speakly.Services
                 return "forbidden";
             if (text.Contains("429") || text.Contains("rate") || text.Contains("quota"))
                 return "rate_limit";
+            if (text.Contains("500") || text.Contains("502") || text.Contains("503") || text.Contains("504") || text.Contains("service unavailable") || text.Contains("gateway"))
+                return "server";
             if (text.Contains("timeout") || text.Contains("timed out"))
                 return "timeout";
             if (text.Contains("ssl") || text.Contains("socket") || text.Contains("network") || text.Contains("dns"))
@@ -30,7 +32,8 @@ namespace Speakly.Services
         {
             return string.Equals(code, "timeout", StringComparison.OrdinalIgnoreCase)
                 || string.Equals(code, "network", StringComparison.OrdinalIgnoreCase)
-                || string.Equals(code, "rate_limit", StringComparison.OrdinalIgnoreCase);
+                || string.Equals(code, "rate_limit", StringComparison.OrdinalIgnoreCase)
+                || string.Equals(code, "server", StringComparison.OrdinalIgnoreCase);
         }
     }
 }

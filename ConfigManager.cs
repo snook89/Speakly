@@ -11,7 +11,7 @@ namespace Speakly.Config
 {
     public class AppConfig
     {
-        public const int CurrentConfigVersion = 2;
+        public const int CurrentConfigVersion = 3;
         public const string DefaultRefinementPrompt =
             "Role and Objective:\n" +
             "You refine speech-to-text transcripts for clarity, grammatical correctness, and formatting compliance.\n\n" +
@@ -96,6 +96,21 @@ namespace Speakly.Config
 
         [JsonPropertyName("cerebras_refinement_model")]
         public string CerebrasRefinementModel { get; set; } = "llama3.1-8b";
+
+        [JsonPropertyName("cerebras_max_completion_tokens")]
+        public int CerebrasMaxCompletionTokens { get; set; } = 256;
+
+        [JsonPropertyName("cerebras_timeout_seconds")]
+        public int CerebrasTimeoutSeconds { get; set; } = 60;
+
+        [JsonPropertyName("cerebras_max_retries")]
+        public int CerebrasMaxRetries { get; set; } = 2;
+
+        [JsonPropertyName("cerebras_retry_base_delay_ms")]
+        public int CerebrasRetryBaseDelayMs { get; set; } = 400;
+
+        [JsonPropertyName("cerebras_version_patch")]
+        public string CerebrasVersionPatch { get; set; } = string.Empty;
 
         [JsonPropertyName("openrouter_refinement_model")]
         public string OpenRouterRefinementModel { get; set; } = "google/gemini-2.0-flash-001";
@@ -438,6 +453,11 @@ namespace Speakly.Config
             config.HistoryRetentionDays = Math.Clamp(config.HistoryRetentionDays, 1, 3650);
             if (string.IsNullOrWhiteSpace(config.PrivacyMode))
                 config.PrivacyMode = "normal";
+            config.CerebrasMaxCompletionTokens = Math.Clamp(config.CerebrasMaxCompletionTokens, 16, 65536);
+            config.CerebrasTimeoutSeconds = Math.Clamp(config.CerebrasTimeoutSeconds, 10, 300);
+            config.CerebrasMaxRetries = Math.Clamp(config.CerebrasMaxRetries, 0, 6);
+            config.CerebrasRetryBaseDelayMs = Math.Clamp(config.CerebrasRetryBaseDelayMs, 100, 5000);
+            config.CerebrasVersionPatch = config.CerebrasVersionPatch?.Trim() ?? string.Empty;
 
             if (config.Profiles == null)
                 config.Profiles = new List<AppProfile>();

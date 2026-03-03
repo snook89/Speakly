@@ -110,8 +110,11 @@ namespace Speakly.Pages
 
             PttHotkeyBox.Text = "Space";
             RecordHotkeyBox.Text = "F9";
-            ValidationText.Text = "Hotkeys reset to defaults.";
-            ValidationText.Foreground = TryFindResource("SystemFillColorSuccessBrush") as Brush ?? Brushes.LightGreen;
+            MessageBox.Show(
+                "Hotkeys reset to defaults (PTT: Space, Toggle: F9).",
+                "Speakly",
+                MessageBoxButton.OK,
+                MessageBoxImage.Information);
         }
 
         private void ValidateHotkeys()
@@ -119,16 +122,16 @@ namespace Speakly.Pages
             if (string.Equals(ConfigManager.Config.PttHotkey, ConfigManager.Config.RecordHotkey, System.StringComparison.OrdinalIgnoreCase))
             {
                 ShowValidation("PTT and Toggle hotkeys must be different.");
-                return;
             }
-
-            ValidationText.Text = string.Empty;
         }
 
         private void ShowValidation(string message)
         {
-            ValidationText.Text = message;
-            ValidationText.Foreground = TryFindResource("SystemFillColorCautionBrush") as Brush ?? Brushes.OrangeRed;
+            MessageBox.Show(
+                message,
+                "Hotkey Conflict",
+                MessageBoxButton.OK,
+                MessageBoxImage.Warning);
         }
     }
 }

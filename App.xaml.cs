@@ -75,6 +75,7 @@ namespace Speakly
         private string _activeSessionId = string.Empty;
         private string _activeOperationId = string.Empty;
         private bool _updateCheckStarted;
+        private readonly System.Threading.SemaphoreSlim _updateCheckGate = new(1, 1);
 
         public App()
         {
@@ -157,17 +158,60 @@ namespace Speakly
                     ["refinement_provider"] = ConfigManager.Config.RefinementModel
                 });
 
-            _ = CheckForAppUpdatesAsync();
+            _ = CheckForAppUpdatesAsync(userInitiated: false, includeStartupDelay: true);
         }
 
-        private async Task CheckForAppUpdatesAsync()
+        public static Task<string> CheckForUpdatesNowAsync()
         {
-            if (_updateCheckStarted) return;
-            _updateCheckStarted = true;
+            if (Current is App app)
+                return app.CheckForAppUpdatesAsync(userInitiated: true, includeStartupDelay: false);
+
+            return Task.FromResult("Application instance is unavailable.");
+        }
+
+        public static string GetDisplayVersion()
+        {
+            if (Current is App app)
+                return app.ResolveDisplayVersion();
+
+            return AppVersion;
+        }
+
+        private string ResolveDisplayVersion()
+        {
+            try
+            {
+                var source = new GithubSource(GitHubUpdateRepoUrl, accessToken: null, prerelease: false);
+                var updateManager = new UpdateManager(source);
+                var installedVersion = updateManager.CurrentVersion?.ToString();
+                if (!string.IsNullOrWhiteSpace(installedVersion))
+                    return installedVersion;
+            }
+            catch
+            {
+                // Fallback to assembly version when update metadata is unavailable.
+            }
+
+            return AppVersion;
+        }
+
+        private async Task<string> CheckForAppUpdatesAsync(bool userInitiated, bool includeStartupDelay)
+        {
+            if (!userInitiated)
+            {
+                if (_updateCheckStarted)
+                    return "Startup update check already completed.";
+
+                _updateCheckStarted = true;
+            }
+
+            if (!await _updateCheckGate.WaitAsync(0))
+                return "Update check is already running.";
 
             try
             {
-                await Task.Delay(TimeSpan.FromSeconds(8));
+                if (includeStartupDelay)
+                    await Task.Delay(TimeSpan.FromSeconds(8));
 
                 string? githubToken = Environment.GetEnvironmentVariable("SPEAKLY_GITHUB_TOKEN");
                 var source = new GithubSource(GitHubUpdateRepoUrl, githubToken, prerelease: false);
@@ -176,7 +220,7 @@ namespace Speakly
                 if (!updateManager.IsInstalled)
                 {
                     Logger.Log("Skipping update check: app is not running from a Velopack installation.");
-                    return;
+                    return "This build is not installed via Speakly updater yet.";
                 }
 
                 var pending = updateManager.UpdatePendingRestart;
@@ -184,36 +228,45 @@ namespace Speakly
                 {
                     Logger.Log($"Applying pending update {pending.Version}.");
                     updateManager.ApplyUpdatesAndRestart(pending);
-                    return;
+                    return $"Applying pending update {pending.Version}.";
                 }
 
                 var updates = await updateManager.CheckForUpdatesAsync();
                 if (updates == null)
                 {
                     Logger.Log("No app updates found.");
-                    return;
+                    return "You're up to date.";
                 }
 
                 Logger.Log($"Update available: {updates.TargetFullRelease.Version}. Downloading package.");
                 await updateManager.DownloadUpdatesAsync(updates);
 
+                bool applyNow = false;
                 await Dispatcher.InvokeAsync(() =>
                 {
-                    var applyNow = MessageBox.Show(
+                    applyNow = MessageBox.Show(
                         $"Update {updates.TargetFullRelease.Version} is ready. Restart now to apply?",
                         "Speakly Update Ready",
                         MessageBoxButton.YesNo,
-                        MessageBoxImage.Information);
-
-                    if (applyNow == MessageBoxResult.Yes)
-                    {
-                        updateManager.ApplyUpdatesAndRestart(updates.TargetFullRelease);
-                    }
+                        MessageBoxImage.Information) == MessageBoxResult.Yes;
                 });
+
+                if (applyNow)
+                {
+                    updateManager.ApplyUpdatesAndRestart(updates.TargetFullRelease);
+                    return $"Update {updates.TargetFullRelease.Version} is applying now.";
+                }
+
+                return $"Update {updates.TargetFullRelease.Version} downloaded. Restart later to apply.";
             }
             catch (Exception ex)
             {
                 Logger.LogException("CheckForAppUpdatesAsync", ex);
+                return $"Update check failed: {ex.Message}";
+            }
+            finally
+            {
+                _updateCheckGate.Release();
             }
         }
 

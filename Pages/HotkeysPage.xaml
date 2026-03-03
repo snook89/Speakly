@@ -39,19 +39,10 @@
                 </StackPanel>
             </Border>
 
-            <Border Style="{StaticResource SectionCard}">
-                <StackPanel>
-                    <TextBlock Text="Validation" Style="{StaticResource SectionTitle}"/>
-                    <TextBlock x:Name="ValidationText"
-                               Text=""
-                               Foreground="{DynamicResource SystemFillColorCautionBrush}"
-                               Margin="0,0,0,10"/>
-                    <ui:Button Content="Reset Hotkeys to Defaults"
-                               Style="{StaticResource SecondaryButton}"
-                               HorizontalAlignment="Left"
-                               Click="ResetDefaults_Click"/>
-                </StackPanel>
-            </Border>
+            <ui:Button Content="Reset Hotkeys to Defaults"
+                       Style="{StaticResource SecondaryButton}"
+                       HorizontalAlignment="Left"
+                       Click="ResetDefaults_Click"/>
         </StackPanel>
     </ScrollViewer>
 </UserControl>

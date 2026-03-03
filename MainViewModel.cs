@@ -45,7 +45,6 @@ namespace Speakly.ViewModels
         public ICommand RefreshModelsCommand { get; }
         public ICommand SaveCurrentPromptCommand { get; }
         public ICommand DeleteSelectedPromptCommand { get; }
-        public ICommand RecoverOverlayCommand { get; }
         public ICommand RunHealthCheckCommand { get; }
         public ICommand ToggleRefinementQuickCommand { get; }
         public ICommand CycleProfileCommand { get; }
@@ -977,12 +976,6 @@ namespace Speakly.ViewModels
                         ProfileStatusMessage = $"Active profile: {match.Name}";
                     }
                 }
-            });
-
-            RecoverOverlayCommand = new RelayCommand(_ =>
-            {
-                App.SetOverlayVisible(true);
-                App.RecoverOverlayPosition();
             });
 
             RunHealthCheckCommand = new RelayCommand(_ => RunHealthChecks());

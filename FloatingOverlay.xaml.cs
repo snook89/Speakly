@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.Runtime.InteropServices;
+using Microsoft.Win32;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
@@ -17,7 +18,7 @@ namespace Speakly
         private readonly DispatcherTimer _timer = new();
         private readonly DispatcherTimer _waveTimer = new();
         private readonly DispatcherTimer _toastTimer = new();
-        private readonly DispatcherTimer _saveSizeTimer = new();
+        private readonly DispatcherTimer _saveBoundsTimer = new();
         private readonly List<Rectangle> _bars = new();
         private readonly Random _rng = new();
 
@@ -71,23 +72,28 @@ namespace Speakly
                 ToastBorder.Visibility = Visibility.Collapsed;
             };
 
-            // Debounced size persistence — saves 1 s after the user stops resizing
-            _saveSizeTimer.Interval = TimeSpan.FromSeconds(1);
-            _saveSizeTimer.Tick += (_, _) =>
+            // Debounced bounds persistence — saves after drag/resize settles.
+            _saveBoundsTimer.Interval = TimeSpan.FromMilliseconds(500);
+            _saveBoundsTimer.Tick += (_, _) =>
             {
-                _saveSizeTimer.Stop();
-                Config.ConfigManager.Config.OverlayWidth  = Width;
-                Config.ConfigManager.Config.OverlayHeight = Height;
-                Config.ConfigManager.Save();
+                _saveBoundsTimer.Stop();
+                PersistBounds();
             };
-            SizeChanged += (_, _) => { _saveSizeTimer.Stop(); _saveSizeTimer.Start(); };
+            SizeChanged += (_, _) => QueuePersistBounds();
+            LocationChanged += (_, _) => QueuePersistBounds();
 
             BuildWaveBars();
             ApplyVisualState("READY");
             SizeChanged += (_, _) => UpdateResponsiveLayout();
-            Loaded += (_, _) => EnsureVisibleOnScreen();
+            Loaded += (_, _) =>
+            {
+                EnsureVisibleOnScreen();
+                QueuePersistBounds();
+            };
             Container.SizeChanged += (_, _) => UpdateContainerClip();
             Loaded += (_, _) => UpdateContainerClip();
+            SystemEvents.DisplaySettingsChanged += SystemEvents_DisplaySettingsChanged;
+            Closed += FloatingOverlay_Closed;
         }
 
         // ── Responsive label/badge breakpoints ────────────────────────────────
@@ -227,6 +233,37 @@ namespace Speakly
 
         private void FloatingOverlay_Closing(object? sender, CancelEventArgs e)
         {
+            PersistBounds();
+        }
+
+        private void FloatingOverlay_Closed(object? sender, EventArgs e)
+        {
+            SystemEvents.DisplaySettingsChanged -= SystemEvents_DisplaySettingsChanged;
+            _saveBoundsTimer.Stop();
+        }
+
+        private void SystemEvents_DisplaySettingsChanged(object? sender, EventArgs e)
+        {
+            Dispatcher.Invoke(() =>
+            {
+                EnsureVisibleOnScreen();
+                QueuePersistBounds();
+            });
+        }
+
+        private void QueuePersistBounds()
+        {
+            _saveBoundsTimer.Stop();
+            _saveBoundsTimer.Start();
+        }
+
+        private void PersistBounds()
+        {
+            if (!IsFinite(Left) || !IsFinite(Top) || !IsFinite(Width) || !IsFinite(Height))
+            {
+                return;
+            }
+
             Config.ConfigManager.Config.OverlayLeft = Left;
             Config.ConfigManager.Config.OverlayTop = Top;
             Config.ConfigManager.Config.OverlayWidth = Width;
@@ -506,31 +543,138 @@ namespace Speakly
         {
             Dispatcher.Invoke(() =>
             {
-                double screenLeft = SystemParameters.VirtualScreenLeft;
-                double screenTop = SystemParameters.VirtualScreenTop;
-                double screenRight = screenLeft + SystemParameters.VirtualScreenWidth;
-                double screenBottom = screenTop + SystemParameters.VirtualScreenHeight;
-
-                const double visibleMargin = 56;
                 const double minOverlayWidth = 56;
                 const double minOverlayHeight = 40;
+                var workArea = GetNearestMonitorWorkArea();
 
-                if (Width < minOverlayWidth) Width = minOverlayWidth;
-                if (Height < minOverlayHeight) Height = minOverlayHeight;
+                double defaultWidth = IsFinite(ActualWidth) && ActualWidth > 0 ? ActualWidth : 420;
+                double defaultHeight = IsFinite(ActualHeight) && ActualHeight > 0 ? ActualHeight : 96;
 
-                if (Width > SystemParameters.VirtualScreenWidth)
-                    Width = SystemParameters.VirtualScreenWidth;
-                if (Height > SystemParameters.VirtualScreenHeight)
-                    Height = SystemParameters.VirtualScreenHeight;
+                if (!IsFinite(Width) || Width < minOverlayWidth)
+                    Width = Math.Max(minOverlayWidth, defaultWidth);
+                if (!IsFinite(Height) || Height < minOverlayHeight)
+                    Height = Math.Max(minOverlayHeight, defaultHeight);
 
-                double minLeft = screenLeft - Width + visibleMargin;
-                double maxLeft = screenRight - visibleMargin;
-                double minTop = screenTop;
-                double maxTop = screenBottom - visibleMargin;
+                Width = Math.Min(Width, Math.Max(minOverlayWidth, workArea.Width));
+                Height = Math.Min(Height, Math.Max(minOverlayHeight, workArea.Height));
 
-                Left = Math.Max(minLeft, Math.Min(Left, maxLeft));
-                Top = Math.Max(minTop, Math.Min(Top, maxTop));
+                if (!IsFinite(Left) || !IsFinite(Top))
+                {
+                    Left = workArea.Left + (workArea.Width - Width) / 2.0;
+                    Top = workArea.Top + 50;
+                }
+
+                double minLeft = workArea.Left;
+                double maxLeft = Math.Max(minLeft, workArea.Right - Width);
+                double minTop = workArea.Top;
+                double maxTop = Math.Max(minTop, workArea.Bottom - Height);
+
+                Left = Clamp(Left, minLeft, maxLeft);
+                Top = Clamp(Top, minTop, maxTop);
             });
+        }
+
+        private Rect GetNearestMonitorWorkArea()
+        {
+            double virtualLeft = SystemParameters.VirtualScreenLeft;
+            double virtualTop = SystemParameters.VirtualScreenTop;
+            double virtualWidth = Math.Max(1, SystemParameters.VirtualScreenWidth);
+            double virtualHeight = Math.Max(1, SystemParameters.VirtualScreenHeight);
+            var fallback = new Rect(virtualLeft, virtualTop, virtualWidth, virtualHeight);
+
+            if (!IsFinite(Left) || !IsFinite(Top) || !IsFinite(Width) || !IsFinite(Height))
+            {
+                return fallback;
+            }
+
+            var source = PresentationSource.FromVisual(this);
+            if (source?.CompositionTarget == null)
+            {
+                return fallback;
+            }
+
+            var toDevice = source.CompositionTarget.TransformToDevice;
+            var fromDevice = source.CompositionTarget.TransformFromDevice;
+
+            var topLeftPx = toDevice.Transform(new Point(Left, Top));
+            var bottomRightPx = toDevice.Transform(new Point(Left + Width, Top + Height));
+            var windowRectPx = new Rect(
+                Math.Min(topLeftPx.X, bottomRightPx.X),
+                Math.Min(topLeftPx.Y, bottomRightPx.Y),
+                Math.Abs(bottomRightPx.X - topLeftPx.X),
+                Math.Abs(bottomRightPx.Y - topLeftPx.Y));
+
+            if (windowRectPx.Width <= 0 || windowRectPx.Height <= 0)
+            {
+                return fallback;
+            }
+
+            var rect = new RECT
+            {
+                Left = (int)Math.Floor(windowRectPx.Left),
+                Top = (int)Math.Floor(windowRectPx.Top),
+                Right = (int)Math.Ceiling(windowRectPx.Right),
+                Bottom = (int)Math.Ceiling(windowRectPx.Bottom),
+            };
+
+            IntPtr monitor = MonitorFromRect(ref rect, MONITOR_DEFAULTTONEAREST);
+            if (monitor == IntPtr.Zero)
+            {
+                return fallback;
+            }
+
+            var info = new MONITORINFO { cbSize = Marshal.SizeOf<MONITORINFO>() };
+            if (!GetMonitorInfo(monitor, ref info))
+            {
+                return fallback;
+            }
+
+            var workTopLeftDip = fromDevice.Transform(new Point(info.rcWork.Left, info.rcWork.Top));
+            var workBottomRightDip = fromDevice.Transform(new Point(info.rcWork.Right, info.rcWork.Bottom));
+
+            var workRect = new Rect(
+                Math.Min(workTopLeftDip.X, workBottomRightDip.X),
+                Math.Min(workTopLeftDip.Y, workBottomRightDip.Y),
+                Math.Abs(workBottomRightDip.X - workTopLeftDip.X),
+                Math.Abs(workBottomRightDip.Y - workTopLeftDip.Y));
+
+            return workRect.Width > 1 && workRect.Height > 1 ? workRect : fallback;
+        }
+
+        private static bool IsFinite(double value) => !double.IsNaN(value) && !double.IsInfinity(value);
+
+        private static double Clamp(double value, double min, double max)
+        {
+            if (value < min) return min;
+            if (value > max) return max;
+            return value;
+        }
+
+        private const uint MONITOR_DEFAULTTONEAREST = 0x00000002;
+
+        [DllImport("user32.dll")]
+        private static extern IntPtr MonitorFromRect(ref RECT lprc, uint dwFlags);
+
+        [DllImport("user32.dll", CharSet = CharSet.Auto)]
+        [return: MarshalAs(UnmanagedType.Bool)]
+        private static extern bool GetMonitorInfo(IntPtr hMonitor, ref MONITORINFO lpmi);
+
+        [StructLayout(LayoutKind.Sequential)]
+        private struct RECT
+        {
+            public int Left;
+            public int Top;
+            public int Right;
+            public int Bottom;
+        }
+
+        [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Auto)]
+        private struct MONITORINFO
+        {
+            public int cbSize;
+            public RECT rcMonitor;
+            public RECT rcWork;
+            public int dwFlags;
         }
 
         private static int GetResponsiveBarCount(double canvasWidth)

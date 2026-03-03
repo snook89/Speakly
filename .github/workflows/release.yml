@@ -88,16 +88,23 @@ jobs:
 
       - name: Publish Release to GitHub
         shell: pwsh
-        run: >
-          vpk upload github
-          --repoUrl https://github.com/${{ github.repository }}
-          --token ${{ secrets.GITHUB_TOKEN }}
-          --channel win
-          --outputDir .\artifacts\releases
-          --tag ${{ github.ref_name }}
-          --releaseName Speakly v${{ steps.version.outputs.value }}
-          --publish
-          --merge
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $tag = "${{ github.ref_name }}"
+          $releaseName = "Speakly v${{ steps.version.outputs.value }}"
+          $files = Get-ChildItem -Path .\artifacts\releases -File | ForEach-Object { $_.FullName }
+          if ($files.Count -eq 0) {
+            throw "No packaged files found in .\\artifacts\\releases."
+          }
+
+          gh release view $tag --repo "${{ github.repository }}" *> $null
+          if ($LASTEXITCODE -ne 0) {
+            gh release create $tag --repo "${{ github.repository }}" --title $releaseName --generate-notes $files
+          }
+          else {
+            gh release upload $tag $files --repo "${{ github.repository }}" --clobber
+          }
 
       - name: Upload Packaged Artifacts
         uses: actions/upload-artifact@v4

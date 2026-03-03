@@ -68,6 +68,8 @@ namespace Speakly
         private AppProfile? _activeSessionProfile;
         private string _failoverFromProvider = string.Empty;
         private string _failoverToProvider = string.Empty;
+        private string _activeSessionId = string.Empty;
+        private string _activeOperationId = string.Empty;
 
         protected override void OnStartup(StartupEventArgs e)
         {
@@ -133,6 +135,17 @@ namespace Speakly
             }
 
             MainWindow.Show();
+            TelemetryManager.Track(
+                name: "app_start",
+                level: "info",
+                result: "ok",
+                data: new Dictionary<string, string>
+                {
+                    ["version"] = AppVersion,
+                    ["theme"] = ConfigManager.Config.Theme,
+                    ["stt_provider"] = ConfigManager.Config.SttModel,
+                    ["refinement_provider"] = ConfigManager.Config.RefinementModel
+                });
         }
 
         private void InitializeTranscriptionAndRefinement()
@@ -262,6 +275,7 @@ namespace Speakly
                     
                     // Ensure connection is up eventually (though streaming starts immediately via buffer)
                     await connectTask;
+                    TrackSessionEvent("transcriber_connect", result: "ok");
                     return;
                 }
             }
@@ -293,6 +307,7 @@ namespace Speakly
 
                     // Ensure connection is up eventually
                     await connectTask;
+                    TrackSessionEvent("transcriber_connect", result: "ok");
                 }
                 else
                 {
@@ -325,6 +340,7 @@ namespace Speakly
         {
             if (_recorder == null || !TryEnterTranscribing()) return;
             Logger.Log("Stopping recording.");
+            TrackSessionEvent("transcribing_start");
             _overlay?.SetStatus("TRANSCRIBING", Brushes.Yellow);
             _stopSound?.Play();
             _recorder.StopRecording();
@@ -424,6 +440,10 @@ namespace Speakly
         {
             if (!e.IsFinal || string.IsNullOrWhiteSpace(e.Text) || _finalTranscriptionProcessed) return;
             Logger.Log($"App received transcription: isFinal={e.IsFinal}, Text='{e.Text}'");
+            TrackSessionEvent("transcriber_final", data: new Dictionary<string, string>
+            {
+                ["text"] = e.Text
+            });
             await HandleFinalTranscriptionAsync(e.Text, ConfigManager.Config.SttModel, ResolveActiveSttModel());
         }
 
@@ -458,6 +478,14 @@ namespace Speakly
 
             var errorCode = ErrorClassifier.Classify(error);
             Logger.Log($"Transcriber error classified as '{errorCode}': {error}");
+            TrackSessionEvent(
+                name: "transcriber_error",
+                level: "error",
+                success: false,
+                result: "error",
+                errorCode: errorCode,
+                errorClass: errorCode,
+                data: new Dictionary<string, string> { ["error"] = error });
 
             var failoverSucceeded = await TryRunSttFailoverAsync(errorCode);
             if (failoverSucceeded) return;
@@ -478,6 +506,7 @@ namespace Speakly
             if (_refiner != null && ConfigManager.Config.EnableRefinement)
             {
                 SetSessionState(SessionState.Refining);
+                TrackSessionEvent("refiner_start");
                 string activeRefinementModel = ConfigManager.Config.RefinementModel switch
                 {
                     "Cerebras" => ConfigManager.Config.CerebrasRefinementModel,
@@ -502,6 +531,13 @@ namespace Speakly
                 swRefine.Stop();
                 _refineMs = (int)swRefine.ElapsedMilliseconds;
                 Logger.Log($"Refinement complete: '{textToInsert}'");
+                TrackSessionEvent(
+                    name: "refiner_result",
+                    success: !refinementFallbackUsed,
+                    result: refinementFallbackUsed ? "fallback" : "ok",
+                    errorCode: refinementFallbackUsed ? refinementFallbackCode : string.Empty,
+                    errorClass: refinementFallbackUsed ? refinementFallbackCode : string.Empty,
+                    durationMs: _refineMs);
             }
             else
             {
@@ -509,6 +545,7 @@ namespace Speakly
             }
 
             Logger.Log($"Inserting text into window {_lastActiveWindow}: '{textToInsert}'");
+            TrackSessionEvent("insert_attempt");
             var toType = _sessionHasInserted ? " " + textToInsert : textToInsert;
             InsertResult insertResult = new InsertResult { Success = false, Method = "Unknown", ErrorCode = "NotExecuted" };
             await _insertionGate.WaitAsync();
@@ -540,6 +577,14 @@ namespace Speakly
                 Dispatcher.Invoke(() => Clipboard.SetText(fullSessionText));
                 Logger.Log($"Copied full session text to clipboard (length={fullSessionText.Length}).");
             }
+
+            TrackSessionEvent(
+                name: "insert_result",
+                success: insertResult.Success,
+                result: insertResult.Method,
+                errorCode: insertResult.ErrorCode,
+                errorClass: insertResult.ErrorCode,
+                durationMs: _insertMs);
 
             HistoryManager.AddEntry(
                 original: originalText,
@@ -612,6 +657,18 @@ namespace Speakly
             });
 
             _overlay?.SetStatus("READY", Brushes.Aqua);
+            TrackSessionEvent(
+                name: "session_end",
+                result: "success",
+                durationMs: _recordMs + _transcribeMs + _refineMs + _insertMs,
+                data: new Dictionary<string, string>
+                {
+                    ["stt_provider"] = sttProvider,
+                    ["stt_model"] = sttModel,
+                    ["refinement_provider"] = ConfigManager.Config.EnableRefinement ? ConfigManager.Config.RefinementModel : "Disabled",
+                    ["refinement_model"] = ConfigManager.Config.EnableRefinement ? ResolveActiveRefinementModel() : string.Empty,
+                    ["insertion_method"] = insertResult.Method
+                });
             SetSessionState(SessionState.Idle);
         }
 
@@ -632,6 +689,14 @@ namespace Speakly
             _failoverToProvider = fallbackProvider;
             _overlay?.SetStatus($"FAILOVER:{fallbackProvider}", Brushes.Orange);
             Logger.Log($"Attempting STT failover to {fallbackProvider}.");
+            TrackSessionEvent(
+                name: "failover_start",
+                result: "attempt",
+                data: new Dictionary<string, string>
+                {
+                    ["from_provider"] = _failoverFromProvider,
+                    ["to_provider"] = _failoverToProvider
+                });
 
             ITranscriber? fallback = null;
             try
@@ -660,6 +725,10 @@ namespace Speakly
                 if (completed == finalTcs.Task)
                 {
                     var finalText = await finalTcs.Task;
+                    TrackSessionEvent("failover_result", result: "success", data: new Dictionary<string, string>
+                    {
+                        ["provider"] = fallbackProvider
+                    });
                     await HandleFinalTranscriptionAsync(finalText, fallbackProvider, ResolveSttModelForProvider(fallbackProvider));
                     return true;
                 }
@@ -676,6 +745,7 @@ namespace Speakly
                 fallback?.Dispose();
             }
 
+            TrackSessionEvent("failover_result", level: "warning", success: false, result: "failed", errorCode: errorCode, errorClass: errorCode);
             return false;
         }
 
@@ -732,6 +802,20 @@ namespace Speakly
                 MessageBox.Show($"Transcription Error: {error}", "Speakly Error", MessageBoxButton.OK, MessageBoxImage.Error);
             });
 
+            TrackSessionEvent(
+                name: "session_end",
+                level: "error",
+                success: false,
+                result: "failed",
+                errorCode: errorCode,
+                errorClass: errorCode,
+                durationMs: _recordMs + _transcribeMs + _refineMs + _insertMs,
+                data: new Dictionary<string, string>
+                {
+                    ["error"] = error,
+                    ["stt_provider"] = ConfigManager.Config.SttModel,
+                    ["stt_model"] = ResolveActiveSttModel()
+                });
             SetSessionState(SessionState.Idle);
         }
 
@@ -803,6 +887,7 @@ namespace Speakly
 
             _recorder.StartRecording();
             await connectTask;
+            TrackSessionEvent("transcriber_connect", result: "ok");
         }
 
         public async Task StopRecordingFromOverlayAsync()
@@ -823,6 +908,11 @@ namespace Speakly
             _stopSound?.Dispose();
             
             Logger.Log("Application exiting. Forcefully terminating process.");
+            TelemetryManager.Track(
+                name: "app_exit",
+                level: "info",
+                result: "ok",
+                data: new Dictionary<string, string> { ["version"] = AppVersion });
             base.OnExit(e);
             
             // Hard exit to ensure no "ghost" processes remain from background threads or hidden windows
@@ -984,6 +1074,8 @@ namespace Speakly
         {
             _recordingStartedUtc = DateTime.UtcNow;
             _transcribingStartedUtc = _recordingStartedUtc;
+            _activeSessionId = Guid.NewGuid().ToString("N");
+            _activeOperationId = Guid.NewGuid().ToString("N");
             _recordMs = 0;
             _transcribeMs = 0;
             _refineMs = 0;
@@ -996,6 +1088,11 @@ namespace Speakly
             {
                 _sessionAudioChunks.Clear();
             }
+            TrackSessionEvent("session_start", data: new Dictionary<string, string>
+            {
+                ["trigger_provider"] = ConfigManager.Config.SttModel,
+                ["trigger_model"] = ResolveActiveSttModel()
+            });
         }
 
         private void PrepareSessionContext()
@@ -1006,6 +1103,13 @@ namespace Speakly
                 ConfigManager.SetActiveProfile(_activeSessionProfile.Id);
                 ConfigManager.EnsureProfileSyncToLegacyFields(_activeSessionProfile);
                 InitializeTranscriptionAndRefinement();
+                TrackSessionEvent("profile_resolved", data: new Dictionary<string, string>
+                {
+                    ["profile_id"] = _activeSessionProfile.Id,
+                    ["profile_name"] = _activeSessionProfile.Name,
+                    ["stt_provider"] = _activeSessionProfile.SttProvider,
+                    ["refinement_provider"] = _activeSessionProfile.RefinementProvider
+                });
 
                 Dispatcher.Invoke(() =>
                 {
@@ -1078,6 +1182,33 @@ namespace Speakly
             {
                 _sessionState = state;
             }
+            TrackSessionEvent("session_state", data: new Dictionary<string, string>
+            {
+                ["state"] = state.ToString()
+            });
+        }
+
+        private void TrackSessionEvent(
+            string name,
+            string level = "info",
+            bool success = true,
+            string result = "",
+            string errorCode = "",
+            string errorClass = "",
+            int durationMs = 0,
+            Dictionary<string, string>? data = null)
+        {
+            TelemetryManager.Track(
+                name: name,
+                level: level,
+                success: success,
+                result: result,
+                sessionId: _activeSessionId,
+                operationId: _activeOperationId,
+                errorCode: errorCode,
+                errorClass: errorClass,
+                durationMs: durationMs,
+                data: data);
         }
     }
 }

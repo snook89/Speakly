@@ -34,6 +34,7 @@
                                    Style="{StaticResource SecondaryButton}"/>
                         <ui:Button Content="Next profile"
                                    Command="{Binding CycleProfileCommand}"
+                                   IsEnabled="{Binding CanCycleProfile}"
                                    Margin="0,0,8,8"
                                    Style="{StaticResource SecondaryButton}"/>
                     </WrapPanel>
@@ -59,6 +60,7 @@
                     <WrapPanel Margin="0,0,0,10">
                         <ui:Button Content="Next profile"
                                    Command="{Binding CycleProfileCommand}"
+                                   IsEnabled="{Binding CanCycleProfile}"
                                    Margin="0,0,8,8"
                                    Style="{StaticResource SecondaryButton}"/>
                         <ui:Button Content="Save profile"

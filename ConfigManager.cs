@@ -136,6 +136,21 @@ namespace Speakly.Config
         [JsonPropertyName("enable_debug_logs")]
         public bool EnableDebugLogs { get; set; } = false;
 
+        [JsonPropertyName("telemetry_enabled")]
+        public bool TelemetryEnabled { get; set; } = true;
+
+        [JsonPropertyName("telemetry_level")]
+        public string TelemetryLevel { get; set; } = "normal";
+
+        [JsonPropertyName("telemetry_retention_days")]
+        public int TelemetryRetentionDays { get; set; } = 14;
+
+        [JsonPropertyName("telemetry_max_file_mb")]
+        public int TelemetryMaxFileMb { get; set; } = 16;
+
+        [JsonPropertyName("telemetry_redaction_mode")]
+        public string TelemetryRedactionMode { get; set; } = "strict";
+
         [JsonPropertyName("restore_clipboard")]
         public bool RestoreClipboard { get; set; } = true;
         
@@ -458,6 +473,16 @@ namespace Speakly.Config
             config.CerebrasMaxRetries = Math.Clamp(config.CerebrasMaxRetries, 0, 6);
             config.CerebrasRetryBaseDelayMs = Math.Clamp(config.CerebrasRetryBaseDelayMs, 100, 5000);
             config.CerebrasVersionPatch = config.CerebrasVersionPatch?.Trim() ?? string.Empty;
+            config.TelemetryRetentionDays = Math.Clamp(config.TelemetryRetentionDays, 1, 3650);
+            config.TelemetryMaxFileMb = Math.Clamp(config.TelemetryMaxFileMb, 1, 512);
+            config.TelemetryLevel = string.IsNullOrWhiteSpace(config.TelemetryLevel)
+                ? "normal"
+                : config.TelemetryLevel.Trim().ToLowerInvariant();
+            config.TelemetryRedactionMode = string.IsNullOrWhiteSpace(config.TelemetryRedactionMode)
+                ? "strict"
+                : config.TelemetryRedactionMode.Trim().ToLowerInvariant();
+            if (config.TelemetryRedactionMode is not ("strict" or "hash" or "off"))
+                config.TelemetryRedactionMode = "strict";
 
             if (config.Profiles == null)
                 config.Profiles = new List<AppProfile>();

@@ -37,6 +37,14 @@
 
             <Border Style="{StaticResource SectionCard}">
                 <StackPanel>
+                    <TextBlock Text="Telemetry" Style="{StaticResource SectionTitle}"/>
+                    <TextBlock x:Name="TelemetrySummaryText" Style="{StaticResource HintText}"/>
+                    <TextBlock x:Name="TelemetrySessionText" Style="{StaticResource HintText}" Margin="0,6,0,0"/>
+                </StackPanel>
+            </Border>
+
+            <Border Style="{StaticResource SectionCard}">
+                <StackPanel>
                     <TextBlock Text="Provider Breakdown" Style="{StaticResource SectionTitle}"/>
                     <ListView x:Name="ProviderList"
                               BorderThickness="0"

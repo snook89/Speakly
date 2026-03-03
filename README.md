@@ -21,6 +21,21 @@ Built with WPF on .NET 9.
 - History and statistics pages with latency, success/failure, and failover data.
 - Health checks for startup readiness (keys, devices, hotkeys, failover).
 - Primary `SendInput` text insertion with clipboard fallback for reliability.
+- Structured local telemetry events with correlation IDs and configurable redaction.
+- GitHub Actions CI pipeline with automated build + unit tests + coverage gate.
+
+## Quality and Observability
+
+- Unit-test project: `Speakly.Tests.Unit`.
+- CI workflow: `.github/workflows/ci.yml`.
+- Telemetry controls available in `General`:
+  - `Enable Local Telemetry`
+  - `Telemetry Level` (`minimal` / `normal` / `verbose`)
+  - `Redaction Mode` (`strict` / `hash` / `off`)
+  - Retention days and max file size
+- Telemetry storage path:
+  - `%AppData%\Speakly\Telemetry\telemetry_events*.jsonl`
+- The Statistics page now includes telemetry event/error/session summary.
 
 ## Provider Support
 

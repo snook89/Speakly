@@ -169,6 +169,18 @@ namespace Speakly.ViewModels
             "Forest",
             "Ember"
         };
+        public ObservableCollection<string> AvailableTelemetryLevels { get; } = new ObservableCollection<string>
+        {
+            "minimal",
+            "normal",
+            "verbose"
+        };
+        public ObservableCollection<string> AvailableTelemetryRedactionModes { get; } = new ObservableCollection<string>
+        {
+            "strict",
+            "hash",
+            "off"
+        };
 
         public ObservableCollection<string> AvailableSttModels { get; } = new ObservableCollection<string>();
         public ObservableCollection<string> AvailableRefinementModels { get; } = new ObservableCollection<string>();
@@ -402,6 +414,58 @@ namespace Speakly.ViewModels
             set { ConfigManager.Config.SaveDebugRecords = value; OnPropertyChanged(); }
         }
 
+        public bool TelemetryEnabled
+        {
+            get => ConfigManager.Config.TelemetryEnabled;
+            set { ConfigManager.Config.TelemetryEnabled = value; OnPropertyChanged(); }
+        }
+
+        public string TelemetryLevel
+        {
+            get => ConfigManager.Config.TelemetryLevel;
+            set
+            {
+                var normalized = value?.Trim().ToLowerInvariant();
+                if (string.IsNullOrWhiteSpace(normalized)) normalized = "normal";
+                if (!AvailableTelemetryLevels.Contains(normalized)) normalized = "normal";
+                ConfigManager.Config.TelemetryLevel = normalized;
+                OnPropertyChanged();
+            }
+        }
+
+        public int TelemetryRetentionDays
+        {
+            get => ConfigManager.Config.TelemetryRetentionDays;
+            set
+            {
+                ConfigManager.Config.TelemetryRetentionDays = Math.Clamp(value, 1, 3650);
+                OnPropertyChanged();
+            }
+        }
+
+        public int TelemetryMaxFileMb
+        {
+            get => ConfigManager.Config.TelemetryMaxFileMb;
+            set
+            {
+                ConfigManager.Config.TelemetryMaxFileMb = Math.Clamp(value, 1, 512);
+                OnPropertyChanged();
+            }
+        }
+
+        public string TelemetryRedactionMode
+        {
+            get => ConfigManager.Config.TelemetryRedactionMode;
+            set
+            {
+                var normalized = value?.Trim().ToLowerInvariant();
+                if (string.IsNullOrWhiteSpace(normalized)) normalized = "strict";
+                if (!AvailableTelemetryRedactionModes.Contains(normalized)) normalized = "strict";
+                ConfigManager.Config.TelemetryRedactionMode = normalized;
+                OnPropertyChanged();
+            }
+        }
+
         public bool EnableRefinement
         {
             get => ConfigManager.Config.EnableRefinement;
@@ -447,10 +511,19 @@ namespace Speakly.ViewModels
                     RefreshFromConfig();
                     LoadProfileEditorFields(value);
                     ProfileStatusMessage = $"Active profile: {value.Name}";
+                    TelemetryManager.Track(
+                        name: "profile_switch",
+                        result: "ok",
+                        data: new Dictionary<string, string>
+                        {
+                            ["profile_id"] = value.Id,
+                            ["profile_name"] = value.Name
+                        });
                 }
                 OnPropertyChanged();
                 OnPropertyChanged(nameof(ActiveProfileName));
                 OnPropertyChanged(nameof(CanDeleteSelectedProfile));
+                OnPropertyChanged(nameof(CanCycleProfile));
             }
         }
 
@@ -500,6 +573,7 @@ namespace Speakly.ViewModels
         }
 
         public bool CanDeleteSelectedProfile => Profiles.Count > 1 && SelectedProfile != null;
+        public bool CanCycleProfile => Profiles.Count > 1;
 
         // ── Prompt Library ────────────────────────────────────────────────────
 
@@ -550,6 +624,8 @@ namespace Speakly.ViewModels
             var active = ConfigManager.GetActiveProfile();
             SelectedProfile = Profiles.FirstOrDefault(p => string.Equals(p.Id, active.Id, StringComparison.OrdinalIgnoreCase))
                               ?? Profiles.FirstOrDefault();
+            OnPropertyChanged(nameof(CanDeleteSelectedProfile));
+            OnPropertyChanged(nameof(CanCycleProfile));
         }
 
         private void ReloadProfiles(string? selectedProfileId = null)
@@ -567,6 +643,8 @@ namespace Speakly.ViewModels
             SelectedProfile = Profiles.FirstOrDefault(p => string.Equals(p.Id, targetId, StringComparison.OrdinalIgnoreCase))
                               ?? Profiles.FirstOrDefault();
             OnPropertyChanged(nameof(CanDeleteSelectedProfile));
+            OnPropertyChanged(nameof(CanCycleProfile));
+            CommandManager.InvalidateRequerySuggested();
         }
 
         private static string BuildProfileProcessDisplay(AppProfile profile)
@@ -609,6 +687,7 @@ namespace Speakly.ViewModels
             if (Profiles.Count == 1)
             {
                 ProfileStatusMessage = "Only one profile exists. Create another profile to cycle.";
+                TelemetryManager.Track("profile_cycle", level: "warning", success: false, result: "single_profile");
                 return;
             }
 
@@ -617,6 +696,14 @@ namespace Speakly.ViewModels
             int next = (index + 1) % Profiles.Count;
             SelectedProfile = Profiles[next];
             ProfileStatusMessage = $"Active profile: {SelectedProfile?.Name ?? "Default"}";
+            TelemetryManager.Track(
+                name: "profile_cycle",
+                result: "ok",
+                data: new Dictionary<string, string>
+                {
+                    ["profile_id"] = SelectedProfile?.Id ?? string.Empty,
+                    ["profile_name"] = SelectedProfile?.Name ?? string.Empty
+                });
         }
 
         private void CreateProfile()
@@ -658,6 +745,14 @@ namespace Speakly.ViewModels
             ReloadProfiles(newProfile.Id);
             ConfigManager.SaveDebounced();
             ProfileStatusMessage = $"Created profile \"{newProfile.Name}\".";
+            TelemetryManager.Track(
+                name: "profile_create",
+                result: "ok",
+                data: new Dictionary<string, string>
+                {
+                    ["profile_id"] = newProfile.Id,
+                    ["profile_name"] = newProfile.Name
+                });
         }
 
         private void SaveProfile()
@@ -668,6 +763,7 @@ namespace Speakly.ViewModels
             if (string.IsNullOrWhiteSpace(proposedName))
             {
                 ProfileStatusMessage = "Profile name cannot be empty.";
+                TelemetryManager.Track("profile_save", level: "warning", success: false, result: "empty_name");
                 return;
             }
 
@@ -677,6 +773,7 @@ namespace Speakly.ViewModels
             if (duplicateName)
             {
                 ProfileStatusMessage = $"Another profile already uses \"{proposedName}\".";
+                TelemetryManager.Track("profile_save", level: "warning", success: false, result: "duplicate_name");
                 return;
             }
 
@@ -695,6 +792,15 @@ namespace Speakly.ViewModels
             var selectedId = SelectedProfile.Id;
             ReloadProfiles(selectedId);
             ProfileStatusMessage = $"Saved profile \"{proposedName}\" ({parsedProcesses.Count} process mapping(s)).";
+            TelemetryManager.Track(
+                name: "profile_save",
+                result: "ok",
+                data: new Dictionary<string, string>
+                {
+                    ["profile_id"] = selectedId,
+                    ["profile_name"] = proposedName,
+                    ["mapped_process_count"] = parsedProcesses.Count.ToString()
+                });
         }
 
         private void DeleteSelectedProfile()
@@ -721,6 +827,14 @@ namespace Speakly.ViewModels
 
             ReloadProfiles(nextProfile.Id);
             ProfileStatusMessage = $"Deleted profile \"{deletedName}\".";
+            TelemetryManager.Track(
+                name: "profile_delete",
+                result: "ok",
+                data: new Dictionary<string, string>
+                {
+                    ["profile_id"] = deletedId,
+                    ["profile_name"] = deletedName
+                });
         }
 
         private void RefreshFromConfig()
@@ -838,7 +952,7 @@ namespace Speakly.ViewModels
                 EnableRefinement = !EnableRefinement;
             });
 
-            CycleProfileCommand = new RelayCommand(_ => CycleProfile());
+            CycleProfileCommand = new RelayCommand(_ => CycleProfile(), _ => CanCycleProfile);
 
             CreateProfileCommand = new RelayCommand(
                 _ => CreateProfile(),
@@ -1627,6 +1741,17 @@ namespace Speakly.ViewModels
 
             ApiTestStatus = sb.ToString();
             ApiTestCompleted?.Invoke(dg, oa, cr, or);
+            TelemetryManager.Track(
+                name: "api_test",
+                level: "info",
+                result: "completed",
+                data: new Dictionary<string, string>
+                {
+                    ["deepgram_result"] = dg,
+                    ["openai_result"] = oa,
+                    ["cerebras_result"] = cr,
+                    ["openrouter_result"] = or
+                });
             ApiTestStatus = "Ready";
         }
 
@@ -1665,6 +1790,11 @@ namespace Speakly.ViewModels
             var result = HealthCheckService.Run(ConfigManager.Config);
             HealthSummary = result.Summary;
             HealthDetails = result.Details;
+            TelemetryManager.Track(
+                name: "healthcheck_run",
+                level: result.HasIssues ? "warning" : "info",
+                success: !result.HasIssues,
+                result: result.HasIssues ? "issues_detected" : "healthy");
         }
 
         protected void OnPropertyChanged([CallerMemberName] string? name = null)

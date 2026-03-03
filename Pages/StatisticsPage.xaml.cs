@@ -49,6 +49,12 @@ namespace Speakly.Pages
                 ? "No errors in selected range."
                 : string.Join(" | ", summary.ErrorCounts.Select(kv => $"{kv.Key}: {kv.Value}"));
 
+            var telemetrySummary = TelemetryManager.GetSummary(days);
+            TelemetrySummaryText.Text =
+                $"Events: {telemetrySummary.TotalEvents} | Errors: {telemetrySummary.ErrorEvents} | Error rate: {telemetrySummary.ErrorRatePercent:0.0}%";
+            TelemetrySessionText.Text =
+                $"Sessions started: {telemetrySummary.SessionStarts} | Sessions ended: {telemetrySummary.SessionEnds}";
+
             var rows = summary.ByProvider
                 .Select(x => new ProviderRow
                 {

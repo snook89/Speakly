@@ -45,6 +45,41 @@
                     <TextBlock Text="{Binding LastInsertionMethod, StringFormat=Method: {0}}" Style="{StaticResource HintText}"/>
                 </StackPanel>
             </Border>
+
+            <Border Style="{StaticResource SectionCard}">
+                <StackPanel>
+                    <TextBlock Text="Telemetry" Style="{StaticResource SectionTitle}"/>
+                    <ui:ToggleSwitch Content="Enable Local Telemetry" IsChecked="{Binding TelemetryEnabled}" Margin="0,0,0,10"/>
+                    <TextBlock Text="Telemetry Level" Style="{StaticResource FieldLabel}"/>
+                    <ComboBox ItemsSource="{Binding AvailableTelemetryLevels}"
+                              SelectedItem="{Binding TelemetryLevel}"
+                              Margin="0,0,0,10"
+                              MaxWidth="240"
+                              HorizontalAlignment="Left"/>
+                    <TextBlock Text="Redaction Mode" Style="{StaticResource FieldLabel}"/>
+                    <ComboBox ItemsSource="{Binding AvailableTelemetryRedactionModes}"
+                              SelectedItem="{Binding TelemetryRedactionMode}"
+                              Margin="0,0,0,10"
+                              MaxWidth="240"
+                              HorizontalAlignment="Left"/>
+
+                    <Grid Margin="0,0,0,6">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="120"/>
+                            <ColumnDefinition Width="24"/>
+                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="120"/>
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Grid.Column="0" Text="Retention (days)" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                        <TextBox Grid.Column="1" Text="{Binding TelemetryRetentionDays, UpdateSourceTrigger=LostFocus}" VerticalAlignment="Center"/>
+                        <TextBlock Grid.Column="3" Text="Max file (MB)" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                        <TextBox Grid.Column="4" Text="{Binding TelemetryMaxFileMb, UpdateSourceTrigger=LostFocus}" VerticalAlignment="Center"/>
+                    </Grid>
+
+                    <TextBlock Text="Telemetry is stored locally only and is redacted by default." Style="{StaticResource HintText}"/>
+                </StackPanel>
+            </Border>
         </StackPanel>
     </ScrollViewer>
 </UserControl>

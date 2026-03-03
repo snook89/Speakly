@@ -56,6 +56,8 @@ namespace Speakly
         private DateTime _overlayLastActivityUtc = DateTime.UtcNow;
         private bool _overlayHiddenByIdle;
         private static readonly TimeSpan OverlayIdleHideAfter = TimeSpan.FromSeconds(90);
+        private static readonly TimeSpan PostStopFinalResultGrace = TimeSpan.FromMilliseconds(350);
+        private const string NoFinalResultErrorCode = "stt_no_final_result";
         private IntPtr _lastActiveWindow = IntPtr.Zero;
         private System.IO.MemoryStream? _audioBuffer; // For debug records
         // Serializes text insertions: only one InsertText may run at a time to prevent
@@ -669,10 +671,55 @@ namespace Speakly
                     _audioBuffer = null;
                 }
 
-                // Do NOT set READY here – OnTranscriptionReceived handles the final READY
-                // state (and toast). Setting it here would cause RECORDING→TRANSCRIBING→READY
-                // to fire before REFINING, producing the wrong sequence.
+                // Normally OnTranscriptionReceived/OnTranscriberError finishes the session.
+                // If provider callbacks never arrive, force-recover so hotkeys don't deadlock.
+                await RecoverIfNoFinalResultAsync();
             }
+        }
+
+        private async Task RecoverIfNoFinalResultAsync()
+        {
+            await Task.Delay(PostStopFinalResultGrace);
+            if (_finalTranscriptionProcessed)
+            {
+                return;
+            }
+
+            SessionState snapshot;
+            lock (_sessionLock)
+            {
+                snapshot = _sessionState;
+            }
+
+            if (snapshot is not (SessionState.Transcribing or SessionState.Refining))
+            {
+                return;
+            }
+
+            Logger.Log("No final transcription callback received after stop; forcing session recovery.");
+            TrackSessionEvent(
+                name: "session_end",
+                level: "warning",
+                success: false,
+                result: "no_final_result",
+                errorCode: NoFinalResultErrorCode,
+                errorClass: NoFinalResultErrorCode,
+                durationMs: _recordMs + _transcribeMs + _refineMs + _insertMs,
+                data: new Dictionary<string, string>
+                {
+                    ["stt_provider"] = ConfigManager.Config.SttModel,
+                    ["stt_model"] = ResolveActiveSttModel()
+                });
+
+            Dispatcher.Invoke(() =>
+            {
+                var vm = MainWindow.DataContext as MainViewModel;
+                vm?.SetLastInsertionStatus("N/A", false, NoFinalResultErrorCode);
+            });
+
+            _overlay?.SetStatus("READY", Brushes.Aqua);
+            MarkOverlayActivity(showOverlayIfNeeded: false);
+            SetSessionState(SessionState.Idle);
         }
 
         private void SaveDebugRecord()

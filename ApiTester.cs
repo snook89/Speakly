@@ -11,17 +11,35 @@ namespace Speakly.Services
     {
         private static readonly HttpClient _client = new HttpClient();
 
-        public static async Task<string> TestDeepgramAsync(string apiKey)
+        public static async Task<string> TestDeepgramAsync(string apiKey, string? baseUrl = null)
         {
             if (string.IsNullOrWhiteSpace(apiKey)) return "FAIL: No API Key provided";
             try
             {
-                var request = new HttpRequestMessage(HttpMethod.Get, "https://api.deepgram.com/v1/projects");
+                var normalizedBase = NormalizeHttpBaseUrl(baseUrl, "https://api.deepgram.com");
+                var request = new HttpRequestMessage(HttpMethod.Get, $"{normalizedBase}/v1/projects");
                 request.Headers.Add("Authorization", $"Token {apiKey}");
                 var response = await _client.SendAsync(request);
                 return response.IsSuccessStatusCode ? "OK: Connection Successful" : $"FAIL: {response.StatusCode}";
             }
             catch (Exception ex) { return $"FAIL: {ex.Message}"; }
+        }
+
+        private static string NormalizeHttpBaseUrl(string? baseUrl, string fallback)
+        {
+            var normalized = baseUrl?.Trim();
+            if (string.IsNullOrWhiteSpace(normalized))
+            {
+                normalized = fallback;
+            }
+
+            if (!normalized.StartsWith("https://", StringComparison.OrdinalIgnoreCase) &&
+                !normalized.StartsWith("http://", StringComparison.OrdinalIgnoreCase))
+            {
+                normalized = "https://" + normalized;
+            }
+
+            return normalized.TrimEnd('/');
         }
 
         public static async Task<string> TestOpenAIAsync(string apiKey)

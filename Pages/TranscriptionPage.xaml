@@ -21,6 +21,15 @@
                     <TextBlock Text="Language (ISO code)" Style="{StaticResource FieldLabel}"/>
                     <ui:TextBox Text="{Binding Language}" Margin="0,0,0,4" MaxWidth="300" HorizontalAlignment="Left"/>
                     <TextBlock Text="Examples: en, uk, es. Use layout to follow the keyboard layout. Use multi for multilingual mode." Style="{StaticResource HintText}" Margin="0,0,0,14"/>
+                    <ui:InfoBar Title="Deepgram language warning"
+                                Message="{Binding DeepgramLanguageGuardMessage}"
+                                Severity="Warning"
+                                IsOpen="{Binding HasDeepgramLanguageGuard}"
+                                Margin="0,0,0,14"/>
+
+                    <TextBlock Text="Deepgram API Base URL" Style="{StaticResource FieldLabel}"/>
+                    <ui:TextBox Text="{Binding DeepgramApiBaseUrl}" Margin="0,0,0,4" MaxWidth="520" HorizontalAlignment="Left"/>
+                    <TextBlock Text="Default: https://api.deepgram.com. For EU use https://api.eu.deepgram.com, or set your dedicated/self-hosted endpoint." Style="{StaticResource HintText}" Margin="0,0,0,14"/>
 
                     <TextBlock Text="Target Model" Style="{StaticResource FieldLabel}"/>
                     <Grid x:Name="ModelRow">

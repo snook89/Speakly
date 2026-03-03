@@ -81,6 +81,9 @@ namespace Speakly.Config
         [JsonPropertyName("deepgram_model")]
         public string DeepgramModel { get; set; } = "nova-2";
 
+        [JsonPropertyName("deepgram_api_base_url")]
+        public string DeepgramApiBaseUrl { get; set; } = "https://api.deepgram.com";
+
         [JsonPropertyName("openai_stt_model")]
         public string OpenAISttModel { get; set; } = "whisper-1";
 

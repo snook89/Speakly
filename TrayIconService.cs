@@ -18,6 +18,7 @@ namespace Speakly.Services
         private TaskbarIcon _notifyIcon;
         private Window _mainWindow;
         private ContextMenu _contextMenu;
+        private MenuItem _profilesMenu = null!;
 
         public TrayIconService(Window mainWindow)
         {
@@ -50,20 +51,14 @@ namespace Speakly.Services
             toggleRefinement.Click += (_, _) => App.ViewModel.ToggleRefinementQuickCommand.Execute(null);
 
             MenuItem nextProfile = new MenuItem { Header = "Next Profile" };
-            nextProfile.Click += (_, _) => App.ViewModel.CycleProfileCommand.Execute(null);
-
-            var profilesMenu = new MenuItem { Header = "Profiles" };
-            foreach (var profile in App.ViewModel.Profiles)
+            nextProfile.Click += (_, _) =>
             {
-                var item = new MenuItem { Header = profile.Name, Tag = profile.Id, IsCheckable = true };
-                item.Click += (_, _) =>
-                {
-                    App.ViewModel.SetProfileByIdCommand.Execute(item.Tag?.ToString());
-                    RefreshProfileChecks(profilesMenu);
-                };
-                profilesMenu.Items.Add(item);
-            }
-            RefreshProfileChecks(profilesMenu);
+                App.ViewModel.CycleProfileCommand.Execute(null);
+                RefreshProfileChecks(_profilesMenu);
+            };
+
+            _profilesMenu = new MenuItem { Header = "Profiles" };
+            RebuildProfilesMenu();
             
             MenuItem exitItem = new MenuItem { Header = "Exit" };
             exitItem.Click += OnExitClick;
@@ -72,7 +67,7 @@ namespace Speakly.Services
             _contextMenu.Items.Add(showOverlayItem);
             _contextMenu.Items.Add(toggleRefinement);
             _contextMenu.Items.Add(nextProfile);
-            _contextMenu.Items.Add(profilesMenu);
+            _contextMenu.Items.Add(_profilesMenu);
             _contextMenu.Items.Add(new Separator());
             _contextMenu.Items.Add(exitItem);
 
@@ -93,6 +88,7 @@ namespace Speakly.Services
             // positions it in the screen corner instead of near the cursor.
             var hwnd = new WindowInteropHelper(_mainWindow).Handle;
             SetForegroundWindow(hwnd);
+            RebuildProfilesMenu();
             _contextMenu.IsOpen = true;
         }
         
@@ -150,6 +146,23 @@ namespace Speakly.Services
         public void Dispose()
         {
             _notifyIcon?.Dispose();
+        }
+
+        private void RebuildProfilesMenu()
+        {
+            _profilesMenu.Items.Clear();
+            foreach (var profile in App.ViewModel.Profiles)
+            {
+                var item = new MenuItem { Header = profile.Name, Tag = profile.Id, IsCheckable = true };
+                item.Click += (_, _) =>
+                {
+                    App.ViewModel.SetProfileByIdCommand.Execute(item.Tag?.ToString());
+                    RefreshProfileChecks(_profilesMenu);
+                };
+                _profilesMenu.Items.Add(item);
+            }
+
+            RefreshProfileChecks(_profilesMenu);
         }
 
         private static void RefreshProfileChecks(MenuItem profilesMenu)

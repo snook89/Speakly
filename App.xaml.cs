@@ -407,7 +407,7 @@ namespace Speakly
                 _overlay?.UpdateAudioLevel(Math.Min(rms * 12f, 1f));
             }
 
-            if (_transcriber != null && _transcriber.IsConnected)
+            if (_transcriber != null)
             {
                 await _transcriber.SendAudioAsync(data);
             }

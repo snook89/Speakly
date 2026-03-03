@@ -30,6 +30,14 @@ namespace Speakly.ViewModels
         private string _lastInsertionStatus = "No insertion yet";
         private string _healthSummary = "Health checks not run yet.";
         private string _healthDetails = string.Empty;
+        private string _newProfileName = string.Empty;
+        private string _profileDraftName = string.Empty;
+        private string _profileProcessNamesInput = string.Empty;
+        private string _profileStatusMessage = "Tip: create additional profiles and map them to process names (for example: code, notepad).";
+        private static readonly string[] DeepgramMultilingualCodes =
+        {
+            "en", "es", "fr", "de", "hi", "ru", "pt", "ja", "it", "nl"
+        };
 
         public event Action<string, string, string, string>? ApiTestCompleted;
         public event Action<bool>? RefreshModelsCompleted;
@@ -42,6 +50,9 @@ namespace Speakly.ViewModels
         public ICommand ToggleRefinementQuickCommand { get; }
         public ICommand CycleProfileCommand { get; }
         public ICommand SetProfileByIdCommand { get; }
+        public ICommand CreateProfileCommand { get; }
+        public ICommand SaveProfileCommand { get; }
+        public ICommand DeleteProfileCommand { get; }
 
         public bool IsRefreshingModels
         {
@@ -139,6 +150,7 @@ namespace Speakly.ViewModels
                 SyncActiveProfileFromLegacy();
                 OnPropertyChanged(); 
                 OnPropertyChanged(nameof(SelectedSttModelString));
+                NotifyDeepgramLanguageGuardChanged();
             }
         }
 
@@ -184,6 +196,7 @@ namespace Speakly.ViewModels
                 else if (SttModel == "OpenRouter") ConfigManager.Config.OpenRouterSttModel = normalized;
                 SyncActiveProfileFromLegacy();
                 OnPropertyChanged();
+                NotifyDeepgramLanguageGuardChanged();
             }
         }
 
@@ -223,6 +236,16 @@ namespace Speakly.ViewModels
         {
             get => ConfigManager.Config.DeepgramApiKey;
             set { ConfigManager.Config.DeepgramApiKey = value; OnPropertyChanged(); }
+        }
+
+        public string DeepgramApiBaseUrl
+        {
+            get => ConfigManager.Config.DeepgramApiBaseUrl;
+            set
+            {
+                ConfigManager.Config.DeepgramApiBaseUrl = NormalizeDeepgramApiBaseUrl(value);
+                OnPropertyChanged();
+            }
         }
 
         public string OpenAIApiKey
@@ -340,8 +363,18 @@ namespace Speakly.ViewModels
         public string Language
         {
             get => ConfigManager.Config.Language;
-            set { ConfigManager.Config.Language = value; SyncActiveProfileFromLegacy(); OnPropertyChanged(); }
+            set
+            {
+                ConfigManager.Config.Language = value;
+                SyncActiveProfileFromLegacy();
+                OnPropertyChanged();
+                NotifyDeepgramLanguageGuardChanged();
+            }
         }
+
+        public string DeepgramLanguageGuardMessage => BuildDeepgramLanguageGuardMessage();
+
+        public bool HasDeepgramLanguageGuard => !string.IsNullOrWhiteSpace(DeepgramLanguageGuardMessage);
 
         public ObservableCollection<HistoryEntry> HistoryEntries { get; } = new ObservableCollection<HistoryEntry>();
         public ObservableCollection<AppProfile> Profiles { get; } = new ObservableCollection<AppProfile>();
@@ -358,13 +391,61 @@ namespace Speakly.ViewModels
                     ConfigManager.SetActiveProfile(value.Id);
                     ApplyProfileToLegacyConfig(value);
                     RefreshFromConfig();
+                    LoadProfileEditorFields(value);
+                    ProfileStatusMessage = $"Active profile: {value.Name}";
                 }
                 OnPropertyChanged();
                 OnPropertyChanged(nameof(ActiveProfileName));
+                OnPropertyChanged(nameof(CanDeleteSelectedProfile));
             }
         }
 
         public string ActiveProfileName => SelectedProfile?.Name ?? "Default";
+
+        public string NewProfileName
+        {
+            get => _newProfileName;
+            set
+            {
+                _newProfileName = value;
+                OnPropertyChanged();
+                CommandManager.InvalidateRequerySuggested();
+            }
+        }
+
+        public string ProfileDraftName
+        {
+            get => _profileDraftName;
+            set
+            {
+                _profileDraftName = value;
+                OnPropertyChanged();
+                CommandManager.InvalidateRequerySuggested();
+            }
+        }
+
+        public string ProfileProcessNamesInput
+        {
+            get => _profileProcessNamesInput;
+            set
+            {
+                _profileProcessNamesInput = value;
+                OnPropertyChanged();
+                CommandManager.InvalidateRequerySuggested();
+            }
+        }
+
+        public string ProfileStatusMessage
+        {
+            get => _profileStatusMessage;
+            private set
+            {
+                _profileStatusMessage = value;
+                OnPropertyChanged();
+            }
+        }
+
+        public bool CanDeleteSelectedProfile => Profiles.Count > 1 && SelectedProfile != null;
 
         // ── Prompt Library ────────────────────────────────────────────────────
 
@@ -417,6 +498,35 @@ namespace Speakly.ViewModels
                               ?? Profiles.FirstOrDefault();
         }
 
+        private void ReloadProfiles(string? selectedProfileId = null)
+        {
+            Profiles.Clear();
+            foreach (var profile in ConfigManager.Config.Profiles)
+            {
+                Profiles.Add(profile);
+            }
+
+            var targetId = string.IsNullOrWhiteSpace(selectedProfileId)
+                ? ConfigManager.Config.ActiveProfileId
+                : selectedProfileId.Trim();
+
+            SelectedProfile = Profiles.FirstOrDefault(p => string.Equals(p.Id, targetId, StringComparison.OrdinalIgnoreCase))
+                              ?? Profiles.FirstOrDefault();
+            OnPropertyChanged(nameof(CanDeleteSelectedProfile));
+        }
+
+        private static string BuildProfileProcessDisplay(AppProfile profile)
+        {
+            if (profile.ProcessNames.Count == 0) return string.Empty;
+            return string.Join(", ", profile.ProcessNames);
+        }
+
+        private void LoadProfileEditorFields(AppProfile profile)
+        {
+            ProfileDraftName = profile.Name;
+            ProfileProcessNamesInput = BuildProfileProcessDisplay(profile);
+        }
+
         private void ApplyProfileToLegacyConfig(AppProfile profile)
         {
             ConfigManager.EnsureProfileSyncToLegacyFields(profile);
@@ -442,10 +552,121 @@ namespace Speakly.ViewModels
         private void CycleProfile()
         {
             if (Profiles.Count == 0) return;
+            if (Profiles.Count == 1)
+            {
+                ProfileStatusMessage = "Only one profile exists. Create another profile to cycle.";
+                return;
+            }
+
             int index = SelectedProfile == null ? 0 : Profiles.IndexOf(SelectedProfile);
             if (index < 0) index = 0;
             int next = (index + 1) % Profiles.Count;
             SelectedProfile = Profiles[next];
+            ProfileStatusMessage = $"Active profile: {SelectedProfile?.Name ?? "Default"}";
+        }
+
+        private void CreateProfile()
+        {
+            var baseProfile = SelectedProfile ?? ConfigManager.GetActiveProfile();
+            var requestedName = NewProfileName?.Trim();
+
+            var profileName = string.IsNullOrWhiteSpace(requestedName)
+                ? $"Profile {Profiles.Count + 1}"
+                : requestedName;
+
+            if (ConfigManager.Config.Profiles.Any(p => string.Equals(p.Name, profileName, StringComparison.OrdinalIgnoreCase)))
+            {
+                ProfileStatusMessage = $"Profile \"{profileName}\" already exists.";
+                return;
+            }
+
+            var newProfile = new AppProfile
+            {
+                Id = Guid.NewGuid().ToString("N"),
+                Name = profileName,
+                ProcessNames = new List<string>(),
+                SttProvider = baseProfile.SttProvider,
+                SttModel = baseProfile.SttModel,
+                RefinementEnabled = baseProfile.RefinementEnabled,
+                RefinementProvider = baseProfile.RefinementProvider,
+                RefinementModel = baseProfile.RefinementModel,
+                RefinementPrompt = baseProfile.RefinementPrompt,
+                Language = baseProfile.Language,
+                CopyToClipboard = baseProfile.CopyToClipboard,
+                EnableSttFailover = baseProfile.EnableSttFailover,
+                SttFailoverOrder = baseProfile.SttFailoverOrder.ToList()
+            };
+
+            ConfigManager.Config.Profiles.Add(newProfile);
+            ConfigManager.Config.ActiveProfileId = newProfile.Id;
+            NewProfileName = string.Empty;
+
+            ReloadProfiles(newProfile.Id);
+            ConfigManager.SaveDebounced();
+            ProfileStatusMessage = $"Created profile \"{newProfile.Name}\".";
+        }
+
+        private void SaveProfile()
+        {
+            if (SelectedProfile == null) return;
+
+            var proposedName = ProfileDraftName?.Trim();
+            if (string.IsNullOrWhiteSpace(proposedName))
+            {
+                ProfileStatusMessage = "Profile name cannot be empty.";
+                return;
+            }
+
+            bool duplicateName = ConfigManager.Config.Profiles.Any(p =>
+                !string.Equals(p.Id, SelectedProfile.Id, StringComparison.OrdinalIgnoreCase) &&
+                string.Equals(p.Name, proposedName, StringComparison.OrdinalIgnoreCase));
+            if (duplicateName)
+            {
+                ProfileStatusMessage = $"Another profile already uses \"{proposedName}\".";
+                return;
+            }
+
+            var parsedProcesses = (ProfileProcessNamesInput ?? string.Empty)
+                .Split(new[] { ',', ';', '\r', '\n', '\t' }, StringSplitOptions.RemoveEmptyEntries)
+                .Select(ProfileHelpers.NormalizeProcessName)
+                .Where(x => !string.IsNullOrWhiteSpace(x))
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToList();
+
+            SelectedProfile.Name = proposedName;
+            SelectedProfile.ProcessNames = parsedProcesses;
+            ConfigManager.SetActiveProfile(SelectedProfile.Id);
+            ConfigManager.SaveDebounced();
+
+            var selectedId = SelectedProfile.Id;
+            ReloadProfiles(selectedId);
+            ProfileStatusMessage = $"Saved profile \"{proposedName}\" ({parsedProcesses.Count} process mapping(s)).";
+        }
+
+        private void DeleteSelectedProfile()
+        {
+            if (SelectedProfile == null || Profiles.Count <= 1)
+            {
+                return;
+            }
+
+            string deletedId = SelectedProfile.Id;
+            string deletedName = SelectedProfile.Name;
+
+            var nextProfile = ConfigManager.Config.Profiles
+                .FirstOrDefault(p => !string.Equals(p.Id, deletedId, StringComparison.OrdinalIgnoreCase));
+            if (nextProfile == null)
+            {
+                return;
+            }
+
+            ConfigManager.Config.Profiles.RemoveAll(p => string.Equals(p.Id, deletedId, StringComparison.OrdinalIgnoreCase));
+            ConfigManager.Config.ActiveProfileId = nextProfile.Id;
+            ConfigManager.EnsureProfileSyncToLegacyFields(nextProfile);
+            ConfigManager.SaveDebounced();
+
+            ReloadProfiles(nextProfile.Id);
+            ProfileStatusMessage = $"Deleted profile \"{deletedName}\".";
         }
 
         private void RefreshFromConfig()
@@ -454,6 +675,7 @@ namespace Speakly.ViewModels
             UpdateRefinementModelList();
             OnPropertyChanged(nameof(SttModel));
             OnPropertyChanged(nameof(SelectedSttModelString));
+            OnPropertyChanged(nameof(DeepgramApiBaseUrl));
             OnPropertyChanged(nameof(EnableRefinement));
             OnPropertyChanged(nameof(RefinementModel));
             OnPropertyChanged(nameof(SelectedRefinementModelString));
@@ -461,6 +683,7 @@ namespace Speakly.ViewModels
             OnPropertyChanged(nameof(Language));
             OnPropertyChanged(nameof(CopyToClipboard));
             OnPropertyChanged(nameof(EnableSttFailover));
+            NotifyDeepgramLanguageGuardChanged();
         }
 
         public ICommand ToggleFavoriteModelCommand => ToggleRefinementFavoriteModelCommand;
@@ -557,12 +780,28 @@ namespace Speakly.ViewModels
 
             CycleProfileCommand = new RelayCommand(_ => CycleProfile());
 
+            CreateProfileCommand = new RelayCommand(
+                _ => CreateProfile(),
+                _ => true);
+
+            SaveProfileCommand = new RelayCommand(
+                _ => SaveProfile(),
+                _ => SelectedProfile != null);
+
+            DeleteProfileCommand = new RelayCommand(
+                _ => DeleteSelectedProfile(),
+                _ => CanDeleteSelectedProfile);
+
             SetProfileByIdCommand = new RelayCommand(obj =>
             {
                 if (obj is string profileId)
                 {
                     var match = Profiles.FirstOrDefault(p => string.Equals(p.Id, profileId, StringComparison.OrdinalIgnoreCase));
-                    if (match != null) SelectedProfile = match;
+                    if (match != null)
+                    {
+                        SelectedProfile = match;
+                        ProfileStatusMessage = $"Active profile: {match.Name}";
+                    }
                 }
             });
 
@@ -612,7 +851,18 @@ namespace Speakly.ViewModels
 
             PropertyChanged += (_, args) =>
             {
-                if (args.PropertyName is nameof(LastInsertionMethod) or nameof(LastInsertionStatus) or nameof(HealthSummary) or nameof(HealthDetails) or nameof(ApiTestStatus))
+                if (args.PropertyName is nameof(LastInsertionMethod)
+                    or nameof(LastInsertionStatus)
+                    or nameof(HealthSummary)
+                    or nameof(HealthDetails)
+                    or nameof(ApiTestStatus)
+                    or nameof(DeepgramLanguageGuardMessage)
+                    or nameof(HasDeepgramLanguageGuard)
+                    or nameof(NewProfileName)
+                    or nameof(ProfileDraftName)
+                    or nameof(ProfileProcessNamesInput)
+                    or nameof(ProfileStatusMessage)
+                    or nameof(CanDeleteSelectedProfile))
                     return;
 
                 ConfigManager.SaveDebounced();
@@ -658,15 +908,10 @@ namespace Speakly.ViewModels
 
             if (SttModel == "Deepgram")
             {
-                AvailableSttModels.Add("nova-2");
-                AvailableSttModels.Add("nova-2-ea");
-                AvailableSttModels.Add("nova-2-phone");
-                AvailableSttModels.Add("nova-2-medical");
                 AvailableSttModels.Add("nova-3");
-                AvailableSttModels.Add("whisper-tiny");
-                AvailableSttModels.Add("whisper-small");
-                AvailableSttModels.Add("whisper-medium");
-                AvailableSttModels.Add("whisper-large");
+                AvailableSttModels.Add("nova-2");
+                AvailableSttModels.Add("nova-2-phonecall");
+                AvailableSttModels.Add("nova-2-medical");
             }
             else if (SttModel == "OpenAI")
             {
@@ -854,6 +1099,23 @@ namespace Speakly.ViewModels
             if (value < min) return min;
             if (value > max) return max;
             return value;
+        }
+
+        private static string NormalizeDeepgramApiBaseUrl(string? value)
+        {
+            var normalized = value?.Trim();
+            if (string.IsNullOrWhiteSpace(normalized))
+            {
+                return "https://api.deepgram.com";
+            }
+
+            if (!normalized.StartsWith("https://", StringComparison.OrdinalIgnoreCase) &&
+                !normalized.StartsWith("http://", StringComparison.OrdinalIgnoreCase))
+            {
+                normalized = "https://" + normalized;
+            }
+
+            return normalized.TrimEnd('/');
         }
 
         private bool TryApplyDynamicModels(ObservableCollection<string> target, Dictionary<string, List<string>> catalog, string provider)
@@ -1092,16 +1354,15 @@ namespace Speakly.ViewModels
 
         private async Task<List<string>> FetchDeepgramModelsAsync(string apiKey)
         {
-            var models = await FetchModelsFromEndpointAsync(
-                "https://api.deepgram.com/v1/models",
-                new AuthenticationHeaderValue("Token", apiKey));
+            var baseUrl = NormalizeDeepgramApiBaseUrl(ConfigManager.Config.DeepgramApiBaseUrl);
+            using var request = new HttpRequestMessage(HttpMethod.Get, $"{baseUrl}/v1/models");
+            request.Headers.Authorization = new AuthenticationHeaderValue("Token", apiKey);
 
-            return models
-                .Where(m => m.Contains("nova", StringComparison.OrdinalIgnoreCase) ||
-                            m.Contains("whisper", StringComparison.OrdinalIgnoreCase) ||
-                            m.Contains("flux", StringComparison.OrdinalIgnoreCase))
-                .OrderBy(m => m, StringComparer.OrdinalIgnoreCase)
-                .ToList();
+            using var response = await _httpClient.SendAsync(request);
+            if (!response.IsSuccessStatusCode) return new List<string>();
+
+            var json = await response.Content.ReadAsStringAsync();
+            return ExtractDeepgramStreamingSttModelIds(json);
         }
 
         private async Task<List<string>> FetchModelsFromEndpointAsync(string url, AuthenticationHeaderValue authHeader)
@@ -1157,7 +1418,7 @@ namespace Speakly.ViewModels
 
                 if (item.ValueKind != JsonValueKind.Object) continue;
 
-                foreach (var propertyName in new[] { "id", "model", "name" })
+                foreach (var propertyName in new[] { "canonical_name", "id", "model", "name" })
                 {
                     if (item.TryGetProperty(propertyName, out var valueElement) && valueElement.ValueKind == JsonValueKind.String)
                     {
@@ -1166,6 +1427,56 @@ namespace Speakly.ViewModels
                     }
                 }
             }
+        }
+
+        private static List<string> ExtractDeepgramStreamingSttModelIds(string json)
+        {
+            var results = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+            using var document = JsonDocument.Parse(json);
+            var root = document.RootElement;
+
+            if (root.TryGetProperty("stt", out var sttArray) && sttArray.ValueKind == JsonValueKind.Array)
+            {
+                foreach (var model in sttArray.EnumerateArray())
+                {
+                    if (model.ValueKind != JsonValueKind.Object) continue;
+
+                    if (model.TryGetProperty("streaming", out var streamingProp) &&
+                        streamingProp.ValueKind == JsonValueKind.False)
+                    {
+                        continue;
+                    }
+
+                    foreach (var propertyName in new[] { "canonical_name", "id", "model", "name" })
+                    {
+                        if (!model.TryGetProperty(propertyName, out var valueElement) ||
+                            valueElement.ValueKind != JsonValueKind.String)
+                        {
+                            continue;
+                        }
+
+                        var value = valueElement.GetString()?.Trim();
+                        if (!string.IsNullOrWhiteSpace(value))
+                        {
+                            results.Add(value);
+                            break;
+                        }
+                    }
+                }
+            }
+
+            if (results.Count == 0)
+            {
+                return ExtractModelIds(json)
+                    .Where(m => m.Contains("nova", StringComparison.OrdinalIgnoreCase)
+                                || m.Contains("whisper", StringComparison.OrdinalIgnoreCase)
+                                || m.Contains("flux", StringComparison.OrdinalIgnoreCase))
+                    .OrderBy(m => m, StringComparer.OrdinalIgnoreCase)
+                    .ToList();
+            }
+
+            return results.OrderBy(m => m, StringComparer.OrdinalIgnoreCase).ToList();
         }
 
         private static bool IsOpenAiSttModel(string modelId)
@@ -1200,7 +1511,7 @@ namespace Speakly.ViewModels
 
             sb.AppendLine("--- API TEST RESULTS ---");
             
-            var dg = await ApiTester.TestDeepgramAsync(DeepgramApiKey);
+            var dg = await ApiTester.TestDeepgramAsync(DeepgramApiKey, DeepgramApiBaseUrl);
             sb.AppendLine($"Deepgram: {dg}");
 
             var oa = await ApiTester.TestOpenAIAsync(OpenAIApiKey);
@@ -1215,6 +1526,36 @@ namespace Speakly.ViewModels
             ApiTestStatus = sb.ToString();
             ApiTestCompleted?.Invoke(dg, oa, cr, or);
             ApiTestStatus = "Ready";
+        }
+
+        private string BuildDeepgramLanguageGuardMessage()
+        {
+            if (!string.Equals(SttModel, "Deepgram", StringComparison.OrdinalIgnoreCase))
+            {
+                return string.Empty;
+            }
+
+            var configuredLanguage = (Language ?? string.Empty).Trim().ToLowerInvariant();
+            if (!string.Equals(configuredLanguage, "multi", StringComparison.Ordinal))
+            {
+                return string.Empty;
+            }
+
+            var modelId = (SelectedSttModelString ?? string.Empty).Trim().ToLowerInvariant();
+            if (!modelId.StartsWith("nova-3", StringComparison.OrdinalIgnoreCase) &&
+                !modelId.StartsWith("nova-2", StringComparison.OrdinalIgnoreCase))
+            {
+                return $"Deepgram language=multi is not supported by \"{SelectedSttModelString}\". Choose nova-3/nova-2 for multilingual mode.";
+            }
+
+            var supportedCodes = string.Join(", ", DeepgramMultilingualCodes);
+            return $"Deepgram multi supports {supportedCodes}. Ukrainian is not in multi; use language=uk for Ukrainian.";
+        }
+
+        private void NotifyDeepgramLanguageGuardChanged()
+        {
+            OnPropertyChanged(nameof(DeepgramLanguageGuardMessage));
+            OnPropertyChanged(nameof(HasDeepgramLanguageGuard));
         }
 
         public void RunHealthChecks()

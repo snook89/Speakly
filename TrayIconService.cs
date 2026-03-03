@@ -97,6 +97,10 @@ namespace Speakly.Services
             if (_mainWindow.WindowState == WindowState.Minimized && ConfigManager.Config.MinimizeToTray)
             {
                 _mainWindow.Hide();
+                if (ConfigManager.Config.ShowOverlay)
+                {
+                    App.SetOverlayVisible(true);
+                }
             }
         }
 
@@ -106,6 +110,10 @@ namespace Speakly.Services
             {
                 e.Cancel = true; // prevent close
                 _mainWindow.Hide();
+                if (ConfigManager.Config.ShowOverlay)
+                {
+                    App.SetOverlayVisible(true);
+                }
             }
             else
             {

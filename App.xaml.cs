@@ -7,6 +7,7 @@ using System.Diagnostics;
 using System.Windows;
 using System.Windows.Input;
 using System.Windows.Media;
+using System.Windows.Threading;
 using Velopack;
 using Velopack.Sources;
 using Wpf.Ui.Appearance;
@@ -48,6 +49,10 @@ namespace Speakly
         private bool _isToggleRecording = false; // Track toggle-record state
         private readonly object _sessionLock = new();
         private SessionState _sessionState = SessionState.Idle;
+        private readonly DispatcherTimer _overlayIdleTimer = new();
+        private DateTime _overlayLastActivityUtc = DateTime.UtcNow;
+        private bool _overlayHiddenByIdle;
+        private static readonly TimeSpan OverlayIdleHideAfter = TimeSpan.FromSeconds(90);
         private IntPtr _lastActiveWindow = IntPtr.Zero;
         private System.IO.MemoryStream? _audioBuffer; // For debug records
         // Serializes text insertions: only one InsertText may run at a time to prevent
@@ -143,9 +148,11 @@ namespace Speakly
                 _overlay = new FloatingOverlay();
                 _overlay.Show();
                 _overlay.EnsureVisibleOnScreen();
+                _overlayHiddenByIdle = false;
             }
 
             MainWindow.Show();
+            ConfigureOverlayIdleBehavior();
             // Re-apply theme after main window handle exists so title bar chrome matches app theme.
             SetTheme(ConfigManager.Config.Theme);
             TelemetryManager.Track(
@@ -195,6 +202,104 @@ namespace Speakly
             }
 
             return AppVersion;
+        }
+
+        private void ConfigureOverlayIdleBehavior()
+        {
+            _overlayLastActivityUtc = DateTime.UtcNow;
+            _overlayIdleTimer.Interval = TimeSpan.FromSeconds(5);
+            _overlayIdleTimer.Tick += (_, _) => EvaluateOverlayIdlePolicy();
+            _overlayIdleTimer.Start();
+        }
+
+        private void MarkOverlayActivity(bool showOverlayIfNeeded)
+        {
+            _overlayLastActivityUtc = DateTime.UtcNow;
+            if (showOverlayIfNeeded && ConfigManager.Config.ShowOverlay)
+            {
+                EnsureOverlayVisibleInternal(activate: false);
+            }
+        }
+
+        private void EvaluateOverlayIdlePolicy()
+        {
+            if (!ConfigManager.Config.ShowOverlay)
+            {
+                _overlayHiddenByIdle = false;
+                return;
+            }
+
+            if (!ConfigManager.Config.OverlayAutoHideEnabled)
+            {
+                if (_overlayHiddenByIdle)
+                {
+                    EnsureOverlayVisibleInternal(activate: false);
+                }
+                return;
+            }
+
+            // Keep overlay visible while settings window is open.
+            if (MainWindow != null && MainWindow.IsVisible)
+            {
+                return;
+            }
+
+            if (IsSessionActive())
+            {
+                if (_overlayHiddenByIdle)
+                {
+                    EnsureOverlayVisibleInternal(activate: false);
+                }
+                return;
+            }
+
+            if (_overlay == null || !_overlay.IsVisible)
+            {
+                return;
+            }
+
+            if (DateTime.UtcNow - _overlayLastActivityUtc < OverlayIdleHideAfter)
+            {
+                return;
+            }
+
+            _overlay.Hide();
+            _overlayHiddenByIdle = true;
+        }
+
+        private bool IsSessionActive()
+        {
+            lock (_sessionLock)
+            {
+                return _sessionState != SessionState.Idle;
+            }
+        }
+
+        private void EnsureOverlayVisibleInternal(bool activate)
+        {
+            if (!ConfigManager.Config.ShowOverlay)
+            {
+                return;
+            }
+
+            if (_overlay == null || !_overlay.IsLoaded)
+            {
+                _overlay = new FloatingOverlay();
+                _overlay.Show();
+            }
+            else if (!_overlay.IsVisible)
+            {
+                _overlay.Show();
+            }
+
+            _overlay.EnsureVisibleOnScreen();
+            _overlay.Topmost = true;
+            if (activate)
+            {
+                _overlay.Activate();
+            }
+
+            _overlayHiddenByIdle = false;
         }
 
         private async Task<string> CheckForAppUpdatesAsync(bool userInitiated, bool includeStartupDelay)
@@ -389,6 +494,7 @@ namespace Speakly
             // --- Push-to-Talk (hold) ---
             if (IsHotkeyMatch(ConfigManager.Config.PttHotkey, e))
             {
+                MarkOverlayActivity(showOverlayIfNeeded: true);
                 if (_recorder != null && TryEnterRecording())
                 {
                     BeginSessionTiming();
@@ -418,6 +524,7 @@ namespace Speakly
             // --- Toggle Record ---
             if (IsHotkeyMatch(ConfigManager.Config.RecordHotkey, e))
             {
+                MarkOverlayActivity(showOverlayIfNeeded: true);
                 if (!_isToggleRecording)
                 {
                     if (!TryEnterRecording()) return;
@@ -465,6 +572,7 @@ namespace Speakly
                 {
                     if ((e.Key == mainKey || e.SystemKey == mainKey) && _recorder != null && _recorder.IsRecording && !_isToggleRecording)
                     {
+                        MarkOverlayActivity(showOverlayIfNeeded: false);
                         await StopRecordingAsync();
                     }
                 }
@@ -792,6 +900,7 @@ namespace Speakly
             });
 
             _overlay?.SetStatus("READY", Brushes.Aqua);
+            MarkOverlayActivity(showOverlayIfNeeded: false);
             TrackSessionEvent(
                 name: "session_end",
                 result: "success",
@@ -888,6 +997,7 @@ namespace Speakly
         {
             SetSessionState(SessionState.Error);
             _overlay?.SetStatus("ERROR", Brushes.OrangeRed);
+            MarkOverlayActivity(showOverlayIfNeeded: false);
 
             HistoryManager.AddEntry(
                 original: string.Empty,
@@ -991,6 +1101,7 @@ namespace Speakly
         public async Task ToggleRecordingFromOverlayAsync()
         {
             if (_recorder == null) return;
+            MarkOverlayActivity(showOverlayIfNeeded: true);
 
             if (_recorder.IsRecording)
             {
@@ -1034,6 +1145,7 @@ namespace Speakly
 
         protected override void OnExit(ExitEventArgs e)
         {
+            _overlayIdleTimer.Stop();
             _hotkeyService?.Dispose();
             _trayService?.Dispose();
             _recorder?.Dispose();
@@ -1148,23 +1260,13 @@ namespace Speakly
 
             if (visible)
             {
-                if (app._overlay == null || !app._overlay.IsLoaded)
-                {
-                    app._overlay = new FloatingOverlay();
-                    app._overlay.Show();
-                }
-                else if (!app._overlay.IsVisible)
-                {
-                    app._overlay.Show();
-                }
-
-                app._overlay.EnsureVisibleOnScreen();
-                app._overlay.Topmost = true;
+                app.MarkOverlayActivity(showOverlayIfNeeded: true);
             }
             else
             {
                 app._overlay?.Close();
                 app._overlay = null;
+                app._overlayHiddenByIdle = false;
             }
         }
 
@@ -1172,19 +1274,21 @@ namespace Speakly
         {
             if (Application.Current is not App app) return;
 
-            if (app._overlay == null || !app._overlay.IsLoaded)
-            {
-                app._overlay = new FloatingOverlay();
-                app._overlay.Show();
-            }
-            else if (!app._overlay.IsVisible)
-            {
-                app._overlay.Show();
-            }
+            app.MarkOverlayActivity(showOverlayIfNeeded: true);
+            app.EnsureOverlayVisibleInternal(activate: true);
+        }
 
-            app._overlay.EnsureVisibleOnScreen();
-            app._overlay.Topmost = true;
-            app._overlay.Activate();
+        public static void SetOverlayAutoHideEnabled(bool enabled)
+        {
+            if (Application.Current is not App app) return;
+
+            ConfigManager.Config.OverlayAutoHideEnabled = enabled;
+            app.MarkOverlayActivity(showOverlayIfNeeded: false);
+
+            if (!enabled && ConfigManager.Config.ShowOverlay)
+            {
+                app.EnsureOverlayVisibleInternal(activate: false);
+            }
         }
 
         private static bool IsBaseThemeDictionary(string source)

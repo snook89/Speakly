@@ -377,6 +377,17 @@ namespace Speakly.ViewModels
             }
         }
 
+        public bool OverlayAutoHideEnabled
+        {
+            get => ConfigManager.Config.OverlayAutoHideEnabled;
+            set
+            {
+                ConfigManager.Config.OverlayAutoHideEnabled = value;
+                App.SetOverlayAutoHideEnabled(value);
+                OnPropertyChanged();
+            }
+        }
+
         public int SampleRate
         {
             get => ConfigManager.Config.SampleRate;

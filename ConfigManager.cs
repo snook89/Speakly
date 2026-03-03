@@ -160,6 +160,9 @@ namespace Speakly.Config
         [JsonPropertyName("show_overlay")]
         public bool ShowOverlay { get; set; } = true;
 
+        [JsonPropertyName("overlay_auto_hide_enabled")]
+        public bool OverlayAutoHideEnabled { get; set; } = true;
+
         [JsonPropertyName("language")]
         public string Language { get; set; } = "en";
 

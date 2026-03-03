@@ -2,6 +2,7 @@
 using System.Media;
 using System.Collections.Generic;
 using System.Runtime.InteropServices;
+using System.Threading;
 using System.Threading.Tasks;
 using System.Diagnostics;
 using System.Windows;
@@ -49,6 +50,8 @@ namespace Speakly
         private bool _isToggleRecording = false; // Track toggle-record state
         private readonly object _sessionLock = new();
         private SessionState _sessionState = SessionState.Idle;
+        private CancellationTokenSource? _pendingPttReleaseStopCts;
+        private static readonly TimeSpan PttReleaseDebounce = TimeSpan.FromMilliseconds(60);
         private readonly DispatcherTimer _overlayIdleTimer = new();
         private DateTime _overlayLastActivityUtc = DateTime.UtcNow;
         private bool _overlayHiddenByIdle;
@@ -408,6 +411,26 @@ namespace Speakly
             return (GetAsyncKeyState(vKey) & 0x8000) != 0;
         }
 
+        private static bool IsKeyCurrentlyDown(Key key)
+        {
+            var virtualKey = KeyInterop.VirtualKeyFromKey(key);
+            if (virtualKey <= 0) return false;
+            return (GetAsyncKeyState(virtualKey) & 0x8000) != 0;
+        }
+
+        private void CancelPendingPttReleaseStop()
+        {
+            if (_pendingPttReleaseStopCts == null) return;
+
+            try { _pendingPttReleaseStopCts.Cancel(); }
+            catch { }
+            finally
+            {
+                _pendingPttReleaseStopCts.Dispose();
+                _pendingPttReleaseStopCts = null;
+            }
+        }
+
         private string ResolveOverlayLanguageDisplay()
         {
             var configuredLanguage = ConfigManager.Config.Language?.Trim();
@@ -494,6 +517,7 @@ namespace Speakly
             // --- Push-to-Talk (hold) ---
             if (IsHotkeyMatch(ConfigManager.Config.PttHotkey, e))
             {
+                CancelPendingPttReleaseStop();
                 MarkOverlayActivity(showOverlayIfNeeded: true);
                 if (_recorder != null && TryEnterRecording())
                 {
@@ -572,8 +596,37 @@ namespace Speakly
                 {
                     if ((e.Key == mainKey || e.SystemKey == mainKey) && _recorder != null && _recorder.IsRecording && !_isToggleRecording)
                     {
-                        MarkOverlayActivity(showOverlayIfNeeded: false);
-                        await StopRecordingAsync();
+                        CancelPendingPttReleaseStop();
+                        var releaseCts = new CancellationTokenSource();
+                        _pendingPttReleaseStopCts = releaseCts;
+
+                        try
+                        {
+                            await Task.Delay(PttReleaseDebounce, releaseCts.Token);
+                            if (!ReferenceEquals(_pendingPttReleaseStopCts, releaseCts))
+                            {
+                                return;
+                            }
+
+                            if (IsKeyCurrentlyDown(mainKey))
+                            {
+                                Logger.Log($"Ignoring transient PTT key-up for {mainKey}; key is still physically down.");
+                                return;
+                            }
+
+                            MarkOverlayActivity(showOverlayIfNeeded: false);
+                            await StopRecordingAsync();
+                        }
+                        catch (TaskCanceledException)
+                        {
+                            // A fresh key-down arrived before release was stable.
+                        }
+                        finally
+                        {
+                            if (ReferenceEquals(_pendingPttReleaseStopCts, releaseCts))
+                                _pendingPttReleaseStopCts = null;
+                            releaseCts.Dispose();
+                        }
                     }
                 }
             }
@@ -1146,6 +1199,7 @@ namespace Speakly
         protected override void OnExit(ExitEventArgs e)
         {
             _overlayIdleTimer.Stop();
+            CancelPendingPttReleaseStop();
             _hotkeyService?.Dispose();
             _trayService?.Dispose();
             _recorder?.Dispose();

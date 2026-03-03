@@ -146,6 +146,8 @@ namespace Speakly
             }
 
             MainWindow.Show();
+            // Re-apply theme after main window handle exists so title bar chrome matches app theme.
+            SetTheme(ConfigManager.Config.Theme);
             TelemetryManager.Track(
                 name: "app_start",
                 level: "info",

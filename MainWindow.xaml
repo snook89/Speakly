@@ -4,7 +4,7 @@
     xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
     xmlns:local="clr-namespace:Speakly"
     xmlns:pages="clr-namespace:Speakly.Pages"
-    Title="Speakly - Settings"
+    Title="{Binding SelectedItem.Content, ElementName=RootNavigation, StringFormat=Speakly - {0}, TargetNullValue=Settings, FallbackValue=Speakly - Settings}"
     Height="760"
     Width="1160"
     MinHeight="680"
@@ -34,13 +34,13 @@
                 <ui:NavigationViewItem Content="General"
                                        TargetPageType="{x:Type pages:GeneralPage}">
                     <ui:NavigationViewItem.Icon>
-                        <ui:SymbolIcon Symbol="Home16"/>
+                        <ui:SymbolIcon Symbol="Settings20"/>
                     </ui:NavigationViewItem.Icon>
                 </ui:NavigationViewItem>
                 <ui:NavigationViewItem Content="Hotkeys"
                                        TargetPageType="{x:Type pages:HotkeysPage}">
                     <ui:NavigationViewItem.Icon>
-                        <ui:SymbolIcon Symbol="Keyboard16"/>
+                        <ui:SymbolIcon Symbol="Keyboard20"/>
                     </ui:NavigationViewItem.Icon>
                 </ui:NavigationViewItem>
                 <ui:NavigationViewItem Content="Audio"
@@ -64,7 +64,7 @@
                 <ui:NavigationViewItem Content="API Keys"
                                        TargetPageType="{x:Type pages:ApiKeysPage}">
                     <ui:NavigationViewItem.Icon>
-                        <ui:SymbolIcon Symbol="Key16"/>
+                        <ui:SymbolIcon Symbol="Key20"/>
                     </ui:NavigationViewItem.Icon>
                 </ui:NavigationViewItem>
             </ui:NavigationView.MenuItems>
@@ -73,19 +73,19 @@
                 <ui:NavigationViewItem Content="History"
                                        TargetPageType="{x:Type pages:HistoryPage}">
                     <ui:NavigationViewItem.Icon>
-                        <ui:SymbolIcon Symbol="History16"/>
+                        <ui:SymbolIcon Symbol="History20"/>
                     </ui:NavigationViewItem.Icon>
                 </ui:NavigationViewItem>
                 <ui:NavigationViewItem Content="Statistics"
                                        TargetPageType="{x:Type pages:StatisticsPage}">
                     <ui:NavigationViewItem.Icon>
-                        <ui:SymbolIcon Symbol="History16"/>
+                        <ui:SymbolIcon Symbol="DataHistogram20"/>
                     </ui:NavigationViewItem.Icon>
                 </ui:NavigationViewItem>
                 <ui:NavigationViewItem Content="Info"
                                        TargetPageType="{x:Type pages:InfoPage}">
                     <ui:NavigationViewItem.Icon>
-                        <ui:SymbolIcon Symbol="Info16"/>
+                        <ui:SymbolIcon Symbol="Info20"/>
                     </ui:NavigationViewItem.Icon>
                 </ui:NavigationViewItem>
             </ui:NavigationView.FooterMenuItems>

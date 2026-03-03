@@ -87,24 +87,14 @@ jobs:
           --icon .\Resources\Speakly_new_logo.ico
 
       - name: Publish Release to GitHub
-        shell: pwsh
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          $tag = "${{ github.ref_name }}"
-          $releaseName = "Speakly v${{ steps.version.outputs.value }}"
-          $files = Get-ChildItem -Path .\artifacts\releases -File | ForEach-Object { $_.FullName }
-          if ($files.Count -eq 0) {
-            throw "No packaged files found in .\\artifacts\\releases."
-          }
-
-          gh release view $tag --repo "${{ github.repository }}" *> $null
-          if ($LASTEXITCODE -ne 0) {
-            gh release create $tag --repo "${{ github.repository }}" --title $releaseName --generate-notes $files
-          }
-          else {
-            gh release upload $tag $files --repo "${{ github.repository }}" --clobber
-          }
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: Speakly v${{ steps.version.outputs.value }}
+          generate_release_notes: true
+          files: |
+            artifacts/releases/*
+          fail_on_unmatched_files: true
 
       - name: Upload Packaged Artifacts
         uses: actions/upload-artifact@v4

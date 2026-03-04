@@ -44,6 +44,14 @@
                             <ui:ToggleSwitch Content="Overlay Auto-Hide when idle"
                                              IsChecked="{Binding OverlayAutoHideEnabled}"
                                              Margin="0,0,0,10"/>
+                            <ui:ToggleSwitch Content="Auto-paste when target app regains focus"
+                                             IsChecked="{Binding DeferredTargetPasteEnabled}"
+                                             Margin="0,0,0,6"/>
+                            <TextBlock Text="{Binding PendingTransferStatus}" Style="{StaticResource HintText}" Margin="0,0,0,8"/>
+                            <ui:Button Content="Clear Pending Auto-Paste"
+                                       Command="{Binding ClearPendingTransferCommand}"
+                                       HorizontalAlignment="Left"
+                                       Margin="0,0,0,10"/>
                             <ui:ToggleSwitch Content="Copy result to clipboard" IsChecked="{Binding CopyToClipboard}" Margin="0,0,0,10"/>
                             <TextBlock Text="After each transcription the final text is also placed on the clipboard, so you can Ctrl+V it anywhere even if the target window was not focused." Style="{StaticResource HintText}" Margin="0,0,0,10"/>
                             <ui:ToggleSwitch Content="Enable STT failover on transient errors" IsChecked="{Binding EnableSttFailover}" Margin="0,0,0,10"/>

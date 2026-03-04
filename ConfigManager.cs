@@ -11,7 +11,7 @@ namespace Speakly.Config
 {
     public class AppConfig
     {
-        public const int CurrentConfigVersion = 3;
+        public const int CurrentConfigVersion = 4;
         public const string DefaultRefinementPrompt =
             "Role and Objective:\n" +
             "You refine speech-to-text transcripts for clarity, grammatical correctness, and formatting compliance.\n\n" +
@@ -162,6 +162,12 @@ namespace Speakly.Config
 
         [JsonPropertyName("overlay_auto_hide_enabled")]
         public bool OverlayAutoHideEnabled { get; set; } = true;
+
+        [JsonPropertyName("deferred_target_paste_enabled")]
+        public bool DeferredTargetPasteEnabled { get; set; } = true;
+
+        [JsonPropertyName("deferred_target_paste_ttl_seconds")]
+        public int DeferredTargetPasteTtlSeconds { get; set; } = 600;
 
         [JsonPropertyName("language")]
         public string Language { get; set; } = "en";
@@ -486,6 +492,7 @@ namespace Speakly.Config
                 : config.TelemetryRedactionMode.Trim().ToLowerInvariant();
             if (config.TelemetryRedactionMode is not ("strict" or "hash" or "off"))
                 config.TelemetryRedactionMode = "strict";
+            config.DeferredTargetPasteTtlSeconds = Math.Clamp(config.DeferredTargetPasteTtlSeconds, 30, 3600);
 
             if (config.Profiles == null)
                 config.Profiles = new List<AppProfile>();

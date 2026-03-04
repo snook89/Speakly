@@ -30,6 +30,7 @@ namespace Speakly.ViewModels
         private string _modelRefreshStatus = "Model list: defaults loaded";
         private string _lastInsertionMethod = "N/A";
         private string _lastInsertionStatus = "No insertion yet";
+        private string _pendingTransferStatus = "No pending auto-paste.";
         private string _healthSummary = "Health checks not run yet.";
         private string _healthDetails = string.Empty;
         private string _newProfileName = string.Empty;
@@ -55,6 +56,7 @@ namespace Speakly.ViewModels
         public ICommand SaveProfileCommand { get; }
         public ICommand DeleteProfileCommand { get; }
         public ICommand OpenDebugLogsCommand { get; }
+        public ICommand ClearPendingTransferCommand { get; }
 
         public bool IsRefreshingModels
         {
@@ -387,6 +389,17 @@ namespace Speakly.ViewModels
             {
                 ConfigManager.Config.OverlayAutoHideEnabled = value;
                 App.SetOverlayAutoHideEnabled(value);
+                OnPropertyChanged();
+            }
+        }
+
+        public bool DeferredTargetPasteEnabled
+        {
+            get => ConfigManager.Config.DeferredTargetPasteEnabled;
+            set
+            {
+                ConfigManager.Config.DeferredTargetPasteEnabled = value;
+                App.SetDeferredTargetPasteEnabled(value);
                 OnPropertyChanged();
             }
         }
@@ -902,6 +915,7 @@ namespace Speakly.ViewModels
             OnPropertyChanged(nameof(Language));
             OnPropertyChanged(nameof(CopyToClipboard));
             OnPropertyChanged(nameof(EnableSttFailover));
+            OnPropertyChanged(nameof(DeferredTargetPasteEnabled));
             NotifyDeepgramLanguageGuardChanged();
         }
 
@@ -929,6 +943,33 @@ namespace Speakly.ViewModels
             LastInsertionStatus = success
                 ? $"OK ({LastInsertionMethod})"
                 : $"Failed ({LastInsertionMethod}){(string.IsNullOrWhiteSpace(errorCode) ? string.Empty : $": {errorCode}")}";
+        }
+
+        public string PendingTransferStatus
+        {
+            get => _pendingTransferStatus;
+            private set
+            {
+                if (string.Equals(_pendingTransferStatus, value, StringComparison.Ordinal))
+                {
+                    return;
+                }
+
+                _pendingTransferStatus = value;
+                OnPropertyChanged();
+                OnPropertyChanged(nameof(HasPendingTransfer));
+                CommandManager.InvalidateRequerySuggested();
+            }
+        }
+
+        public bool HasPendingTransfer =>
+            !string.Equals(PendingTransferStatus, "No pending auto-paste.", StringComparison.OrdinalIgnoreCase);
+
+        public void SetPendingTransferStatus(string status)
+        {
+            PendingTransferStatus = string.IsNullOrWhiteSpace(status)
+                ? "No pending auto-paste."
+                : status.Trim();
         }
 
         public string ApiTestStatus
@@ -1012,6 +1053,9 @@ namespace Speakly.ViewModels
                 _ => CanDeleteSelectedProfile);
 
             OpenDebugLogsCommand = new RelayCommand(_ => OpenDebugLogs());
+            ClearPendingTransferCommand = new RelayCommand(
+                _ => App.ClearDeferredTargetPaste(),
+                _ => HasPendingTransfer);
 
             SetProfileByIdCommand = new RelayCommand(obj =>
             {
@@ -1068,6 +1112,8 @@ namespace Speakly.ViewModels
             {
                 if (args.PropertyName is nameof(LastInsertionMethod)
                     or nameof(LastInsertionStatus)
+                    or nameof(PendingTransferStatus)
+                    or nameof(HasPendingTransfer)
                     or nameof(HealthSummary)
                     or nameof(HealthDetails)
                     or nameof(ApiTestStatus)

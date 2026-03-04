@@ -55,12 +55,15 @@ namespace Speakly
         private static readonly TimeSpan PttReleaseConfirmInterval = TimeSpan.FromMilliseconds(40);
         private const int PttReleaseConfirmChecks = 2;
         private readonly DispatcherTimer _overlayIdleTimer = new();
+        private readonly DispatcherTimer _deferredPasteTimer = new();
         private DateTime _overlayLastActivityUtc = DateTime.UtcNow;
         private bool _overlayHiddenByIdle;
         private static readonly TimeSpan OverlayIdleHideAfter = TimeSpan.FromSeconds(90);
         private static readonly TimeSpan PostStopFinalResultGrace = TimeSpan.FromMilliseconds(350);
         private const string NoFinalResultErrorCode = "stt_no_final_result";
         private SingleInstanceManager? _singleInstanceManager;
+        private readonly PendingTransferManager _pendingTransferManager = new();
+        private bool _deferredPasteApplyInProgress;
         private TargetWindowContext _targetWindowContext = TargetWindowContext.Empty;
         private IntPtr _lastActiveWindow = IntPtr.Zero;
         private System.IO.MemoryStream? _audioBuffer; // For debug records
@@ -179,6 +182,7 @@ namespace Speakly
             _singleInstanceManager.StartActivationListener(() =>
                 Dispatcher.BeginInvoke(new Action(ActivateFromSecondaryInstance)));
             ConfigureOverlayIdleBehavior();
+            ConfigureDeferredPasteBehavior();
             // Re-apply theme after main window handle exists so title bar chrome matches app theme.
             SetTheme(ConfigManager.Config.Theme);
             TelemetryManager.Track(
@@ -281,6 +285,265 @@ namespace Speakly
             _overlayIdleTimer.Interval = TimeSpan.FromSeconds(5);
             _overlayIdleTimer.Tick += (_, _) => EvaluateOverlayIdlePolicy();
             _overlayIdleTimer.Start();
+        }
+
+        private void ConfigureDeferredPasteBehavior()
+        {
+            _deferredPasteTimer.Interval = TimeSpan.FromMilliseconds(350);
+            _deferredPasteTimer.Tick += async (_, _) => await EvaluateDeferredPastePolicyAsync();
+            _deferredPasteTimer.Start();
+            RefreshPendingTransferStatus();
+        }
+
+        private async Task EvaluateDeferredPastePolicyAsync()
+        {
+            if (_deferredPasteApplyInProgress)
+            {
+                return;
+            }
+
+            try
+            {
+                var now = DateTime.UtcNow;
+                var pending = _pendingTransferManager.GetActiveOrExpire(now, out var expired);
+                if (expired != null)
+                {
+                    Logger.Log($"Deferred paste expired for {expired.TargetContext}.");
+                    TelemetryManager.Track(
+                        name: "deferred_paste_expired",
+                        level: "warning",
+                        success: false,
+                        result: "expired",
+                        errorCode: "deferred_paste_expired",
+                        data: new Dictionary<string, string>
+                        {
+                            ["target_process"] = expired.TargetContext.ProcessName,
+                            ["target_pid"] = expired.TargetContext.ProcessId.ToString(),
+                            ["failure_code"] = expired.FailureCode
+                        });
+                    RefreshPendingTransferStatus();
+                    return;
+                }
+
+                if (pending == null)
+                {
+                    RefreshPendingTransferStatus();
+                    return;
+                }
+
+                if (!ConfigManager.Config.DeferredTargetPasteEnabled || IsSessionActive())
+                {
+                    RefreshPendingTransferStatus();
+                    return;
+                }
+
+                var foreground = TextInserter.CaptureForegroundWindowContext();
+                if (!PendingTransferManager.IsForegroundMatch(foreground, pending.TargetContext))
+                {
+                    RefreshPendingTransferStatus();
+                    return;
+                }
+
+                _deferredPasteApplyInProgress = true;
+                InsertResult deferredResult = new InsertResult
+                {
+                    Success = false,
+                    Method = "DeferredNotExecuted",
+                    ErrorCode = "deferred_not_executed"
+                };
+                await _insertionGate.WaitAsync();
+                try
+                {
+                    deferredResult = await Task.Run(() => TextInserter.InsertText(pending.Text, foreground));
+                }
+                finally
+                {
+                    _insertionGate.Release();
+                }
+
+                _pendingTransferManager.TryConsume(pending.Id, out _);
+
+                if (deferredResult.Success)
+                {
+                    Logger.Log($"Deferred paste applied successfully into {foreground}.");
+                    TelemetryManager.Track(
+                        name: "deferred_paste_applied",
+                        level: "info",
+                        result: deferredResult.Method,
+                        operationId: pending.OperationId,
+                        data: new Dictionary<string, string>
+                        {
+                            ["target_process"] = foreground.ProcessName,
+                            ["target_pid"] = foreground.ProcessId.ToString(),
+                            ["method"] = deferredResult.Method
+                        });
+
+                    Dispatcher.Invoke(() =>
+                    {
+                        var vm = MainWindow?.DataContext as MainViewModel ?? ViewModel;
+                        vm?.SetLastInsertionStatus($"{deferredResult.Method}+Deferred", true, string.Empty);
+                    });
+                }
+                else
+                {
+                    Logger.Log($"Deferred paste failed ({deferredResult.ErrorCode}) for {foreground}.");
+                    TelemetryManager.Track(
+                        name: "deferred_paste_failed",
+                        level: "warning",
+                        success: false,
+                        result: deferredResult.Method,
+                        operationId: pending.OperationId,
+                        errorCode: deferredResult.ErrorCode,
+                        errorClass: deferredResult.ErrorCode,
+                        data: new Dictionary<string, string>
+                        {
+                            ["target_process"] = foreground.ProcessName,
+                            ["target_pid"] = foreground.ProcessId.ToString()
+                        });
+
+                    Dispatcher.Invoke(() =>
+                    {
+                        var vm = MainWindow?.DataContext as MainViewModel ?? ViewModel;
+                        vm?.SetLastInsertionStatus($"{deferredResult.Method}+Deferred", false, deferredResult.ErrorCode);
+                    });
+                }
+
+                RefreshPendingTransferStatus();
+            }
+            catch (Exception ex)
+            {
+                Logger.LogException("EvaluateDeferredPastePolicyAsync", ex);
+            }
+            finally
+            {
+                _deferredPasteApplyInProgress = false;
+            }
+        }
+
+        private void RefreshPendingTransferStatus()
+        {
+            try
+            {
+                var now = DateTime.UtcNow;
+                var pending = _pendingTransferManager.GetActiveOrExpire(now, out var expired);
+                if (expired != null)
+                {
+                    Logger.Log($"Deferred paste expired for {expired.TargetContext}.");
+                }
+                string status;
+                if (pending == null)
+                {
+                    status = "No pending auto-paste.";
+                }
+                else if (!ConfigManager.Config.DeferredTargetPasteEnabled)
+                {
+                    status = $"Pending auto-paste paused for {pending.TargetDisplayName}.";
+                }
+                else
+                {
+                    status = $"Pending auto-paste: return to {pending.TargetDisplayName}.";
+                }
+
+                Dispatcher.Invoke(() =>
+                {
+                    var vm = MainWindow?.DataContext as MainViewModel ?? ViewModel;
+                    vm?.SetPendingTransferStatus(status);
+                });
+            }
+            catch (Exception ex)
+            {
+                Logger.LogException("RefreshPendingTransferStatus", ex);
+            }
+        }
+
+        private bool ShouldQueueDeferredPaste(InsertionFailureReason reason)
+        {
+            return reason is InsertionFailureReason.FocusRestoreFailed
+                or InsertionFailureReason.MissingTarget
+                or InsertionFailureReason.TargetWindowUnavailable
+                or InsertionFailureReason.InputBlockedByIntegrity;
+        }
+
+        private bool TryQueueDeferredPaste(string textToInsert, InsertResult insertResult)
+        {
+            if (!ConfigManager.Config.DeferredTargetPasteEnabled)
+            {
+                return false;
+            }
+
+            if (!insertResult.ClipboardUpdated || !ShouldQueueDeferredPaste(insertResult.FailureReason))
+            {
+                return false;
+            }
+
+            if (!_targetWindowContext.IsValid || string.IsNullOrWhiteSpace(textToInsert))
+            {
+                return false;
+            }
+
+            var createdAt = DateTime.UtcNow;
+            int ttlSeconds = Math.Clamp(ConfigManager.Config.DeferredTargetPasteTtlSeconds, 30, 3600);
+            var pending = new PendingTransfer(
+                text: textToInsert,
+                targetContext: _targetWindowContext,
+                createdAtUtc: createdAt,
+                expiresAtUtc: createdAt.AddSeconds(ttlSeconds),
+                failureCode: insertResult.ErrorCode,
+                operationId: _activeOperationId);
+
+            var replaced = _pendingTransferManager.Replace(pending);
+            if (replaced != null)
+            {
+                Logger.Log($"Replaced deferred paste queued for {replaced.TargetContext} with new target {pending.TargetContext}.");
+                TrackSessionEvent(
+                    name: "deferred_paste_replaced",
+                    level: "warning",
+                    result: "replaced",
+                    data: new Dictionary<string, string>
+                    {
+                        ["previous_target"] = replaced.TargetContext.ProcessName,
+                        ["new_target"] = pending.TargetContext.ProcessName
+                    });
+            }
+
+            Logger.Log($"Queued deferred paste for {pending.TargetContext} (ttl={ttlSeconds}s, reason={insertResult.ErrorCode}).");
+            TrackSessionEvent(
+                name: "deferred_paste_queued",
+                level: "info",
+                result: "queued",
+                errorCode: insertResult.ErrorCode,
+                errorClass: insertResult.ErrorCode,
+                data: new Dictionary<string, string>
+                {
+                    ["target_process"] = pending.TargetContext.ProcessName,
+                    ["target_pid"] = pending.TargetContext.ProcessId.ToString(),
+                    ["ttl_seconds"] = ttlSeconds.ToString()
+                });
+            RefreshPendingTransferStatus();
+            return true;
+        }
+
+        private void ClearDeferredPasteInternal(string reason)
+        {
+            var cleared = _pendingTransferManager.Clear();
+            if (cleared == null)
+            {
+                RefreshPendingTransferStatus();
+                return;
+            }
+
+            Logger.Log($"Cleared deferred paste for {cleared.TargetContext} (reason={reason}).");
+            TelemetryManager.Track(
+                name: "deferred_paste_cleared",
+                level: "info",
+                result: reason,
+                operationId: cleared.OperationId,
+                data: new Dictionary<string, string>
+                {
+                    ["target_process"] = cleared.TargetContext.ProcessName,
+                    ["target_pid"] = cleared.TargetContext.ProcessId.ToString()
+                });
+            RefreshPendingTransferStatus();
         }
 
         private void MarkOverlayActivity(bool showOverlayIfNeeded)
@@ -1078,7 +1341,10 @@ namespace Speakly
                 if (string.IsNullOrWhiteSpace(insertResult.ErrorCode))
                     insertResult.ErrorCode = $"refine_{refinementFallbackCode}";
             }
-            _sessionHasInserted = insertResult.Success;
+            if (insertResult.Success)
+            {
+                _sessionHasInserted = true;
+            }
 
             if (ConfigManager.Config.CopyToClipboard)
             {
@@ -1091,23 +1357,30 @@ namespace Speakly
 
             if (!insertResult.Success)
             {
-                var targetName = string.IsNullOrWhiteSpace(_targetWindowContext.ProcessName)
-                    ? "target app"
-                    : _targetWindowContext.ProcessName;
-                var recoveryMessage =
-                    $"Speakly could not safely insert text into the original target ({targetName})." + Environment.NewLine +
-                    "The latest result was copied to your clipboard." + Environment.NewLine +
-                    "Focus the target app and press Ctrl+V to paste." + Environment.NewLine + Environment.NewLine +
-                    $"Reason: {insertResult.ErrorCode}";
-
-                Dispatcher.Invoke(() =>
+                if (TryQueueDeferredPaste(toType, insertResult))
                 {
-                    MessageBox.Show(
-                        recoveryMessage,
-                        "Speakly: Insertion Recovery",
-                        MessageBoxButton.OK,
-                        MessageBoxImage.Warning);
-                });
+                    insertResult.Method = $"{insertResult.Method}+DeferredQueued";
+                }
+                else
+                {
+                    var targetName = string.IsNullOrWhiteSpace(_targetWindowContext.ProcessName)
+                        ? "target app"
+                        : _targetWindowContext.ProcessName;
+                    var recoveryMessage =
+                        $"Speakly could not safely insert text into the original target ({targetName})." + Environment.NewLine +
+                        "The latest result was copied to your clipboard." + Environment.NewLine +
+                        "Focus the target app and press Ctrl+V to paste." + Environment.NewLine + Environment.NewLine +
+                        $"Reason: {insertResult.ErrorCode}";
+
+                    Dispatcher.Invoke(() =>
+                    {
+                        MessageBox.Show(
+                            recoveryMessage,
+                            "Speakly: Insertion Recovery",
+                            MessageBoxButton.OK,
+                            MessageBoxImage.Warning);
+                    });
+                }
             }
 
             TrackSessionEvent(
@@ -1438,6 +1711,7 @@ namespace Speakly
         protected override void OnExit(ExitEventArgs e)
         {
             _overlayIdleTimer.Stop();
+            _deferredPasteTimer.Stop();
             CancelPendingPttReleaseStop();
             _hotkeyService?.Dispose();
             _trayService?.Dispose();
@@ -1583,6 +1857,20 @@ namespace Speakly
             {
                 app.EnsureOverlayVisibleInternal(activate: false);
             }
+        }
+
+        public static void SetDeferredTargetPasteEnabled(bool enabled)
+        {
+            if (Application.Current is not App app) return;
+
+            ConfigManager.Config.DeferredTargetPasteEnabled = enabled;
+            app.RefreshPendingTransferStatus();
+        }
+
+        public static void ClearDeferredTargetPaste()
+        {
+            if (Application.Current is not App app) return;
+            app.ClearDeferredPasteInternal("manual_clear");
         }
 
         private static bool IsBaseThemeDictionary(string source)

@@ -482,12 +482,15 @@ namespace Speakly
             }
 
             var createdAt = DateTime.UtcNow;
-            int ttlSeconds = Math.Clamp(ConfigManager.Config.DeferredTargetPasteTtlSeconds, 30, 3600);
+            int ttlSeconds = Math.Clamp(ConfigManager.Config.DeferredTargetPasteTtlSeconds, 0, 604800);
+            DateTime? expiresAtUtc = ttlSeconds > 0
+                ? createdAt.AddSeconds(ttlSeconds)
+                : null;
             var pending = new PendingTransfer(
                 text: textToInsert,
                 targetContext: _targetWindowContext,
                 createdAtUtc: createdAt,
-                expiresAtUtc: createdAt.AddSeconds(ttlSeconds),
+                expiresAtUtc: expiresAtUtc,
                 failureCode: insertResult.ErrorCode,
                 operationId: _activeOperationId);
 
@@ -506,7 +509,7 @@ namespace Speakly
                     });
             }
 
-            Logger.Log($"Queued deferred paste for {pending.TargetContext} (ttl={ttlSeconds}s, reason={insertResult.ErrorCode}).");
+            Logger.Log($"Queued deferred paste for {pending.TargetContext} (ttl={(ttlSeconds <= 0 ? "infinite" : $"{ttlSeconds}s")}, reason={insertResult.ErrorCode}).");
             TrackSessionEvent(
                 name: "deferred_paste_queued",
                 level: "info",

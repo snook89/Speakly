@@ -11,7 +11,7 @@ namespace Speakly.Config
 {
     public class AppConfig
     {
-        public const int CurrentConfigVersion = 4;
+        public const int CurrentConfigVersion = 5;
         public const string DefaultRefinementPrompt =
             "Role and Objective:\n" +
             "You refine speech-to-text transcripts for clarity, grammatical correctness, and formatting compliance.\n\n" +
@@ -167,7 +167,7 @@ namespace Speakly.Config
         public bool DeferredTargetPasteEnabled { get; set; } = true;
 
         [JsonPropertyName("deferred_target_paste_ttl_seconds")]
-        public int DeferredTargetPasteTtlSeconds { get; set; } = 600;
+        public int DeferredTargetPasteTtlSeconds { get; set; } = 0;
 
         [JsonPropertyName("language")]
         public string Language { get; set; } = "en";
@@ -473,6 +473,7 @@ namespace Speakly.Config
 
         private static void MigrateConfig(AppConfig config)
         {
+            int previousVersion = config.ConfigVersion;
             config.ConfigVersion = AppConfig.CurrentConfigVersion;
             config.HistoryRetentionDays = Math.Clamp(config.HistoryRetentionDays, 1, 3650);
             if (string.IsNullOrWhiteSpace(config.PrivacyMode))
@@ -492,7 +493,9 @@ namespace Speakly.Config
                 : config.TelemetryRedactionMode.Trim().ToLowerInvariant();
             if (config.TelemetryRedactionMode is not ("strict" or "hash" or "off"))
                 config.TelemetryRedactionMode = "strict";
-            config.DeferredTargetPasteTtlSeconds = Math.Clamp(config.DeferredTargetPasteTtlSeconds, 30, 3600);
+            if (previousVersion < 5 && config.DeferredTargetPasteTtlSeconds == 600)
+                config.DeferredTargetPasteTtlSeconds = 0;
+            config.DeferredTargetPasteTtlSeconds = Math.Clamp(config.DeferredTargetPasteTtlSeconds, 0, 604800);
 
             if (config.Profiles == null)
                 config.Profiles = new List<AppProfile>();

@@ -63,6 +63,7 @@ namespace Speakly
         private const string NoFinalResultErrorCode = "stt_no_final_result";
         private SingleInstanceManager? _singleInstanceManager;
         private readonly PendingTransferManager _pendingTransferManager = new();
+        private readonly ManagedAudioProcessor _managedAudioProcessor = new();
         private bool _deferredPasteApplyInProgress;
         private TargetWindowContext _targetWindowContext = TargetWindowContext.Empty;
         private IntPtr _lastActiveWindow = IntPtr.Zero;
@@ -120,6 +121,10 @@ namespace Speakly
             }
 
             ConfigManager.Load();
+            if (!StartupRegistrationService.Reconcile(ConfigManager.Config.StartWithWindows, out var startupTaskStatus))
+            {
+                Logger.Log($"Startup task reconcile failed: {startupTaskStatus}");
+            }
             SetTheme(ConfigManager.Config.Theme);
 
             try
@@ -870,6 +875,7 @@ namespace Speakly
                     PrepareSessionContext();
                     _sessionText.Clear();
                     _sessionHasInserted = false;
+                    _managedAudioProcessor.Reset();
                     AutoAdjustRefinementPromptForLanguage();
                     _overlay?.SetActiveLanguage(ResolveOverlayLanguageDisplay());
                     _overlay?.SetStatus("RECORDING", Brushes.Red);
@@ -901,6 +907,7 @@ namespace Speakly
                     PrepareSessionContext();
                     _sessionText.Clear();
                     _sessionHasInserted = false;
+                    _managedAudioProcessor.Reset();
                     AutoAdjustRefinementPromptForLanguage();
                     _overlay?.SetActiveLanguage(ResolveOverlayLanguageDisplay());
                     _isToggleRecording = true;
@@ -1134,33 +1141,19 @@ namespace Speakly
 
         private async void OnAudioDataAvailable(object? sender, byte[] data)
         {
-            // Feed waveform level (PCM 16-bit LE → RMS)
-            if (data.Length >= 2)
-            {
-                double sumSq = 0;
-                int sampleCount = data.Length / 2;
-                for (int i = 0; i < data.Length - 1; i += 2)
-                {
-                    short sample = (short)(data[i] | (data[i + 1] << 8));
-                    double norm = sample / 32768.0;
-                    sumSq += norm * norm;
-                }
-                float rms = (float)Math.Sqrt(sumSq / sampleCount);
-                // Scale aggressively so quiet voices still animate
-                // Increased multiplier from 6f to 12f for better reactivity
-                _overlay?.UpdateAudioLevel(Math.Min(rms * 12f, 1f));
-            }
+            var processed = _managedAudioProcessor.Process(data, out var processingStats);
+            _overlay?.UpdateAudioLevel(Math.Min(processingStats.ProcessedRms * 12f, 1f));
 
             if (_transcriber != null)
             {
-                await _transcriber.SendAudioAsync(data);
+                await _transcriber.SendAudioAsync(processed);
             }
 
-            CaptureSessionAudio(data);
+            CaptureSessionAudio(processed);
 
             if (_audioBuffer != null)
             {
-                _audioBuffer.Write(data, 0, data.Length);
+                _audioBuffer.Write(processed, 0, processed.Length);
             }
         }
 
@@ -1274,7 +1267,40 @@ namespace Speakly
             if (_finalTranscriptionProcessed) return;
             _finalTranscriptionProcessed = true;
 
-            string textToInsert = originalText;
+            var dictionaryTerms = PersonalDictionaryService.GetCombinedTerms(
+                ConfigManager.Config,
+                _activeSessionProfile,
+                maxTerms: 80);
+            string correctedTranscript = PersonalDictionaryService.ApplyCorrections(
+                originalText,
+                dictionaryTerms,
+                out var correctionCount);
+            if (correctionCount > 0)
+            {
+                Logger.Log($"Personal dictionary corrections applied: {correctionCount}.");
+                TrackSessionEvent(
+                    name: "dictionary_corrections_applied",
+                    result: "ok",
+                    data: new Dictionary<string, string>
+                    {
+                        ["count"] = correctionCount.ToString()
+                    });
+            }
+
+            var suggestions = PersonalDictionaryService.ExtractCandidateTerms(
+                correctedTranscript,
+                dictionaryTerms,
+                maxCandidates: 10);
+            if (suggestions.Count > 0)
+            {
+                Dispatcher.Invoke(() =>
+                {
+                    var vm = MainWindow?.DataContext as MainViewModel ?? ViewModel;
+                    vm?.AddDictionarySuggestions(suggestions);
+                });
+            }
+
+            string textToInsert = correctedTranscript;
             _transcribeMs = (int)Math.Max(0, (DateTime.UtcNow - _transcribingStartedUtc).TotalMilliseconds);
             bool refinementFallbackUsed = false;
             string refinementFallbackCode = string.Empty;
@@ -1294,19 +1320,19 @@ namespace Speakly
                 var swRefine = Stopwatch.StartNew();
                 try
                 {
-                    textToInsert = await _refiner.RefineTextAsync(originalText, ConfigManager.Config.RefinementPrompt);
+                    textToInsert = await _refiner.RefineTextAsync(correctedTranscript, ConfigManager.Config.RefinementPrompt);
                 }
                 catch (Exception ex)
                 {
                     refinementFallbackUsed = true;
                     refinementFallbackCode = ErrorClassifier.Classify(ex.Message);
-                    textToInsert = originalText;
+                    textToInsert = correctedTranscript;
                     Logger.LogException("HandleFinalTranscriptionAsync.Refinement", ex);
                     Logger.Log($"Refinement fallback engaged ({ConfigManager.Config.RefinementModel}, code={refinementFallbackCode}).");
                 }
                 swRefine.Stop();
                 _refineMs = (int)swRefine.ElapsedMilliseconds;
-                Logger.Log($"Refinement stats: inputChars={originalText.Length}, outputChars={textToInsert.Length}, inputWords={CountWords(originalText)}, outputWords={CountWords(textToInsert)}");
+                Logger.Log($"Refinement stats: inputChars={correctedTranscript.Length}, outputChars={textToInsert.Length}, inputWords={CountWords(correctedTranscript)}, outputWords={CountWords(textToInsert)}");
                 Logger.Log($"Refinement complete: '{textToInsert}'");
                 TrackSessionEvent(
                     name: "refiner_result",
@@ -1686,6 +1712,7 @@ namespace Speakly
             PrepareSessionContext();
             _sessionText.Clear();
             _sessionHasInserted = false;
+            _managedAudioProcessor.Reset();
             AutoAdjustRefinementPromptForLanguage();
             _overlay?.SetActiveLanguage(ResolveOverlayLanguageDisplay());
             _isToggleRecording = true;
@@ -1868,6 +1895,34 @@ namespace Speakly
 
             ConfigManager.Config.DeferredTargetPasteEnabled = enabled;
             app.RefreshPendingTransferStatus();
+        }
+
+        public static bool SetStartWithWindowsEnabled(bool enabled)
+        {
+            if (Application.Current is not App)
+            {
+                return false;
+            }
+
+            bool previous = ConfigManager.Config.StartWithWindows;
+            ConfigManager.Config.StartWithWindows = enabled;
+
+            if (StartupRegistrationService.Reconcile(enabled, out var status))
+            {
+                Logger.Log(status);
+                ViewModel?.RunHealthChecks();
+                return true;
+            }
+
+            ConfigManager.Config.StartWithWindows = previous;
+            Logger.Log($"Failed to apply startup setting: {status}");
+            MessageBox.Show(
+                status,
+                "Speakly Startup Setting",
+                MessageBoxButton.OK,
+                MessageBoxImage.Warning);
+            ViewModel?.RunHealthChecks();
+            return false;
         }
 
         public static void ClearDeferredTargetPaste()

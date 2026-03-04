@@ -92,6 +92,65 @@
                                 Severity="Informational"
                                 IsOpen="{Binding HasModelRefreshStatus}"/>
 
+                    <Expander Header="Personal Dictionary" IsExpanded="False" Margin="0,14,0,0">
+                        <StackPanel Margin="0,10,0,0">
+                            <TextBlock Text="Global Terms" Style="{StaticResource FieldLabel}"/>
+                            <TextBlock Text="One term per line (names, product terms, acronyms)."
+                                       Style="{StaticResource HintText}" Margin="0,0,0,6"/>
+                            <ui:TextBox Text="{Binding GlobalDictionaryTermsText}"
+                                        AcceptsReturn="True"
+                                        TextWrapping="Wrap"
+                                        Height="110"
+                                        Margin="0,0,0,8"/>
+                            <StackPanel Orientation="Horizontal" Margin="0,0,0,12">
+                                <ui:Button Content="Import"
+                                           Command="{Binding ImportGlobalDictionaryCommand}"
+                                           Style="{StaticResource SecondaryButton}"
+                                           Margin="0,0,8,0"/>
+                                <ui:Button Content="Export"
+                                           Command="{Binding ExportGlobalDictionaryCommand}"
+                                           Style="{StaticResource SecondaryButton}"/>
+                            </StackPanel>
+
+                            <TextBlock Text="{Binding ActiveProfileName, StringFormat=Profile Terms ({0})}" Style="{StaticResource FieldLabel}"/>
+                            <TextBlock Text="Terms here only apply when this profile is active."
+                                       Style="{StaticResource HintText}" Margin="0,0,0,6"/>
+                            <ui:TextBox Text="{Binding ProfileDictionaryTermsText}"
+                                        AcceptsReturn="True"
+                                        TextWrapping="Wrap"
+                                        Height="90"
+                                        Margin="0,0,0,12"/>
+
+                            <TextBlock Text="Suggested Terms (Confirm to learn)" Style="{StaticResource FieldLabel}"/>
+                            <TextBlock Text="Speakly proposes uncommon/proper terms from recent transcripts. Confirm each term to add it."
+                                       Style="{StaticResource HintText}" Margin="0,0,0,6"/>
+                            <ListBox ItemsSource="{Binding DictionarySuggestions}"
+                                     SelectedItem="{Binding SelectedDictionarySuggestion}"
+                                     MaxHeight="120"
+                                     Margin="0,0,0,8"/>
+                            <StackPanel Orientation="Horizontal">
+                                <ui:Button Content="Add to Global"
+                                           Command="{Binding AddSuggestionToGlobalDictionaryCommand}"
+                                           CommandParameter="{Binding SelectedDictionarySuggestion}"
+                                           Style="{StaticResource SecondaryButton}"
+                                           Margin="0,0,8,0"/>
+                                <ui:Button Content="Add to Profile"
+                                           Command="{Binding AddSuggestionToProfileDictionaryCommand}"
+                                           CommandParameter="{Binding SelectedDictionarySuggestion}"
+                                           Style="{StaticResource SecondaryButton}"
+                                           Margin="0,0,8,0"/>
+                                <ui:Button Content="Dismiss"
+                                           Command="{Binding DismissDictionarySuggestionCommand}"
+                                           CommandParameter="{Binding SelectedDictionarySuggestion}"
+                                           Style="{StaticResource SecondaryButton}"
+                                           Margin="0,0,8,0"/>
+                                <ui:Button Content="Clear All"
+                                           Command="{Binding ClearDictionarySuggestionsCommand}"
+                                           Style="{StaticResource SecondaryButton}"/>
+                            </StackPanel>
+                        </StackPanel>
+                    </Expander>
+
                     <Expander Header="Advanced Settings" IsExpanded="False" Margin="0,14,0,0">
                         <StackPanel Margin="0,10,0,0">
                             <TextBlock Text="For power users. Defaults are safe for most setups."

@@ -20,6 +20,7 @@ namespace Speakly.Config
 
         public string Language { get; set; } = "en";
         public bool CopyToClipboard { get; set; }
+        public List<string> DictionaryTerms { get; set; } = new();
 
         public bool EnableSttFailover { get; set; } = true;
         public List<string> SttFailoverOrder { get; set; } = new() { "Deepgram", "OpenAI", "OpenRouter" };

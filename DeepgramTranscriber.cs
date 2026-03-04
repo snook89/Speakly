@@ -122,6 +122,12 @@ namespace Speakly.Services
                 "utterance_end_ms=1000"
             };
 
+            var preferredTerms = PersonalDictionaryService.GetCombinedTermsForActiveProfile(config, maxTerms: 30);
+            if (preferredTerms.Count > 0)
+            {
+                query.Add($"keywords={Uri.EscapeDataString(string.Join(",", preferredTerms))}");
+            }
+
             var resolvedLanguage = ResolveLanguageForStreaming(config.Language, selectedModel);
             if (!string.IsNullOrWhiteSpace(resolvedLanguage))
             {

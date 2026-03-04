@@ -26,8 +26,48 @@
                     <ui:NumberBox Value="{Binding Channels}" Margin="0,0,0,4"/>
                     <TextBlock Text="Use 1 (Mono) for best compatibility. Allowed range: 1–2." Style="{StaticResource HintText}" Margin="0,0,0,14"/>
 
-                    <ui:ToggleSwitch Content="Save Debug Records" IsChecked="{Binding SaveDebugRecords}" Margin="0,6,0,4"/>
-                    <TextBlock Text="Saves timestamped .wav files to the Records folder for troubleshooting." Style="{StaticResource HintText}"/>
+                    <Expander Header="Advanced Settings" IsExpanded="False" Margin="0,12,0,0">
+                        <StackPanel Margin="0,10,0,0">
+                            <TextBlock Text="Managed Audio Processing" Style="{StaticResource SectionTitle}" Margin="0,0,0,8"/>
+
+                            <ui:ToggleSwitch Content="Automatic Mic Gain"
+                                             IsChecked="{Binding AutoMicGainEnabled}"
+                                             Margin="0,0,0,6"/>
+                            <TextBlock Text="Continuously adjusts input volume so speech stays readable without manual gain tuning."
+                                       Style="{StaticResource HintText}" Margin="0,0,0,10"/>
+
+                            <TextBlock Text="AGC Target RMS" Style="{StaticResource FieldLabel}"/>
+                            <ui:NumberBox Value="{Binding AutoMicGainTargetRms}" Margin="0,0,0,4"/>
+                            <TextBlock Text="Recommended 0.10–0.18. Lower values are softer, higher values are louder."
+                                       Style="{StaticResource HintText}" Margin="0,0,0,14"/>
+
+                            <ui:ToggleSwitch Content="Dynamic Normalization"
+                                             IsChecked="{Binding DynamicNormalizationEnabled}"
+                                             Margin="0,0,0,6"/>
+                            <TextBlock Text="Keeps loudness more consistent between quiet and loud phrases."
+                                       Style="{StaticResource HintText}" Margin="0,0,0,10"/>
+
+                            <TextBlock Text="Normalization Target Peak" Style="{StaticResource FieldLabel}"/>
+                            <ui:NumberBox Value="{Binding NormalizationTargetPeak}" Margin="0,0,0,4"/>
+                            <TextBlock Text="Recommended 0.75–0.90. Prevents clipping while preserving volume."
+                                       Style="{StaticResource HintText}" Margin="0,0,0,14"/>
+
+                            <ui:ToggleSwitch Content="Noise Gate"
+                                             IsChecked="{Binding NoiseGateEnabled}"
+                                             Margin="0,0,0,6"/>
+                            <TextBlock Text="Suppresses very low-level background noise between spoken words."
+                                       Style="{StaticResource HintText}" Margin="0,0,0,10"/>
+
+                            <TextBlock Text="Noise Gate Threshold (dB)" Style="{StaticResource FieldLabel}"/>
+                            <ui:NumberBox Value="{Binding NoiseGateThresholdDb}" Margin="0,0,0,4"/>
+                            <TextBlock Text="Typical range is -55 to -35 dB. Higher threshold cuts more background noise."
+                                       Style="{StaticResource HintText}" Margin="0,0,0,14"/>
+
+                            <ui:ToggleSwitch Content="Save Debug Records" IsChecked="{Binding SaveDebugRecords}" Margin="0,6,0,4"/>
+                            <TextBlock Text="Saves timestamped .wav files to the Records folder for troubleshooting."
+                                       Style="{StaticResource HintText}"/>
+                        </StackPanel>
+                    </Expander>
                 </StackPanel>
             </Border>
         </StackPanel>

@@ -41,6 +41,9 @@
                                        Style="{StaticResource HintText}"
                                        Margin="0,0,0,10"/>
 
+                            <ui:ToggleSwitch Content="Start on Windows startup"
+                                             IsChecked="{Binding StartWithWindows}"
+                                             Margin="0,0,0,10"/>
                             <ui:ToggleSwitch Content="Overlay Auto-Hide when idle"
                                              IsChecked="{Binding OverlayAutoHideEnabled}"
                                              Margin="0,0,0,10"/>

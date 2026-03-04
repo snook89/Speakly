@@ -88,6 +88,12 @@ namespace Speakly.Services
                     content.Add(new StringContent(configuredLanguage), "language");
                 }
 
+                var dictionaryPrompt = PersonalDictionaryService.BuildSttHintPrompt(ConfigManager.Config, maxTerms: 40);
+                if (!string.IsNullOrWhiteSpace(dictionaryPrompt))
+                {
+                    content.Add(new StringContent(dictionaryPrompt), "prompt");
+                }
+
                 var request = new HttpRequestMessage(HttpMethod.Post,
                     "https://openrouter.ai/api/v1/audio/transcriptions")
                 {

@@ -27,6 +27,12 @@ namespace Speakly.Services
             else if (string.Equals(config.PttHotkey, config.RecordHotkey, StringComparison.OrdinalIgnoreCase))
                 issues.Add("PTT and Toggle hotkeys are the same.");
 
+            if (!PrivilegeService.IsCurrentProcessElevated())
+                issues.Add("Speakly is not running with administrator privileges.");
+
+            if (config.StartWithWindows && !StartupRegistrationService.IsEnabled(out var startupStatus))
+                issues.Add($"Start on Windows startup is enabled, but registration is not healthy ({startupStatus}).");
+
             if (!HasApiKeyForStt(config, config.SttModel))
                 issues.Add($"Selected STT provider \"{config.SttModel}\" is missing its API key.");
 

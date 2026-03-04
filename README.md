@@ -18,6 +18,10 @@ Built with WPF on .NET 9.
 - Automatic STT failover for transient provider errors.
 - Floating overlay (status, language badge, waveform, quick menu).
 - System tray controls (settings, profiles, overlay recovery, quick toggles).
+- Always-elevated runtime (UAC) for reliable insertion into elevated apps.
+- Optional `Start on Windows startup` registration (Task Scheduler, highest privileges).
+- Personal dictionary (global + per-profile) with suggested-term confirmation queue.
+- Managed audio processing: automatic mic gain, dynamic normalization, optional noise gate.
 - History and statistics pages with latency, success/failure, and failover data.
 - Health checks for startup readiness (keys, devices, hotkeys, failover).
 - Primary `SendInput` text insertion with clipboard fallback for reliability.
@@ -51,6 +55,7 @@ Notes:
 ## Requirements
 
 - Windows 10/11.
+- Administrator approval on launch (Speakly runs elevated).
 - .NET 9 SDK (for building/running from source) or .NET 9 runtime (for published build).
 - Internet access to provider APIs.
 - API keys:
@@ -100,6 +105,7 @@ Both are configurable and support modifiers (`Ctrl`, `Alt`, `Shift`, `Win`).
 Speakly stores data in a few locations:
 
 - Main config: `%AppData%\Speakly\config.json`
+- Startup task (when enabled): `Speakly Startup` in Windows Task Scheduler
 - Debug logs: `%AppData%\Speakly\Logs\speakly_debug.log`
 - Prompt library: `%AppData%\Speakly\prompts.json` (auto-migrated from legacy install-folder `prompts.json` on first launch)
 - History: `history.json` and `history.log` (next to executable)

@@ -11,7 +11,7 @@ namespace Speakly.Config
 {
     public class AppConfig
     {
-        public const int CurrentConfigVersion = 5;
+        public const int CurrentConfigVersion = 7;
         public const string DefaultRefinementPrompt =
             "Role and Objective:\n" +
             "You refine speech-to-text transcripts for clarity, grammatical correctness, and formatting compliance.\n\n" +
@@ -157,6 +157,12 @@ namespace Speakly.Config
         [JsonPropertyName("minimize_to_tray")]
         public bool MinimizeToTray { get; set; } = true;
 
+        [JsonPropertyName("start_with_windows")]
+        public bool StartWithWindows { get; set; } = false;
+
+        [JsonPropertyName("personal_dictionary_global")]
+        public List<string> PersonalDictionaryGlobal { get; set; } = new();
+
         [JsonPropertyName("show_overlay")]
         public bool ShowOverlay { get; set; } = true;
 
@@ -180,6 +186,24 @@ namespace Speakly.Config
 
         [JsonPropertyName("chunk_size")]
         public int ChunkSize { get; set; } = 4096;
+
+        [JsonPropertyName("auto_mic_gain_enabled")]
+        public bool AutoMicGainEnabled { get; set; } = true;
+
+        [JsonPropertyName("dynamic_normalization_enabled")]
+        public bool DynamicNormalizationEnabled { get; set; } = true;
+
+        [JsonPropertyName("noise_gate_enabled")]
+        public bool NoiseGateEnabled { get; set; } = false;
+
+        [JsonPropertyName("noise_gate_threshold_db")]
+        public int NoiseGateThresholdDb { get; set; } = -45;
+
+        [JsonPropertyName("auto_mic_gain_target_rms")]
+        public double AutoMicGainTargetRms { get; set; } = 0.12;
+
+        [JsonPropertyName("normalization_target_peak")]
+        public double NormalizationTargetPeak { get; set; } = 0.85;
 
         [JsonPropertyName("save_debug_records")]
         public bool SaveDebugRecords { get; set; } = false;
@@ -405,6 +429,7 @@ namespace Speakly.Config
                 RefinementPrompt = config.RefinementPrompt,
                 Language = config.Language,
                 CopyToClipboard = config.CopyToClipboard,
+                DictionaryTerms = new List<string>(),
                 EnableSttFailover = config.EnableSttFailover,
                 SttFailoverOrder = config.SttFailoverOrder?.ToList() ?? new List<string> { "Deepgram", "OpenAI", "OpenRouter" }
             };
@@ -496,6 +521,10 @@ namespace Speakly.Config
             if (previousVersion < 5 && config.DeferredTargetPasteTtlSeconds == 600)
                 config.DeferredTargetPasteTtlSeconds = 0;
             config.DeferredTargetPasteTtlSeconds = Math.Clamp(config.DeferredTargetPasteTtlSeconds, 0, 604800);
+            config.NoiseGateThresholdDb = Math.Clamp(config.NoiseGateThresholdDb, -80, -10);
+            config.AutoMicGainTargetRms = Math.Clamp(config.AutoMicGainTargetRms, 0.02, 0.4);
+            config.NormalizationTargetPeak = Math.Clamp(config.NormalizationTargetPeak, 0.2, 0.99);
+            config.PersonalDictionaryGlobal = NormalizeDictionaryTerms(config.PersonalDictionaryGlobal);
 
             if (config.Profiles == null)
                 config.Profiles = new List<AppProfile>();
@@ -522,6 +551,7 @@ namespace Speakly.Config
                     profile.SttFailoverOrder = new List<string> { "Deepgram", "OpenAI", "OpenRouter" };
                 if (string.IsNullOrWhiteSpace(profile.RefinementPrompt))
                     profile.RefinementPrompt = AppConfig.DefaultRefinementPrompt;
+                profile.DictionaryTerms = NormalizeDictionaryTerms(profile.DictionaryTerms);
             }
 
             if (string.IsNullOrWhiteSpace(config.ActiveProfileId) ||
@@ -549,6 +579,21 @@ namespace Speakly.Config
                 "Cerebras" => config.CerebrasRefinementModel,
                 _ => config.OpenAIRefinementModel
             };
+        }
+
+        private static List<string> NormalizeDictionaryTerms(IEnumerable<string>? terms)
+        {
+            if (terms == null)
+            {
+                return new List<string>();
+            }
+
+            return terms
+                .Select(t => t?.Trim() ?? string.Empty)
+                .Where(t => !string.IsNullOrWhiteSpace(t))
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .OrderBy(t => t, StringComparer.OrdinalIgnoreCase)
+                .ToList();
         }
 
         private static void HydrateSecrets(AppConfig config)

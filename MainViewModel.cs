@@ -13,6 +13,7 @@ using System.Windows.Input;
 using System.Text;
 using System.Text.Json;
 using System.Threading.Tasks;
+using Microsoft.Win32;
 using NAudio.Wave;
 using Speakly.Config;
 using Speakly.Helpers;
@@ -37,6 +38,9 @@ namespace Speakly.ViewModels
         private string _profileDraftName = string.Empty;
         private string _profileProcessNamesInput = string.Empty;
         private string _profileStatusMessage = "Tip: create additional profiles and map them to process names (for example: code, notepad).";
+        private string _globalDictionaryTermsText = string.Empty;
+        private string _profileDictionaryTermsText = string.Empty;
+        private string _selectedDictionarySuggestion = string.Empty;
         private static readonly string[] DeepgramMultilingualCodes =
         {
             "en", "es", "fr", "de", "hi", "ru", "pt", "ja", "it", "nl"
@@ -57,6 +61,12 @@ namespace Speakly.ViewModels
         public ICommand DeleteProfileCommand { get; }
         public ICommand OpenDebugLogsCommand { get; }
         public ICommand ClearPendingTransferCommand { get; }
+        public ICommand AddSuggestionToGlobalDictionaryCommand { get; }
+        public ICommand AddSuggestionToProfileDictionaryCommand { get; }
+        public ICommand DismissDictionarySuggestionCommand { get; }
+        public ICommand ClearDictionarySuggestionsCommand { get; }
+        public ICommand ImportGlobalDictionaryCommand { get; }
+        public ICommand ExportGlobalDictionaryCommand { get; }
 
         public bool IsRefreshingModels
         {
@@ -371,6 +381,26 @@ namespace Speakly.ViewModels
             set { ConfigManager.Config.MinimizeToTray = value; OnPropertyChanged(); }
         }
 
+        public bool StartWithWindows
+        {
+            get => ConfigManager.Config.StartWithWindows;
+            set
+            {
+                if (ConfigManager.Config.StartWithWindows == value)
+                {
+                    return;
+                }
+
+                if (!App.SetStartWithWindowsEnabled(value))
+                {
+                    OnPropertyChanged();
+                    return;
+                }
+
+                OnPropertyChanged();
+            }
+        }
+
         public bool ShowOverlay
         {
             get => ConfigManager.Config.ShowOverlay;
@@ -400,6 +430,66 @@ namespace Speakly.ViewModels
             {
                 ConfigManager.Config.DeferredTargetPasteEnabled = value;
                 App.SetDeferredTargetPasteEnabled(value);
+                OnPropertyChanged();
+            }
+        }
+
+        public bool AutoMicGainEnabled
+        {
+            get => ConfigManager.Config.AutoMicGainEnabled;
+            set
+            {
+                ConfigManager.Config.AutoMicGainEnabled = value;
+                OnPropertyChanged();
+            }
+        }
+
+        public bool DynamicNormalizationEnabled
+        {
+            get => ConfigManager.Config.DynamicNormalizationEnabled;
+            set
+            {
+                ConfigManager.Config.DynamicNormalizationEnabled = value;
+                OnPropertyChanged();
+            }
+        }
+
+        public bool NoiseGateEnabled
+        {
+            get => ConfigManager.Config.NoiseGateEnabled;
+            set
+            {
+                ConfigManager.Config.NoiseGateEnabled = value;
+                OnPropertyChanged();
+            }
+        }
+
+        public int NoiseGateThresholdDb
+        {
+            get => ConfigManager.Config.NoiseGateThresholdDb;
+            set
+            {
+                ConfigManager.Config.NoiseGateThresholdDb = Clamp(value, -80, -10);
+                OnPropertyChanged();
+            }
+        }
+
+        public double AutoMicGainTargetRms
+        {
+            get => ConfigManager.Config.AutoMicGainTargetRms;
+            set
+            {
+                ConfigManager.Config.AutoMicGainTargetRms = Math.Clamp(value, 0.02, 0.4);
+                OnPropertyChanged();
+            }
+        }
+
+        public double NormalizationTargetPeak
+        {
+            get => ConfigManager.Config.NormalizationTargetPeak;
+            set
+            {
+                ConfigManager.Config.NormalizationTargetPeak = Math.Clamp(value, 0.2, 0.99);
                 OnPropertyChanged();
             }
         }
@@ -516,12 +606,52 @@ namespace Speakly.ViewModels
             }
         }
 
+        public string GlobalDictionaryTermsText
+        {
+            get => _globalDictionaryTermsText;
+            set
+            {
+                _globalDictionaryTermsText = value ?? string.Empty;
+                ConfigManager.Config.PersonalDictionaryGlobal = PersonalDictionaryService.ParseTerms(_globalDictionaryTermsText);
+                OnPropertyChanged();
+            }
+        }
+
+        public string ProfileDictionaryTermsText
+        {
+            get => _profileDictionaryTermsText;
+            set
+            {
+                _profileDictionaryTermsText = value ?? string.Empty;
+                var active = SelectedProfile ?? ConfigManager.GetActiveProfile();
+                if (active != null)
+                {
+                    active.DictionaryTerms = PersonalDictionaryService.ParseTerms(_profileDictionaryTermsText);
+                }
+                OnPropertyChanged();
+            }
+        }
+
+        public string SelectedDictionarySuggestion
+        {
+            get => _selectedDictionarySuggestion;
+            set
+            {
+                _selectedDictionarySuggestion = value ?? string.Empty;
+                OnPropertyChanged();
+                CommandManager.InvalidateRequerySuggested();
+            }
+        }
+
+        public bool HasDictionarySuggestions => DictionarySuggestions.Count > 0;
+
         public string DeepgramLanguageGuardMessage => BuildDeepgramLanguageGuardMessage();
 
         public bool HasDeepgramLanguageGuard => !string.IsNullOrWhiteSpace(DeepgramLanguageGuardMessage);
 
         public ObservableCollection<HistoryEntry> HistoryEntries { get; } = new ObservableCollection<HistoryEntry>();
         public ObservableCollection<AppProfile> Profiles { get; } = new ObservableCollection<AppProfile>();
+        public ObservableCollection<string> DictionarySuggestions { get; } = new ObservableCollection<string>();
 
         private AppProfile? _selectedProfile;
         public AppProfile? SelectedProfile
@@ -703,6 +833,7 @@ namespace Speakly.ViewModels
             active.RefinementPrompt = ConfigManager.Config.RefinementPrompt;
             active.Language = ConfigManager.Config.Language;
             active.CopyToClipboard = ConfigManager.Config.CopyToClipboard;
+            active.DictionaryTerms = PersonalDictionaryService.ParseTerms(_profileDictionaryTermsText);
             active.EnableSttFailover = ConfigManager.Config.EnableSttFailover;
             active.SttFailoverOrder = ConfigManager.Config.SttFailoverOrder.ToList();
         }
@@ -760,6 +891,7 @@ namespace Speakly.ViewModels
                 RefinementPrompt = baseProfile.RefinementPrompt,
                 Language = baseProfile.Language,
                 CopyToClipboard = baseProfile.CopyToClipboard,
+                DictionaryTerms = baseProfile.DictionaryTerms.ToList(),
                 EnableSttFailover = baseProfile.EnableSttFailover,
                 SttFailoverOrder = baseProfile.SttFailoverOrder.ToList()
             };
@@ -899,6 +1031,7 @@ namespace Speakly.ViewModels
         {
             UpdateSttModelList();
             UpdateRefinementModelList();
+            RefreshDictionaryTextFromConfig();
             OnPropertyChanged(nameof(SttModel));
             OnPropertyChanged(nameof(SelectedSttModelString));
             OnPropertyChanged(nameof(DeepgramApiBaseUrl));
@@ -916,7 +1049,23 @@ namespace Speakly.ViewModels
             OnPropertyChanged(nameof(CopyToClipboard));
             OnPropertyChanged(nameof(EnableSttFailover));
             OnPropertyChanged(nameof(DeferredTargetPasteEnabled));
+            OnPropertyChanged(nameof(StartWithWindows));
+            OnPropertyChanged(nameof(AutoMicGainEnabled));
+            OnPropertyChanged(nameof(DynamicNormalizationEnabled));
+            OnPropertyChanged(nameof(NoiseGateEnabled));
+            OnPropertyChanged(nameof(NoiseGateThresholdDb));
+            OnPropertyChanged(nameof(AutoMicGainTargetRms));
+            OnPropertyChanged(nameof(NormalizationTargetPeak));
+            OnPropertyChanged(nameof(GlobalDictionaryTermsText));
+            OnPropertyChanged(nameof(ProfileDictionaryTermsText));
             NotifyDeepgramLanguageGuardChanged();
+        }
+
+        private void RefreshDictionaryTextFromConfig()
+        {
+            _globalDictionaryTermsText = PersonalDictionaryService.SerializeTerms(ConfigManager.Config.PersonalDictionaryGlobal);
+            var active = SelectedProfile ?? ConfigManager.GetActiveProfile();
+            _profileDictionaryTermsText = PersonalDictionaryService.SerializeTerms(active?.DictionaryTerms);
         }
 
         public ICommand ToggleFavoriteModelCommand => ToggleRefinementFavoriteModelCommand;
@@ -970,6 +1119,184 @@ namespace Speakly.ViewModels
             PendingTransferStatus = string.IsNullOrWhiteSpace(status)
                 ? "No pending auto-paste."
                 : status.Trim();
+        }
+
+        public void AddDictionarySuggestions(IEnumerable<string> candidates)
+        {
+            var known = BuildKnownDictionarySet();
+            bool changed = false;
+            foreach (var candidate in candidates ?? Enumerable.Empty<string>())
+            {
+                var normalized = candidate?.Trim() ?? string.Empty;
+                if (string.IsNullOrWhiteSpace(normalized))
+                {
+                    continue;
+                }
+
+                if (known.Contains(normalized))
+                {
+                    continue;
+                }
+
+                if (DictionarySuggestions.Any(x => string.Equals(x, normalized, StringComparison.OrdinalIgnoreCase)))
+                {
+                    continue;
+                }
+
+                DictionarySuggestions.Add(normalized);
+                changed = true;
+            }
+
+            if (changed)
+            {
+                OnPropertyChanged(nameof(HasDictionarySuggestions));
+                CommandManager.InvalidateRequerySuggested();
+            }
+        }
+
+        private HashSet<string> BuildKnownDictionarySet()
+        {
+            var active = SelectedProfile ?? ConfigManager.GetActiveProfile();
+            return new HashSet<string>(
+                PersonalDictionaryService.GetCombinedTerms(ConfigManager.Config, active, maxTerms: 1000),
+                StringComparer.OrdinalIgnoreCase);
+        }
+
+        private void AddSuggestionToGlobalDictionary(string term)
+        {
+            var normalized = term?.Trim() ?? string.Empty;
+            if (string.IsNullOrWhiteSpace(normalized))
+            {
+                return;
+            }
+
+            var terms = ConfigManager.Config.PersonalDictionaryGlobal ?? new List<string>();
+            if (!terms.Any(x => string.Equals(x, normalized, StringComparison.OrdinalIgnoreCase)))
+            {
+                terms.Add(normalized);
+            }
+
+            ConfigManager.Config.PersonalDictionaryGlobal = terms
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .OrderBy(x => x, StringComparer.OrdinalIgnoreCase)
+                .ToList();
+
+            RefreshDictionaryTextFromConfig();
+            OnPropertyChanged(nameof(GlobalDictionaryTermsText));
+            RemoveSuggestionFromQueue(normalized);
+        }
+
+        private void AddSuggestionToProfileDictionary(string term)
+        {
+            var normalized = term?.Trim() ?? string.Empty;
+            if (string.IsNullOrWhiteSpace(normalized))
+            {
+                return;
+            }
+
+            var active = SelectedProfile ?? ConfigManager.GetActiveProfile();
+            if (active == null)
+            {
+                return;
+            }
+
+            var terms = active.DictionaryTerms ?? new List<string>();
+            if (!terms.Any(x => string.Equals(x, normalized, StringComparison.OrdinalIgnoreCase)))
+            {
+                terms.Add(normalized);
+            }
+
+            active.DictionaryTerms = terms
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .OrderBy(x => x, StringComparer.OrdinalIgnoreCase)
+                .ToList();
+
+            RefreshDictionaryTextFromConfig();
+            OnPropertyChanged(nameof(ProfileDictionaryTermsText));
+            RemoveSuggestionFromQueue(normalized);
+        }
+
+        private void DismissSuggestion(string term)
+        {
+            RemoveSuggestionFromQueue(term);
+        }
+
+        private void RemoveSuggestionFromQueue(string term)
+        {
+            var normalized = term?.Trim() ?? string.Empty;
+            if (string.IsNullOrWhiteSpace(normalized))
+            {
+                return;
+            }
+
+            var existing = DictionarySuggestions
+                .FirstOrDefault(x => string.Equals(x, normalized, StringComparison.OrdinalIgnoreCase));
+            if (existing == null)
+            {
+                return;
+            }
+
+            DictionarySuggestions.Remove(existing);
+            if (string.Equals(SelectedDictionarySuggestion, existing, StringComparison.OrdinalIgnoreCase))
+            {
+                SelectedDictionarySuggestion = string.Empty;
+            }
+
+            OnPropertyChanged(nameof(HasDictionarySuggestions));
+            CommandManager.InvalidateRequerySuggested();
+        }
+
+        private void ImportGlobalDictionary()
+        {
+            try
+            {
+                var dialog = new OpenFileDialog
+                {
+                    Title = "Import Personal Dictionary",
+                    Filter = "Text Files (*.txt;*.csv)|*.txt;*.csv|All Files (*.*)|*.*",
+                    CheckFileExists = true
+                };
+
+                if (dialog.ShowDialog() != true)
+                {
+                    return;
+                }
+
+                var content = File.ReadAllText(dialog.FileName);
+                ConfigManager.Config.PersonalDictionaryGlobal = PersonalDictionaryService.ParseTerms(content);
+                RefreshDictionaryTextFromConfig();
+                OnPropertyChanged(nameof(GlobalDictionaryTermsText));
+            }
+            catch (Exception ex)
+            {
+                Logger.LogException("ImportGlobalDictionary", ex);
+            }
+        }
+
+        private void ExportGlobalDictionary()
+        {
+            try
+            {
+                var dialog = new SaveFileDialog
+                {
+                    Title = "Export Personal Dictionary",
+                    Filter = "Text Files (*.txt)|*.txt|CSV Files (*.csv)|*.csv|All Files (*.*)|*.*",
+                    FileName = "speakly-dictionary.txt",
+                    AddExtension = true
+                };
+
+                if (dialog.ShowDialog() != true)
+                {
+                    return;
+                }
+
+                var payload = PersonalDictionaryService.SerializeTerms(ConfigManager.Config.PersonalDictionaryGlobal);
+                File.WriteAllText(dialog.FileName, payload);
+            }
+            catch (Exception ex)
+            {
+                Logger.LogException("ExportGlobalDictionary", ex);
+            }
         }
 
         public string ApiTestStatus
@@ -1056,6 +1383,27 @@ namespace Speakly.ViewModels
             ClearPendingTransferCommand = new RelayCommand(
                 _ => App.ClearDeferredTargetPaste(),
                 _ => HasPendingTransfer);
+            AddSuggestionToGlobalDictionaryCommand = new RelayCommand(
+                obj => AddSuggestionToGlobalDictionary((obj as string) ?? SelectedDictionarySuggestion),
+                obj => !string.IsNullOrWhiteSpace((obj as string) ?? SelectedDictionarySuggestion));
+            AddSuggestionToProfileDictionaryCommand = new RelayCommand(
+                obj => AddSuggestionToProfileDictionary((obj as string) ?? SelectedDictionarySuggestion),
+                obj => !string.IsNullOrWhiteSpace((obj as string) ?? SelectedDictionarySuggestion)
+                    && (SelectedProfile ?? ConfigManager.GetActiveProfile()) != null);
+            DismissDictionarySuggestionCommand = new RelayCommand(
+                obj => DismissSuggestion((obj as string) ?? SelectedDictionarySuggestion),
+                obj => !string.IsNullOrWhiteSpace((obj as string) ?? SelectedDictionarySuggestion));
+            ClearDictionarySuggestionsCommand = new RelayCommand(
+                _ =>
+                {
+                    DictionarySuggestions.Clear();
+                    SelectedDictionarySuggestion = string.Empty;
+                    OnPropertyChanged(nameof(HasDictionarySuggestions));
+                    CommandManager.InvalidateRequerySuggested();
+                },
+                _ => HasDictionarySuggestions);
+            ImportGlobalDictionaryCommand = new RelayCommand(_ => ImportGlobalDictionary());
+            ExportGlobalDictionaryCommand = new RelayCommand(_ => ExportGlobalDictionary());
 
             SetProfileByIdCommand = new RelayCommand(obj =>
             {
@@ -1107,6 +1455,7 @@ namespace Speakly.ViewModels
             _ => CanDeleteSelectedPrompt);
 
             RunHealthChecks();
+            RefreshDictionaryTextFromConfig();
 
             PropertyChanged += (_, args) =>
             {
@@ -1119,6 +1468,8 @@ namespace Speakly.ViewModels
                     or nameof(ApiTestStatus)
                     or nameof(DeepgramLanguageGuardMessage)
                     or nameof(HasDeepgramLanguageGuard)
+                    or nameof(SelectedDictionarySuggestion)
+                    or nameof(HasDictionarySuggestions)
                     or nameof(NewProfileName)
                     or nameof(ProfileDraftName)
                     or nameof(ProfileProcessNamesInput)

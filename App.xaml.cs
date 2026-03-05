@@ -1945,7 +1945,7 @@ namespace Speakly
         }
 
         public static string AppVersion { get; } =
-            System.Reflection.Assembly.GetExecutingAssembly().GetName().Version?.ToString(3) ?? "2.0.0";
+            System.Reflection.Assembly.GetExecutingAssembly().GetName().Version?.ToString(3) ?? "2.0.2";
 
         public static void SetTheme(string themeName)
         {

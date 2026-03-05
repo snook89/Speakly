@@ -5,11 +5,22 @@ using System.Windows.Data;
 using System.Windows.Threading;
 using System.Windows;
 using System.Windows.Media;
+using System.Windows.Input;
 
 namespace Speakly.Helpers
 {
     internal static class EditableModelComboHelper
     {
+        public static void HandleKeyUp(ComboBox combo, Key key)
+        {
+            if (!ShouldApplyFilterForKey(key))
+            {
+                return;
+            }
+
+            HandleTextChanged(combo);
+        }
+
         public static void HandleTextChanged(ComboBox combo)
         {
             if (!combo.IsKeyboardFocusWithin) return;
@@ -100,7 +111,7 @@ namespace Speakly.Helpers
 
         private static ScrollViewer? FindDropDownScrollViewer(ComboBox combo)
         {
-            if (combo.Template.FindName("PART_Popup", combo) is Popup popup && popup.Child is DependencyObject popupRoot)
+            if (TryGetPopup(combo) is Popup popup && popup.Child is DependencyObject popupRoot)
             {
                 var popupScrollViewer = FindChild<ScrollViewer>(popupRoot);
                 if (popupScrollViewer != null)
@@ -110,6 +121,55 @@ namespace Speakly.Helpers
             }
 
             return FindChild<ScrollViewer>(combo);
+        }
+
+        private static Popup? TryGetPopup(ComboBox combo)
+        {
+            if (combo.Template.FindName("PART_Popup", combo) is Popup standardPopup)
+            {
+                return standardPopup;
+            }
+
+            if (combo.Template.FindName("Popup", combo) is Popup customPopup)
+            {
+                return customPopup;
+            }
+
+            return null;
+        }
+
+        private static bool ShouldApplyFilterForKey(Key key)
+        {
+            if (Keyboard.Modifiers.HasFlag(ModifierKeys.Control) ||
+                Keyboard.Modifiers.HasFlag(ModifierKeys.Alt) ||
+                Keyboard.Modifiers.HasFlag(ModifierKeys.Windows))
+            {
+                return false;
+            }
+
+            return key switch
+            {
+                Key.Up => false,
+                Key.Down => false,
+                Key.Left => false,
+                Key.Right => false,
+                Key.PageUp => false,
+                Key.PageDown => false,
+                Key.Home => false,
+                Key.End => false,
+                Key.Tab => false,
+                Key.Enter => false,
+                Key.Escape => false,
+                Key.LeftShift => false,
+                Key.RightShift => false,
+                Key.LeftCtrl => false,
+                Key.RightCtrl => false,
+                Key.LeftAlt => false,
+                Key.RightAlt => false,
+                Key.LWin => false,
+                Key.RWin => false,
+                _ => true
+            };
         }
     }
 }

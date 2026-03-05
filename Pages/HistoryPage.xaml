@@ -2,124 +2,147 @@
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
-             FontFamily="Segoe UI Variable Text">
-    <Grid Margin="24,16,24,24">
-        <Grid.RowDefinitions>
-            <RowDefinition Height="Auto"/>
-            <RowDefinition Height="Auto"/>
-            <RowDefinition Height="*"/>
-        </Grid.RowDefinitions>
+             FontFamily="Segoe UI Variable Text"
+             Background="#FF1E2330">
+    <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="{StaticResource PagePadding}">
+        <StackPanel MaxWidth="860">
+            <StackPanel Margin="0,0,0,20">
+                <TextBlock Text="ACTIVITY" Style="{StaticResource PageEyebrow}" />
+                <TextBlock Text="History" Style="{StaticResource PageTitle}" Margin="0" />
+            </StackPanel>
 
-        <TextBlock Grid.Row="0" Text="History" Style="{StaticResource PageTitle}"/>
-
-        <Grid Grid.Row="1" Margin="0,0,0,10">
-            <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="2*"/>
-                <ColumnDefinition Width="Auto"/>
-                <ColumnDefinition Width="Auto"/>
-                <ColumnDefinition Width="Auto"/>
-            </Grid.ColumnDefinitions>
-            <ui:TextBox x:Name="SearchBox"
-                        Grid.Column="0"
-                        PlaceholderText="Search history..."
-                        TextChanged="SearchBox_TextChanged"
-                        Margin="0,0,8,0"/>
-            <ComboBox x:Name="StatusFilterBox"
-                      Grid.Column="1"
-                      SelectionChanged="Filter_SelectionChanged"
-                      Width="130"
-                      Margin="0,0,8,0">
-                <ComboBoxItem Content="All statuses" Tag="all"/>
-                <ComboBoxItem Content="Successful" Tag="ok"/>
-                <ComboBoxItem Content="Failed" Tag="fail"/>
-            </ComboBox>
-            <ComboBox x:Name="ProviderFilterBox"
-                      Grid.Column="2"
-                      SelectionChanged="Filter_SelectionChanged"
-                      Width="130">
-                <ComboBoxItem Content="All providers" Tag="all"/>
-                <ComboBoxItem Content="Deepgram" Tag="Deepgram"/>
-                <ComboBoxItem Content="OpenAI" Tag="OpenAI"/>
-                <ComboBoxItem Content="OpenRouter" Tag="OpenRouter"/>
-            </ComboBox>
-            <ComboBox x:Name="ProfileFilterBox"
-                      Grid.Column="3"
-                      SelectionChanged="Filter_SelectionChanged"
-                      Width="150"
-                      Margin="8,0,0,0">
-                <ComboBoxItem Content="All profiles" Tag="all"/>
-            </ComboBox>
-        </Grid>
-
-        <ListBox Grid.Row="2"
-                 ItemsSource="{Binding HistoryEntries}"
-                 Background="Transparent"
-                 BorderThickness="0"
-                 ScrollViewer.HorizontalScrollBarVisibility="Disabled">
-            <ListBox.ItemTemplate>
-                <DataTemplate>
-                    <ui:Card Padding="12" Margin="0,0,0,8">
-                        <Grid>
+            <Border Style="{StaticResource PageFeatureCard}">
+                <StackPanel>
+                    <TextBlock Text="FILTERS" Style="{StaticResource PageFeatureLabel}" />
+                    <Border Style="{StaticResource PageFeatureSurface}" Margin="0">
+                        <Grid Margin="0,0,0,2">
                             <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="*"/>
-                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="2*" />
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="Auto" />
                             </Grid.ColumnDefinitions>
-
-                            <StackPanel Grid.Column="0">
-                                <TextBlock Text="{Binding Timestamp, StringFormat='{}{0:HH:mm:ss}'}"
-                                           FontSize="11"
-                                           Foreground="{DynamicResource TextFillColorSecondaryBrush}"
-                                           Margin="0,0,0,4"/>
-                                <TextBlock Text="{Binding SttProvider, StringFormat=STT: {0}}"
-                                           FontSize="11"
-                                           Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
-                                <TextBlock Text="{Binding Succeeded, StringFormat=Successful: {0}}"
-                                           FontSize="11"
-                                           Foreground="{DynamicResource TextFillColorSecondaryBrush}"
-                                           Margin="0,0,0,4"/>
-                                <TextBlock Text="{Binding ProfileName, StringFormat=Profile: {0}}"
-                                           FontSize="11"
-                                           Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
-                                <TextBlock Text="{Binding FailoverAttempted, StringFormat=Failover: {0}}"
-                                           FontSize="11"
-                                           Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
-                                <TextBlock Text="{Binding RefinedText}"
-                                           TextWrapping="Wrap"
-                                           FontSize="14"
-                                           Foreground="{DynamicResource TextFillColorPrimaryBrush}"/>
-                                <TextBlock Text="{Binding OriginalText}"
-                                           FontSize="12"
-                                           Foreground="{DynamicResource TextFillColorSecondaryBrush}"
-                                           FontStyle="Italic"
-                                           Margin="0,4,0,0"
-                                           TextWrapping="Wrap"/>
-                                <TextBlock Text="{Binding RecordMs, StringFormat=Record: {0} ms}"
-                                           FontSize="11"
-                                           Foreground="{DynamicResource TextFillColorSecondaryBrush}"
-                                           Margin="0,4,0,0"/>
-                                <TextBlock Text="{Binding TranscribeMs, StringFormat=Transcribe: {0} ms}"
-                                           FontSize="11"
-                                           Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
-                                <TextBlock Text="{Binding RefineMs, StringFormat=Refine: {0} ms}"
-                                           FontSize="11"
-                                           Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
-                                <TextBlock Text="{Binding InsertMs, StringFormat=Insert: {0} ms}"
-                                           FontSize="11"
-                                           Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
-                            </StackPanel>
-
-                            <ui:Button Grid.Column="1"
-                                       VerticalAlignment="Top"
-                                       Content="Copy"
-                                       Command="{Binding DataContext.CopyHistoryCommand, RelativeSource={RelativeSource AncestorType=ListBox}}"
-                                       CommandParameter="{Binding RefinedText}"
-                                       Padding="10,5"
-                                       FontSize="11"
-                                       Style="{StaticResource SecondaryButton}"/>
+                            <ui:TextBox x:Name="SearchBox"
+                                        Grid.Column="0"
+                                        PlaceholderText="Search history..."
+                                        TextChanged="SearchBox_TextChanged"
+                                        Style="{StaticResource InputDefault}"
+                                        Margin="0,0,8,0" />
+                            <ComboBox x:Name="StatusFilterBox"
+                                      Grid.Column="1"
+                                      SelectionChanged="Filter_SelectionChanged"
+                                      Width="140"
+                                      Style="{StaticResource DropdownDefault}"
+                                      Margin="0,0,8,0">
+                                <ComboBoxItem Content="All statuses" Tag="all" />
+                                <ComboBoxItem Content="Successful" Tag="ok" />
+                                <ComboBoxItem Content="Failed" Tag="fail" />
+                            </ComboBox>
+                            <ComboBox x:Name="ProviderFilterBox"
+                                      Grid.Column="2"
+                                      SelectionChanged="Filter_SelectionChanged"
+                                      Width="140"
+                                      Style="{StaticResource DropdownDefault}">
+                                <ComboBoxItem Content="All providers" Tag="all" />
+                                <ComboBoxItem Content="Deepgram" Tag="Deepgram" />
+                                <ComboBoxItem Content="OpenAI" Tag="OpenAI" />
+                                <ComboBoxItem Content="OpenRouter" Tag="OpenRouter" />
+                            </ComboBox>
+                            <ComboBox x:Name="ProfileFilterBox"
+                                      Grid.Column="3"
+                                      SelectionChanged="Filter_SelectionChanged"
+                                      Width="160"
+                                      Style="{StaticResource DropdownDefault}"
+                                      Margin="8,0,0,0">
+                                <ComboBoxItem Content="All profiles" Tag="all" />
+                            </ComboBox>
                         </Grid>
-                    </ui:Card>
-                </DataTemplate>
-            </ListBox.ItemTemplate>
-        </ListBox>
-    </Grid>
+                    </Border>
+                </StackPanel>
+            </Border>
+
+            <Border Style="{StaticResource PageFeatureCard}" Margin="0">
+                <StackPanel>
+                    <TextBlock Text="ENTRIES" Style="{StaticResource PageFeatureLabel}" />
+                    <ListBox ItemsSource="{Binding HistoryEntries}"
+                             Style="{StaticResource InputList}"
+                             BorderThickness="0"
+                             Background="Transparent"
+                             ScrollViewer.HorizontalScrollBarVisibility="Disabled">
+                        <ListBox.ItemTemplate>
+                            <DataTemplate>
+                                <Border Style="{StaticResource PageFeatureSurface}" Margin="0,0,0,10">
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="Auto" />
+                                        </Grid.ColumnDefinitions>
+
+                                        <StackPanel Grid.Column="0">
+                                            <TextBlock Text="{Binding Timestamp, StringFormat='{}{0:HH:mm:ss}'}"
+                                                       Style="{StaticResource HintText}"
+                                                       Margin="0,0,0,4" />
+                                            <WrapPanel Margin="0,0,0,6">
+                                                <TextBlock Text="{Binding SttProvider, StringFormat=STT: {0}}" Style="{StaticResource HintText}" Margin="0,0,14,0" />
+                                                <TextBlock Text="{Binding Succeeded, StringFormat=Successful: {0}}" Style="{StaticResource HintText}" Margin="0,0,14,0" />
+                                                <TextBlock Text="{Binding ProfileName, StringFormat=Profile: {0}}" Style="{StaticResource HintText}" Margin="0,0,14,0" />
+                                                <TextBlock Text="{Binding FailoverAttempted, StringFormat=Failover: {0}}" Style="{StaticResource HintText}" />
+                                            </WrapPanel>
+
+                                            <TextBlock Text="{Binding RefinedText}"
+                                                       Style="{StaticResource BodyText}"
+                                                       Margin="0,0,0,4" />
+                                            <TextBlock Text="{Binding OriginalText}"
+                                                       FontSize="12"
+                                                       Foreground="{DynamicResource BrushTextSecondary}"
+                                                       FontStyle="Italic"
+                                                       TextWrapping="Wrap"
+                                                       Margin="0,0,0,8" />
+
+                                            <UniformGrid Columns="4">
+                                                <Border Style="{StaticResource PageFeatureSurface}" Margin="0,0,8,0">
+                                                    <StackPanel>
+                                                        <TextBlock Text="RECORD" Style="{StaticResource PageFeatureLabel}" Margin="0,0,0,4" />
+                                                        <TextBlock Text="{Binding RecordMs, StringFormat={}{0} ms}" Style="{StaticResource BodyText}" />
+                                                    </StackPanel>
+                                                </Border>
+                                                <Border Style="{StaticResource PageFeatureSurface}" Margin="0,0,8,0">
+                                                    <StackPanel>
+                                                        <TextBlock Text="TRANSCRIBE" Style="{StaticResource PageFeatureLabel}" Margin="0,0,0,4" />
+                                                        <TextBlock Text="{Binding TranscribeMs, StringFormat={}{0} ms}" Style="{StaticResource BodyText}" />
+                                                    </StackPanel>
+                                                </Border>
+                                                <Border Style="{StaticResource PageFeatureSurface}" Margin="0,0,8,0">
+                                                    <StackPanel>
+                                                        <TextBlock Text="REFINE" Style="{StaticResource PageFeatureLabel}" Margin="0,0,0,4" />
+                                                        <TextBlock Text="{Binding RefineMs, StringFormat={}{0} ms}" Style="{StaticResource BodyText}" />
+                                                    </StackPanel>
+                                                </Border>
+                                                <Border Style="{StaticResource PageFeatureSurface}" Margin="0">
+                                                    <StackPanel>
+                                                        <TextBlock Text="INSERT" Style="{StaticResource PageFeatureLabel}" Margin="0,0,0,4" />
+                                                        <TextBlock Text="{Binding InsertMs, StringFormat={}{0} ms}" Style="{StaticResource BodyText}" />
+                                                    </StackPanel>
+                                                </Border>
+                                            </UniformGrid>
+                                        </StackPanel>
+
+                                        <ui:Button Grid.Column="1"
+                                                   VerticalAlignment="Top"
+                                                   Content="Copy"
+                                                   Command="{Binding DataContext.CopyHistoryCommand, RelativeSource={RelativeSource AncestorType=ListBox}}"
+                                                   CommandParameter="{Binding RefinedText}"
+                                                   Style="{StaticResource GhostButton}"
+                                                   Margin="12,0,0,0" />
+                                    </Grid>
+                                </Border>
+                            </DataTemplate>
+                        </ListBox.ItemTemplate>
+                    </ListBox>
+                </StackPanel>
+            </Border>
+        </StackPanel>
+    </ScrollViewer>
 </UserControl>
+
+

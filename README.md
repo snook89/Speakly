@@ -18,8 +18,8 @@ Built with WPF on .NET 9.
 - Automatic STT failover for transient provider errors.
 - Floating overlay (status, language badge, waveform, quick menu).
 - System tray controls (settings, profiles, overlay recovery, quick toggles).
-- Always-elevated runtime (UAC) for reliable insertion into elevated apps.
-- Optional `Start on Windows startup` registration (Task Scheduler, highest privileges).
+- Standard runtime (`asInvoker`) with on-demand elevation prompt when required.
+- Optional `Start on Windows startup` registration (Task Scheduler, current user privileges).
 - Personal dictionary (global + per-profile) with suggested-term confirmation queue.
 - Managed audio processing: automatic mic gain, dynamic normalization, optional noise gate.
 - History and statistics pages with latency, success/failure, and failover data.
@@ -55,7 +55,7 @@ Notes:
 ## Requirements
 
 - Windows 10/11.
-- Administrator approval on launch (Speakly runs elevated).
+- No administrator approval required on launch.
 - .NET 9 SDK (for building/running from source) or .NET 9 runtime (for published build).
 - Internet access to provider APIs.
 - API keys:

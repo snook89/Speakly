@@ -17,6 +17,7 @@ namespace Speakly.Config
         public string RefinementProvider { get; set; } = "OpenAI";
         public string RefinementModel { get; set; } = "gpt-4o-mini";
         public string RefinementPrompt { get; set; } = AppConfig.DefaultRefinementPrompt;
+        public string PromptPresetName { get; set; } = string.Empty;
 
         public string Language { get; set; } = "en";
         public bool CopyToClipboard { get; set; }

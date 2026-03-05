@@ -114,10 +114,28 @@ namespace Speakly.Services
             if (string.IsNullOrWhiteSpace(apiKey)) return "FAIL: No API Key provided";
             try
             {
-                var request = new HttpRequestMessage(HttpMethod.Get, "https://openrouter.ai/api/v1/models");
+                var payload = new
+                {
+                    model = "openrouter/auto",
+                    messages = new[]
+                    {
+                        new { role = "user", content = "ping" }
+                    },
+                    max_tokens = 1,
+                    temperature = 0
+                };
+
+                var request = new HttpRequestMessage(HttpMethod.Post, "https://openrouter.ai/api/v1/chat/completions");
                 request.Headers.Add("Authorization", $"Bearer {apiKey}");
+                request.Headers.TryAddWithoutValidation("HTTP-Referer", "https://speakly.app");
+                request.Headers.TryAddWithoutValidation("X-Title", "Speakly");
+                request.Content = new StringContent(JsonSerializer.Serialize(payload), Encoding.UTF8, "application/json");
+
                 var response = await _client.SendAsync(request);
-                return response.IsSuccessStatusCode ? "OK: Connection Successful" : $"FAIL: {response.StatusCode}";
+                if (response.IsSuccessStatusCode) return "OK: Connection Successful";
+
+                var body = await response.Content.ReadAsStringAsync();
+                return $"FAIL: {response.StatusCode} ({ExtractApiErrorMessage(body)})";
             }
             catch (Exception ex) { return $"FAIL: {ex.Message}"; }
         }

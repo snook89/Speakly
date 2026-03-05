@@ -46,11 +46,11 @@ namespace Speakly.Services
             // /TR requires the executable path to be wrapped in quotes as part of the value.
             var taskAction = $"\\\"{exePath}\\\"";
             var create = RunSchtasks(
-                $"/Create /F /TN \"{StartupTaskName}\" /SC ONLOGON /RL HIGHEST /TR \"{taskAction}\"");
+                $"/Create /F /TN \"{StartupTaskName}\" /SC ONLOGON /RL LIMITED /TR \"{taskAction}\"");
 
             if (create.ExitCode == 0)
             {
-                message = "Startup task registered (highest privileges).";
+                message = "Startup task registered.";
                 return true;
             }
 

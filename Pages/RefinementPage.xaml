@@ -2,215 +2,253 @@
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
-             FontFamily="Segoe UI Variable Text">
-    <ScrollViewer VerticalScrollBarVisibility="Auto">
-        <StackPanel Margin="24,16,24,24">
-            <TextBlock Text="Refinement" Style="{StaticResource PageTitle}"/>
+             FontFamily="Segoe UI Variable Text"
+             Background="#FF1E2330">
+    <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="{StaticResource PagePadding}">
+        <StackPanel MaxWidth="760">
+            <StackPanel Margin="0,0,0,28">
+                <TextBlock Text="AI REFINEMENT" Style="{StaticResource PageEyebrow}" />
+                <TextBlock Text="Refinement" Style="{StaticResource PageTitle}" Margin="0" />
+            </StackPanel>
 
-            <Border Style="{StaticResource SectionCard}">
+            <Border Style="{StaticResource PageFeatureCard}" Margin="0">
                 <StackPanel>
-                    <TextBlock Text="AI Text Refinement" Style="{StaticResource SectionTitle}"/>
+                    <TextBlock Text="REFINEMENT ENGINE" Style="{StaticResource PageFeatureLabel}" />
+                    <TextBlock Text="AI Text Refinement" Style="{StaticResource SectionTitle}" />
+                    <ui:ToggleSwitch Content="Enable AI Refinement"
+                                     IsChecked="{Binding EnableRefinement}"
+                                     Style="{StaticResource AccentToggleSwitch}"
+                                     Margin="0,0,0,10" />
 
-                    <ui:ToggleSwitch Content="Enable AI Refinement" IsChecked="{Binding EnableRefinement}" Margin="0,0,0,16"/>
-
-                    <!-- All refinement settings are hidden when refinement is disabled -->
                     <StackPanel>
                         <StackPanel.Style>
                             <Style TargetType="StackPanel">
                                 <Style.Triggers>
                                     <DataTrigger Binding="{Binding EnableRefinement}" Value="False">
-                                        <Setter Property="Opacity" Value="0.4"/>
-                                        <Setter Property="IsEnabled" Value="False"/>
+                                        <Setter Property="Opacity" Value="0.4" />
+                                        <Setter Property="IsEnabled" Value="False" />
                                     </DataTrigger>
                                 </Style.Triggers>
                             </Style>
                         </StackPanel.Style>
 
-                    <TextBlock Text="Service" Style="{StaticResource FieldLabel}"/>
-                    <ComboBox SelectedValue="{Binding RefinementModel}" SelectedValuePath="Content" Margin="0,0,0,16" MaxWidth="300" HorizontalAlignment="Left">
-                        <ComboBoxItem Content="OpenAI"/>
-                        <ComboBoxItem Content="OpenRouter"/>
-                        <ComboBoxItem Content="Cerebras"/>
-                    </ComboBox>
-
-                    <TextBlock Text="Target Model" Style="{StaticResource FieldLabel}"/>
-                    <Grid x:Name="ModelRow">
-                        <ComboBox x:Name="RefinementModelCombo"
-                                  ItemsSource="{Binding AvailableRefinementModels}"
-                                  Text="{Binding SelectedRefinementModelString}"
-                                  IsEditable="True"
-                                  IsTextSearchEnabled="False"
-                                  StaysOpenOnEdit="True"
-                                  ScrollViewer.VerticalScrollBarVisibility="Visible"
-                                  KeyUp="ModelCombo_KeyUp"
-                                  DropDownClosed="ModelCombo_DropDownClosed"
-                                  PreviewKeyDown="ModelCombo_PreviewKeyDown"
-                                  Margin="0,0,0,12">
-                            <ComboBox.ItemTemplate>
-                                <DataTemplate>
-                                    <StackPanel Orientation="Horizontal">
-                                        <TextBlock Text="★"
-                                                   Foreground="{DynamicResource TextFillColorSecondaryBrush}"
-                                                   Margin="0,0,6,0">
-                                            <TextBlock.Visibility>
-                                                <MultiBinding Converter="{StaticResource ModelFavoriteVisibilityConverter}"
-                                                              ConverterParameter="Refinement">
-                                                    <Binding />
-                                                    <Binding RelativeSource="{RelativeSource AncestorType=UserControl}" Path="DataContext"/>
-                                                </MultiBinding>
-                                            </TextBlock.Visibility>
-                                        </TextBlock>
-                                        <TextBlock Text="{Binding}" />
-                                    </StackPanel>
-                                </DataTemplate>
-                            </ComboBox.ItemTemplate>
-                            <ComboBox.ItemContainerStyle>
-                                <Style TargetType="ComboBoxItem" BasedOn="{StaticResource {x:Type ComboBoxItem}}">
-                                    <!-- Tag carries the ViewModel so ContextMenu can reach it -->
-                                    <Setter Property="Tag" Value="{Binding DataContext, RelativeSource={RelativeSource AncestorType=UserControl}}"/>
-                                    <Setter Property="ContextMenu">
-                                        <Setter.Value>
-                                            <ContextMenu>
-                                                <MenuItem Header="★ Toggle Favorite"
-                                                          Command="{Binding PlacementTarget.Tag.ToggleRefinementFavoriteModelCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
-                                                          CommandParameter="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource AncestorType=ContextMenu}}"/>
-                                            </ContextMenu>
-                                        </Setter.Value>
-                                    </Setter>
-                                </Style>
-                            </ComboBox.ItemContainerStyle>
+                        <TextBlock Text="Service" Style="{StaticResource FieldLabel}" />
+                        <ComboBox SelectedValue="{Binding RefinementModel}"
+                                  SelectedValuePath="Content"
+                                  Style="{StaticResource DropdownDefault}"
+                                  Margin="0,0,0,16"
+                                  MaxWidth="300"
+                                  MinWidth="240"
+                                  HorizontalAlignment="Left">
+                            <ComboBoxItem Content="OpenAI" />
+                            <ComboBoxItem Content="OpenRouter" />
+                            <ComboBoxItem Content="Cerebras" />
                         </ComboBox>
-                        <Border x:Name="ModelGlow"
-                                BorderThickness="2" IsHitTestVisible="False" Opacity="0" Panel.ZIndex="10"
-                                Margin="0,0,0,12">
-                            <Border.Effect><DropShadowEffect x:Name="ModelGlowFx" BlurRadius="18" ShadowDepth="0" Opacity="0.95"/></Border.Effect>
-                        </Border>
-                    </Grid>
 
-                    <ui:Button Content="Refresh models"
-                               Command="{Binding RefreshModelsCommand}"
-                               HorizontalAlignment="Left"
-                               Padding="14,7"
-                               Style="{StaticResource SecondaryButton}"
-                               Margin="0,0,0,10"/>
-
-                    <ui:InfoBar Title="Model status"
-                                Message="{Binding ModelRefreshStatus}"
-                                Severity="Informational"
-                                IsOpen="{Binding HasModelRefreshStatus}"
-                                Margin="0,0,0,12"/>
-
-                    <Expander Header="Advanced Settings" IsExpanded="False" Margin="0,0,0,14">
-                        <StackPanel Margin="0,10,0,0">
-                            <TextBlock Text="For power users. Defaults are safe for most setups."
-                                       Style="{StaticResource HintText}"
-                                       Margin="0,0,0,10"/>
-
-                            <StackPanel>
-                                <StackPanel.Style>
-                                    <Style TargetType="StackPanel">
-                                        <Setter Property="Visibility" Value="Collapsed"/>
-                                        <Style.Triggers>
-                                            <DataTrigger Binding="{Binding IsCerebrasRefinementProvider}" Value="True">
-                                                <Setter Property="Visibility" Value="Visible"/>
-                                            </DataTrigger>
-                                        </Style.Triggers>
+                        <TextBlock Text="Target Model" Style="{StaticResource FieldLabel}" />
+                        <Grid x:Name="ModelRow" Width="420" HorizontalAlignment="Left">
+                            <ComboBox x:Name="RefinementModelCombo"
+                                      ItemsSource="{Binding AvailableRefinementModels}"
+                                      Text="{Binding SelectedRefinementModelString}"
+                                      Style="{StaticResource DropdownDefault}"
+                                      Width="420"
+                                      HorizontalAlignment="Stretch"
+                                      IsEditable="True"
+                                      IsTextSearchEnabled="False"
+                                      StaysOpenOnEdit="True"
+                                      MaxDropDownHeight="460"
+                                      ScrollViewer.VerticalScrollBarVisibility="Visible"
+                                      KeyUp="ModelCombo_KeyUp"
+                                      DropDownOpened="ModelCombo_DropDownOpened"
+                                      DropDownClosed="ModelCombo_DropDownClosed"
+                                      PreviewKeyDown="ModelCombo_PreviewKeyDown"
+                                      Margin="0,0,0,12">
+                                <ComboBox.ItemTemplate>
+                                    <DataTemplate>
+                                        <StackPanel Orientation="Horizontal">
+                                            <TextBlock Text="★"
+                                                       Foreground="{DynamicResource BrushTextSecondary}"
+                                                       Margin="0,0,6,0">
+                                                <TextBlock.Visibility>
+                                                    <MultiBinding Converter="{StaticResource ModelFavoriteVisibilityConverter}"
+                                                                  ConverterParameter="Refinement">
+                                                        <Binding />
+                                                        <Binding RelativeSource="{RelativeSource AncestorType=UserControl}" Path="DataContext" />
+                                                    </MultiBinding>
+                                                </TextBlock.Visibility>
+                                            </TextBlock>
+                                            <TextBlock Text="{Binding}" />
+                                        </StackPanel>
+                                    </DataTemplate>
+                                </ComboBox.ItemTemplate>
+                                <ComboBox.ItemContainerStyle>
+                                    <Style TargetType="ComboBoxItem" BasedOn="{StaticResource {x:Type ComboBoxItem}}">
+                                        <Setter Property="Tag" Value="{Binding DataContext, RelativeSource={RelativeSource AncestorType=UserControl}}" />
+                                        <Setter Property="ContextMenu">
+                                            <Setter.Value>
+                                                <ContextMenu>
+                                                    <MenuItem Header="★ Toggle Favorite"
+                                                              Command="{Binding PlacementTarget.Tag.ToggleRefinementFavoriteModelCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
+                                                              CommandParameter="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource AncestorType=ContextMenu}}" />
+                                                </ContextMenu>
+                                            </Setter.Value>
+                                        </Setter>
                                     </Style>
-                                </StackPanel.Style>
+                                </ComboBox.ItemContainerStyle>
+                            </ComboBox>
+                            <Border x:Name="ModelGlow"
+                                    BorderThickness="2"
+                                    CornerRadius="8"
+                                    IsHitTestVisible="False"
+                                    Opacity="0"
+                                    Panel.ZIndex="10"
+                                    Width="{Binding ElementName=RefinementModelCombo, Path=ActualWidth}"
+                                    Height="{Binding ElementName=RefinementModelCombo, Path=ActualHeight}"
+                                    HorizontalAlignment="Left"
+                                    VerticalAlignment="Top"
+                                    Margin="0,0,0,12">
+                                <Border.Effect>
+                                    <DropShadowEffect x:Name="ModelGlowFx" BlurRadius="18" ShadowDepth="0" Opacity="0.95" />
+                                </Border.Effect>
+                            </Border>
+                        </Grid>
 
-                                <TextBlock Text="Cerebras Request Tuning" Style="{StaticResource FieldLabel}"/>
-                                <TextBlock Text="These settings improve reliability during rate limits and transient service errors."
-                                           Style="{StaticResource HintText}"
-                                           Margin="0,0,0,10"
-                                           TextWrapping="Wrap"/>
+                        <ui:Button Content="Refresh models"
+                                   Command="{Binding RefreshModelsCommand}"
+                                   HorizontalAlignment="Left"
+                                   Style="{StaticResource SecondaryButton}"
+                                   Margin="0,0,0,10" />
 
-                                <TextBlock Text="Max Completion Tokens" Style="{StaticResource FieldLabel}"/>
-                                <ui:NumberBox Value="{Binding CerebrasMaxCompletionTokens}" Margin="0,0,0,4"/>
-                                <TextBlock Text="Lower values reduce rate-limit pressure. Recommended: 128–512."
-                                           Style="{StaticResource HintText}"
-                                           Margin="0,0,0,10"/>
+                        <ui:InfoBar Title="Model status"
+                                    Message="{Binding ModelRefreshStatus}"
+                                    Severity="Informational"
+                                    IsOpen="{Binding HasModelRefreshStatus}"
+                                    Margin="0,0,0,12" />
 
-                                <TextBlock Text="Request Timeout (seconds)" Style="{StaticResource FieldLabel}"/>
-                                <ui:NumberBox Value="{Binding CerebrasTimeoutSeconds}" Margin="0,0,0,4"/>
-                                <TextBlock Text="Recommended: 45–90 seconds depending on model size."
-                                           Style="{StaticResource HintText}"
-                                           Margin="0,0,0,10"/>
+                        <Expander Header="Advanced Settings" IsExpanded="False" Margin="0,0,0,14">
+                            <Border Style="{StaticResource PageFeatureSurface}" Margin="0,10,0,0">
+                                <StackPanel>
+                                    <TextBlock Text="ADVANCED" Style="{StaticResource PageFeatureLabel}" />
+                                    <TextBlock Text="For power users. Defaults are safe for most setups."
+                                               Style="{StaticResource HintText}"
+                                               Margin="0,0,0,10" />
 
-                                <TextBlock Text="Max Retries" Style="{StaticResource FieldLabel}"/>
-                                <ui:NumberBox Value="{Binding CerebrasMaxRetries}" Margin="0,0,0,4"/>
-                                <TextBlock Text="Retries are used for transient failures (429/5xx/timeouts)."
-                                           Style="{StaticResource HintText}"
-                                           Margin="0,0,0,10"/>
+                                    <StackPanel>
+                                        <StackPanel.Style>
+                                            <Style TargetType="StackPanel">
+                                                <Setter Property="Visibility" Value="Collapsed" />
+                                                <Style.Triggers>
+                                                    <DataTrigger Binding="{Binding IsCerebrasRefinementProvider}" Value="True">
+                                                        <Setter Property="Visibility" Value="Visible" />
+                                                    </DataTrigger>
+                                                </Style.Triggers>
+                                            </Style>
+                                        </StackPanel.Style>
 
-                                <TextBlock Text="Retry Base Delay (ms)" Style="{StaticResource FieldLabel}"/>
-                                <ui:NumberBox Value="{Binding CerebrasRetryBaseDelayMs}" Margin="0,0,0,4"/>
-                                <TextBlock Text="Exponential backoff starts from this delay value."
-                                           Style="{StaticResource HintText}"
-                                           Margin="0,0,0,10"/>
+                                        <TextBlock Text="Cerebras Request Tuning" Style="{StaticResource FieldLabel}" />
+                                        <TextBlock Text="These settings improve reliability during rate limits and transient service errors."
+                                                   Style="{StaticResource HintText}"
+                                                   Margin="0,0,0,10" />
 
-                                <TextBlock Text="Version Patch Header (optional)" Style="{StaticResource FieldLabel}"/>
-                                <ui:TextBox Text="{Binding CerebrasVersionPatch, UpdateSourceTrigger=PropertyChanged}"
-                                            PlaceholderText="e.g. 2025-08-28"
-                                            Margin="0,0,0,4"/>
-                                <TextBlock Text="If set, Speakly sends X-Cerebras-Version-Patch with each Cerebras request."
-                                           Style="{StaticResource HintText}"/>
+                                        <TextBlock Text="Max Completion Tokens" Style="{StaticResource FieldLabel}" />
+                                        <ui:NumberBox Value="{Binding CerebrasMaxCompletionTokens}" Margin="0,0,0,4" />
+                                        <TextBlock Text="Lower values reduce rate-limit pressure. Recommended: 128–512."
+                                                   Style="{StaticResource HintText}"
+                                                   Margin="0,0,0,10" />
+
+                                        <TextBlock Text="Request Timeout (seconds)" Style="{StaticResource FieldLabel}" />
+                                        <ui:NumberBox Value="{Binding CerebrasTimeoutSeconds}" Margin="0,0,0,4" />
+                                        <TextBlock Text="Recommended: 45–90 seconds depending on model size."
+                                                   Style="{StaticResource HintText}"
+                                                   Margin="0,0,0,10" />
+
+                                        <TextBlock Text="Max Retries" Style="{StaticResource FieldLabel}" />
+                                        <ui:NumberBox Value="{Binding CerebrasMaxRetries}" Margin="0,0,0,4" />
+                                        <TextBlock Text="Retries are used for transient failures (429/5xx/timeouts)."
+                                                   Style="{StaticResource HintText}"
+                                                   Margin="0,0,0,10" />
+
+                                        <TextBlock Text="Retry Base Delay (ms)" Style="{StaticResource FieldLabel}" />
+                                        <ui:NumberBox Value="{Binding CerebrasRetryBaseDelayMs}" Margin="0,0,0,4" />
+                                        <TextBlock Text="Exponential backoff starts from this delay value."
+                                                   Style="{StaticResource HintText}"
+                                                   Margin="0,0,0,10" />
+
+                                        <TextBlock Text="Version Patch Header (optional)" Style="{StaticResource FieldLabel}" />
+                                        <ui:TextBox Text="{Binding CerebrasVersionPatch, UpdateSourceTrigger=PropertyChanged}"
+                                                    Style="{StaticResource InputDefault}"
+                                                    PlaceholderText="e.g. 2025-08-28"
+                                                    Margin="0,0,0,4" />
+                                        <TextBlock Text="If set, Speakly sends X-Cerebras-Version-Patch with each Cerebras request."
+                                                   Style="{StaticResource HintText}" />
+                                    </StackPanel>
+                                </StackPanel>
+                            </Border>
+                        </Expander>
+
+                        <Border Style="{StaticResource PageFeatureSurface}">
+                            <StackPanel>
+                                <TextBlock Text="PROMPTS" Style="{StaticResource PageFeatureLabel}" />
+                                <TextBlock Text="Prompt Presets" Style="{StaticResource FieldLabel}" />
+                                <Grid Margin="0,0,0,14" Width="560" HorizontalAlignment="Left">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <ComboBox Grid.Column="0"
+                                              ItemsSource="{Binding SavedPrompts}"
+                                              SelectedItem="{Binding SelectedPromptEntry}"
+                                              DisplayMemberPath="Name"
+                                              Style="{StaticResource DropdownDefault}"
+                                              Width="300"
+                                              Margin="0,0,8,0" />
+                                    <ui:Button Grid.Column="1"
+                                               Content="Delete"
+                                               Command="{Binding DeleteSelectedPromptCommand}"
+                                               Style="{StaticResource DangerButton}"
+                                               IsEnabled="{Binding CanDeleteSelectedPrompt}"
+                                               ToolTip="Delete selected user prompt (built-in prompts cannot be deleted)" />
+                                </Grid>
+
+                                <ui:InfoBar Title="Prompt warning"
+                                            Message="Custom System Prompt is empty. Refinement may behave unpredictably."
+                                            Severity="Warning"
+                                            IsOpen="{Binding IsRefinementPromptMissing}"
+                                            Margin="0,0,0,12" />
+
+                                <TextBlock Text="Custom System Prompt" Style="{StaticResource FieldLabel}" />
+                                <ui:TextBox x:Name="PromptTextBox"
+                                            Text="{Binding RefinementPrompt, UpdateSourceTrigger=PropertyChanged}"
+                                            Style="{StaticResource InputTextArea}"
+                                            Height="160"
+                                            Margin="0,0,0,12" />
+
+                                <TextBlock Text="Save current prompt as:" Style="{StaticResource FieldLabel}" />
+                                <Grid Margin="0,0,0,4">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <ui:TextBox Grid.Column="0"
+                                                PlaceholderText="Prompt name…"
+                                                Text="{Binding NewPromptName, UpdateSourceTrigger=PropertyChanged}"
+                                                Style="{StaticResource InputDefault}"
+                                                Margin="0,0,8,0" />
+                                    <ui:Button Grid.Column="1"
+                                               Content="Save"
+                                               Command="{Binding SaveCurrentPromptCommand}"
+                                               Style="{StaticResource PrimaryButton}"
+                                               ToolTip="Save the current prompt text under this name" />
+                                </Grid>
+                                <TextBlock Text="Built-in prompts (General, Ukrainian) cannot be overwritten or deleted."
+                                           Style="{StaticResource HintText}" />
                             </StackPanel>
-                        </StackPanel>
-                    </Expander>
-
-                    <TextBlock Text="Prompt Presets" Style="{StaticResource FieldLabel}"/>
-                    <Grid Margin="0,0,0,14">
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="*"/>
-                            <ColumnDefinition Width="Auto"/>
-                        </Grid.ColumnDefinitions>
-                        <ComboBox Grid.Column="0"
-                                  ItemsSource="{Binding SavedPrompts}"
-                                  SelectedItem="{Binding SelectedPromptEntry}"
-                                  DisplayMemberPath="Name"
-                                  Margin="0,0,8,0"/>
-                        <ui:Button Grid.Column="1"
-                                   Content="Delete"
-                                   Command="{Binding DeleteSelectedPromptCommand}"
-                                   Style="{StaticResource SecondaryButton}"
-                                   IsEnabled="{Binding CanDeleteSelectedPrompt}"
-                                   ToolTip="Delete selected user prompt (built-in prompts cannot be deleted)"/>
-                    </Grid>
-
-                    <ui:InfoBar Title="Prompt warning"
-                                Message="Custom System Prompt is empty. Refinement may behave unpredictably."
-                                Severity="Warning"
-                                IsOpen="{Binding IsRefinementPromptMissing}"
-                                Margin="0,0,0,12"/>
-
-                    <TextBlock Text="Custom System Prompt" Style="{StaticResource FieldLabel}"/>
-                    <ui:TextBox x:Name="PromptTextBox"
-                                Text="{Binding RefinementPrompt, UpdateSourceTrigger=PropertyChanged}"
-                                AcceptsReturn="True" Height="160" TextWrapping="Wrap"
-                                VerticalScrollBarVisibility="Auto"
-                                Margin="0,0,0,12"/>
-
-                    <TextBlock Text="Save current prompt as:" Style="{StaticResource FieldLabel}"/>
-                    <Grid Margin="0,0,0,4">
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="*"/>
-                            <ColumnDefinition Width="Auto"/>
-                        </Grid.ColumnDefinitions>
-                        <ui:TextBox Grid.Column="0"
-                                    PlaceholderText="Prompt name…"
-                                    Text="{Binding NewPromptName, UpdateSourceTrigger=PropertyChanged}"
-                                    Margin="0,0,8,0"/>
-                        <ui:Button Grid.Column="1"
-                                   Content="Save"
-                                   Command="{Binding SaveCurrentPromptCommand}"
-                                   Style="{StaticResource SecondaryButton}"
-                                   ToolTip="Save the current prompt text under this name"/>
-                    </Grid>
-                    <TextBlock Text="Built-in prompts (General, Ukrainian) cannot be overwritten or deleted."
-                               Style="{StaticResource HintText}" Margin="0,0,0,4"/>
+                        </Border>
                     </StackPanel>
                 </StackPanel>
             </Border>
         </StackPanel>
     </ScrollViewer>
 </UserControl>
+
+

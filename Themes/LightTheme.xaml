@@ -1,13 +1,119 @@
 <ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
                     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
-    <!-- Legacy custom UI brushes removed. WPF UI theme resources are used for app chrome. -->
-    <SolidColorBrush x:Key="AppWarningPanelBrush" Color="#33CC7A00"/>
-    <SolidColorBrush x:Key="AppWarningBorderBrush" Color="#99CC7A00"/>
-    <SolidColorBrush x:Key="AppCaptureBgBrush" Color="#CC5555"/>
+    <!-- Light compatibility theme (same resource keys as DarkTheme) -->
+    <Color x:Key="ColorBgBase">#F4F6FA</Color>
+    <Color x:Key="ColorBgSurface">#EEF2F7</Color>
+    <Color x:Key="ColorBgCard">#FFFFFF</Color>
+    <Color x:Key="ColorBgCardHover">#F7FAFC</Color>
+    <Color x:Key="ColorBgInput">#FFFFFF</Color>
+    <Color x:Key="ColorBgSidebar">#EDEFF4</Color>
 
-    <SolidColorBrush x:Key="OverlayContainerBrush" Color="#F0FFFFFF"/>
-    <SolidColorBrush x:Key="OverlayPrimaryTextBrush" Color="#1A1A1A"/>
-    <SolidColorBrush x:Key="OverlayMutedTextBrush" Color="#666666"/>
-    <SolidColorBrush x:Key="OverlayLanguageBadgeBrush" Color="#3322D3EE"/>
-    <SolidColorBrush x:Key="OverlayLanguageTextBrush" Color="#005A75"/>
+    <Color x:Key="ColorBorderSubtle">#D8DEE8</Color>
+    <Color x:Key="ColorBorderDefault">#C5D0DE</Color>
+    <Color x:Key="ColorBorderStrong">#AAB8CB</Color>
+
+    <Color x:Key="ColorTextPrimary">#0F172A</Color>
+    <Color x:Key="ColorTextSecondary">#475569</Color>
+    <Color x:Key="ColorTextMuted">#64748B</Color>
+    <Color x:Key="ColorTextDisabled">#94A3B8</Color>
+
+    <Color x:Key="ColorAccent">#06B6D4</Color>
+    <Color x:Key="ColorAccentHover">#0891B2</Color>
+    <Color x:Key="ColorAccentPressed">#0E7490</Color>
+    <Color x:Key="ColorAccentGlow">#2606B6D4</Color>
+    <Color x:Key="ColorAccentSubtle">#1206B6D4</Color>
+
+    <Color x:Key="ColorSuccess">#10B981</Color>
+    <Color x:Key="ColorWarning">#D97706</Color>
+    <Color x:Key="ColorDanger">#DC2626</Color>
+    <Color x:Key="ColorDangerSubtle">#1ADC2626</Color>
+
+    <SolidColorBrush x:Key="BrushBgBase" Color="{StaticResource ColorBgBase}" />
+    <SolidColorBrush x:Key="BrushBgSurface" Color="{StaticResource ColorBgSurface}" />
+    <SolidColorBrush x:Key="BrushBgCard" Color="{StaticResource ColorBgCard}" />
+    <SolidColorBrush x:Key="BrushBgCardHover" Color="{StaticResource ColorBgCardHover}" />
+    <SolidColorBrush x:Key="BrushBgInput" Color="{StaticResource ColorBgInput}" />
+    <SolidColorBrush x:Key="BrushBgSidebar" Color="{StaticResource ColorBgSidebar}" />
+
+    <SolidColorBrush x:Key="BrushBorderSubtle" Color="{StaticResource ColorBorderSubtle}" />
+    <SolidColorBrush x:Key="BrushBorderDefault" Color="{StaticResource ColorBorderDefault}" />
+    <SolidColorBrush x:Key="BrushBorderStrong" Color="{StaticResource ColorBorderStrong}" />
+
+    <SolidColorBrush x:Key="BrushTextPrimary" Color="{StaticResource ColorTextPrimary}" />
+    <SolidColorBrush x:Key="BrushTextSecondary" Color="{StaticResource ColorTextSecondary}" />
+    <SolidColorBrush x:Key="BrushTextMuted" Color="{StaticResource ColorTextMuted}" />
+    <SolidColorBrush x:Key="BrushTextDisabled" Color="{StaticResource ColorTextDisabled}" />
+
+    <SolidColorBrush x:Key="BrushAccent" Color="{StaticResource ColorAccent}" />
+    <SolidColorBrush x:Key="BrushAccentHover" Color="{StaticResource ColorAccentHover}" />
+    <SolidColorBrush x:Key="BrushAccentPressed" Color="{StaticResource ColorAccentPressed}" />
+    <SolidColorBrush x:Key="BrushAccentGlow" Color="{StaticResource ColorAccentGlow}" />
+    <SolidColorBrush x:Key="BrushAccentSubtle" Color="{StaticResource ColorAccentSubtle}" />
+
+    <SolidColorBrush x:Key="BrushSuccess" Color="{StaticResource ColorSuccess}" />
+    <SolidColorBrush x:Key="BrushWarning" Color="{StaticResource ColorWarning}" />
+    <SolidColorBrush x:Key="BrushDanger" Color="{StaticResource ColorDanger}" />
+    <SolidColorBrush x:Key="BrushDangerSubtle" Color="{StaticResource ColorDangerSubtle}" />
+
+    <!-- Overlay skin fallback keys (overridden by Themes/OverlaySkins/*.xaml) -->
+    <LinearGradientBrush x:Key="OverlaySkin.PillowIdleBrush" StartPoint="0.1,0.1" EndPoint="0.9,0.9">
+        <GradientStop Color="#F7FFFFFF" Offset="0" />
+        <GradientStop Color="#F2F7FD" Offset="1" />
+    </LinearGradientBrush>
+    <LinearGradientBrush x:Key="OverlaySkin.PillowHoverBrush" StartPoint="0.1,0.1" EndPoint="0.9,0.9">
+        <GradientStop Color="#FCFFFFFF" Offset="0" />
+        <GradientStop Color="#F6FBFF" Offset="1" />
+    </LinearGradientBrush>
+    <LinearGradientBrush x:Key="OverlaySkin.PillowRecordingBrush" StartPoint="0.1,0.1" EndPoint="0.9,0.9">
+        <GradientStop Color="#FFE9FAFD" Offset="0" />
+        <GradientStop Color="#FFDFF7FB" Offset="1" />
+    </LinearGradientBrush>
+    <LinearGradientBrush x:Key="OverlaySkin.PillowProcessingBrush" StartPoint="0.1,0.1" EndPoint="0.9,0.9">
+        <GradientStop Color="#FFF3F8FC" Offset="0" />
+        <GradientStop Color="#FFECF5FB" Offset="1" />
+    </LinearGradientBrush>
+
+    <SolidColorBrush x:Key="OverlaySkin.PillowIdleBorderBrush" Color="#BFD2E3" />
+    <SolidColorBrush x:Key="OverlaySkin.PillowRecordingBorderBrush" Color="#0EA5BD" />
+    <SolidColorBrush x:Key="OverlaySkin.PillowProcessingBorderBrush" Color="#5AAFC4" />
+
+    <SolidColorBrush x:Key="OverlaySkin.IconIdleBrush" Color="#0891B2" />
+    <SolidColorBrush x:Key="OverlaySkin.IconRecordingBrush" Color="#04758E" />
+    <SolidColorBrush x:Key="OverlaySkin.IconProcessingBrush" Color="#0A7C96" />
+
+    <SolidColorBrush x:Key="OverlaySkin.TimerBackgroundBrush" Color="#2406B6D4" />
+    <SolidColorBrush x:Key="OverlaySkin.TimerForegroundBrush" Color="#0B5B72" />
+
+    <SolidColorBrush x:Key="OverlaySkin.LanguageBadgeBrush" Color="#2406B6D4" />
+    <SolidColorBrush x:Key="OverlaySkin.LanguageBadgeBorderBrush" Color="#8BBFCD" />
+    <SolidColorBrush x:Key="OverlaySkin.LanguageBadgeForegroundBrush" Color="#0A657D" />
+
+    <SolidColorBrush x:Key="OverlaySkin.CancelBrush" Color="#33DC2626" />
+    <SolidColorBrush x:Key="OverlaySkin.CancelBorderBrush" Color="#CA5A5A" />
+    <SolidColorBrush x:Key="OverlaySkin.CancelForegroundBrush" Color="#9F1F1F" />
+
+    <SolidColorBrush x:Key="OverlaySkin.ToastBrush" Color="#F2F7FD" />
+    <SolidColorBrush x:Key="OverlaySkin.ToastBorderBrush" Color="#BDD2E3" />
+    <SolidColorBrush x:Key="OverlaySkin.ToastForegroundBrush" Color="#1D3348" />
+
+    <SolidColorBrush x:Key="OverlaySkin.MenuBrush" Color="#F7FAFD" />
+    <SolidColorBrush x:Key="OverlaySkin.MenuBorderBrush" Color="#C8D8E7" />
+    <SolidColorBrush x:Key="OverlaySkin.MenuItemHoverBrush" Color="#1806B6D4" />
+    <SolidColorBrush x:Key="OverlaySkin.MenuForegroundBrush" Color="#16324A" />
+
+    <SolidColorBrush x:Key="OverlaySkin.StatusForegroundBrush" Color="#0F172A" />
+    <SolidColorBrush x:Key="OverlaySkin.SubtleTextBrush" Color="#4B6075" />
+    <SolidColorBrush x:Key="OverlaySkin.AccentBrush" Color="#06B6D4" />
+    <Color x:Key="OverlaySkin.ShadowColor">#66000000</Color>
+
+    <!-- Compatibility keys used by existing code-behind -->
+    <SolidColorBrush x:Key="AppWarningPanelBrush" Color="#33D97706" />
+    <SolidColorBrush x:Key="AppWarningBorderBrush" Color="#88D97706" />
+    <SolidColorBrush x:Key="AppCaptureBgBrush" Color="#CCFCA5A5" />
+
+    <SolidColorBrush x:Key="OverlayContainerBrush" Color="#E6FFFFFF" />
+    <SolidColorBrush x:Key="OverlayPrimaryTextBrush" Color="{StaticResource ColorTextPrimary}" />
+    <SolidColorBrush x:Key="OverlayMutedTextBrush" Color="{StaticResource ColorTextSecondary}" />
+    <SolidColorBrush x:Key="OverlayLanguageBadgeBrush" Color="{StaticResource ColorAccentSubtle}" />
+    <SolidColorBrush x:Key="OverlayLanguageTextBrush" Color="{StaticResource ColorAccentPressed}" />
 </ResourceDictionary>

@@ -2,74 +2,105 @@
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
-             FontFamily="Segoe UI Variable Text">
-    <ScrollViewer VerticalScrollBarVisibility="Auto">
-        <StackPanel Margin="24,16,24,24">
-            <TextBlock Text="Audio" Style="{StaticResource PageTitle}"/>
+             FontFamily="Segoe UI Variable Text"
+             Background="#FF1E2330">
+    <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="{StaticResource PagePadding}">
+        <StackPanel MaxWidth="640">
+            <StackPanel Margin="0,0,0,28">
+                <TextBlock Text="INPUT" Style="{StaticResource PageEyebrow}" />
+                <TextBlock Text="Audio" Style="{StaticResource PageTitle}" Margin="0" />
+            </StackPanel>
 
-            <Border Style="{StaticResource SectionCard}">
+            <Border Style="{StaticResource PageFeatureCard}" Margin="0">
                 <StackPanel>
-                    <TextBlock Text="Input &amp; Capture" Style="{StaticResource SectionTitle}"/>
+                    <TextBlock Text="CAPTURE" Style="{StaticResource PageFeatureLabel}" />
+                    <TextBlock Text="Input &amp; Capture" Style="{StaticResource SectionTitle}" />
 
-                    <TextBlock Text="Microphone Input Device" Style="{StaticResource FieldLabel}"/>
-                    <ComboBox ItemsSource="{Binding AvailableAudioDevices}" SelectedItem="{Binding AudioDevice}" Margin="0,0,0,16"/>
+                    <TextBlock Text="Microphone Input Device" Style="{StaticResource FieldLabel}" />
+                    <ComboBox ItemsSource="{Binding AvailableAudioDevices}"
+                              SelectedItem="{Binding AudioDevice}"
+                              Style="{StaticResource DropdownDefault}"
+                              Margin="0,0,0,16" />
 
-                    <TextBlock Text="Sample Rate (Hz)" Style="{StaticResource FieldLabel}"/>
-                    <ui:NumberBox Value="{Binding SampleRate}" Margin="0,0,0,4"/>
-                    <TextBlock Text="16000 is recommended for most STT models. Allowed range: 8000–48000." Style="{StaticResource HintText}" Margin="0,0,0,14"/>
+                    <TextBlock Text="Sample Rate (Hz)" Style="{StaticResource FieldLabel}" />
+                    <ui:NumberBox Value="{Binding SampleRate}" Margin="0,0,0,4" />
+                    <TextBlock Text="16000 is recommended for most STT models. Allowed range: 8000–48000."
+                               Style="{StaticResource HintText}"
+                               Margin="0,0,0,14" />
 
-                    <TextBlock Text="Chunk Size (Bytes)" Style="{StaticResource FieldLabel}"/>
-                    <ui:NumberBox Value="{Binding ChunkSize}" Margin="0,0,0,4"/>
-                    <TextBlock Text="Controls capture frame size used for streaming. 4096 is a common balance between latency and CPU usage. Allowed range: 256–32768." Style="{StaticResource HintText}" Margin="0,0,0,14"/>
+                    <TextBlock Text="Audio Frame Size (Bytes)" Style="{StaticResource FieldLabel}" />
+                    <ui:NumberBox Value="{Binding ChunkSize}" Margin="0,0,0,4" />
+                    <TextBlock Text="Controls capture frame size used for streaming (affects packet cadence, not URL params). 4096 is a common balance between latency and CPU usage. Allowed range: 256–32768."
+                               Style="{StaticResource HintText}"
+                               Margin="0,0,0,14" />
 
-                    <TextBlock Text="Channels" Style="{StaticResource FieldLabel}"/>
-                    <ui:NumberBox Value="{Binding Channels}" Margin="0,0,0,4"/>
-                    <TextBlock Text="Use 1 (Mono) for best compatibility. Allowed range: 1–2." Style="{StaticResource HintText}" Margin="0,0,0,14"/>
+                    <TextBlock Text="Channels" Style="{StaticResource FieldLabel}" />
+                    <ui:NumberBox Value="{Binding Channels}" Margin="0,0,0,4" />
+                    <TextBlock Text="Use 1 (Mono) for best compatibility. Allowed range: 1–2."
+                               Style="{StaticResource HintText}"
+                               Margin="0,0,0,14" />
 
                     <Expander Header="Advanced Settings" IsExpanded="False" Margin="0,12,0,0">
-                        <StackPanel Margin="0,10,0,0">
-                            <TextBlock Text="Managed Audio Processing" Style="{StaticResource SectionTitle}" Margin="0,0,0,8"/>
+                        <Border Style="{StaticResource PageFeatureSurface}" Margin="0,10,0,0">
+                            <StackPanel>
+                                <TextBlock Text="AUDIO PROCESSING" Style="{StaticResource PageFeatureLabel}" />
+                                <TextBlock Text="Managed Audio Processing" Style="{StaticResource SectionTitle}" Margin="0,0,0,8" />
 
-                            <ui:ToggleSwitch Content="Automatic Mic Gain"
-                                             IsChecked="{Binding AutoMicGainEnabled}"
-                                             Margin="0,0,0,6"/>
-                            <TextBlock Text="Continuously adjusts input volume so speech stays readable without manual gain tuning."
-                                       Style="{StaticResource HintText}" Margin="0,0,0,10"/>
+                                <ui:ToggleSwitch Content="Automatic Mic Gain"
+                                                 IsChecked="{Binding AutoMicGainEnabled}"
+                                                 Style="{StaticResource AccentToggleSwitch}"
+                                                 Margin="0,0,0,2" />
+                                <TextBlock Text="Continuously adjusts input volume so speech stays readable without manual gain tuning."
+                                           Style="{StaticResource HintText}"
+                                           Margin="0,0,0,10" />
 
-                            <TextBlock Text="AGC Target RMS" Style="{StaticResource FieldLabel}"/>
-                            <ui:NumberBox Value="{Binding AutoMicGainTargetRms}" Margin="0,0,0,4"/>
-                            <TextBlock Text="Recommended 0.10–0.18. Lower values are softer, higher values are louder."
-                                       Style="{StaticResource HintText}" Margin="0,0,0,14"/>
+                                <TextBlock Text="AGC Target RMS" Style="{StaticResource FieldLabel}" />
+                                <ui:NumberBox Value="{Binding AutoMicGainTargetRms}" Margin="0,0,0,4" />
+                                <TextBlock Text="Recommended 0.10–0.18. Lower values are softer, higher values are louder."
+                                           Style="{StaticResource HintText}"
+                                           Margin="0,0,0,14" />
 
-                            <ui:ToggleSwitch Content="Dynamic Normalization"
-                                             IsChecked="{Binding DynamicNormalizationEnabled}"
-                                             Margin="0,0,0,6"/>
-                            <TextBlock Text="Keeps loudness more consistent between quiet and loud phrases."
-                                       Style="{StaticResource HintText}" Margin="0,0,0,10"/>
+                                <ui:ToggleSwitch Content="Dynamic Normalization"
+                                                 IsChecked="{Binding DynamicNormalizationEnabled}"
+                                                 Style="{StaticResource AccentToggleSwitch}"
+                                                 Margin="0,0,0,2" />
+                                <TextBlock Text="Keeps loudness more consistent between quiet and loud phrases."
+                                           Style="{StaticResource HintText}"
+                                           Margin="0,0,0,10" />
 
-                            <TextBlock Text="Normalization Target Peak" Style="{StaticResource FieldLabel}"/>
-                            <ui:NumberBox Value="{Binding NormalizationTargetPeak}" Margin="0,0,0,4"/>
-                            <TextBlock Text="Recommended 0.75–0.90. Prevents clipping while preserving volume."
-                                       Style="{StaticResource HintText}" Margin="0,0,0,14"/>
+                                <TextBlock Text="Normalization Target Peak" Style="{StaticResource FieldLabel}" />
+                                <ui:NumberBox Value="{Binding NormalizationTargetPeak}" Margin="0,0,0,4" />
+                                <TextBlock Text="Recommended 0.75–0.90. Prevents clipping while preserving volume."
+                                           Style="{StaticResource HintText}"
+                                           Margin="0,0,0,14" />
 
-                            <ui:ToggleSwitch Content="Noise Gate"
-                                             IsChecked="{Binding NoiseGateEnabled}"
-                                             Margin="0,0,0,6"/>
-                            <TextBlock Text="Suppresses very low-level background noise between spoken words."
-                                       Style="{StaticResource HintText}" Margin="0,0,0,10"/>
+                                <ui:ToggleSwitch Content="Noise Gate"
+                                                 IsChecked="{Binding NoiseGateEnabled}"
+                                                 Style="{StaticResource AccentToggleSwitch}"
+                                                 Margin="0,0,0,2" />
+                                <TextBlock Text="Suppresses very low-level background noise between spoken words."
+                                           Style="{StaticResource HintText}"
+                                           Margin="0,0,0,10" />
 
-                            <TextBlock Text="Noise Gate Threshold (dB)" Style="{StaticResource FieldLabel}"/>
-                            <ui:NumberBox Value="{Binding NoiseGateThresholdDb}" Margin="0,0,0,4"/>
-                            <TextBlock Text="Typical range is -55 to -35 dB. Higher threshold cuts more background noise."
-                                       Style="{StaticResource HintText}" Margin="0,0,0,14"/>
+                                <TextBlock Text="Noise Gate Threshold (dB)" Style="{StaticResource FieldLabel}" />
+                                <ui:NumberBox Value="{Binding NoiseGateThresholdDb}" Margin="0,0,0,4" />
+                                <TextBlock Text="Typical range is -55 to -35 dB. Higher threshold cuts more background noise."
+                                           Style="{StaticResource HintText}"
+                                           Margin="0,0,0,14" />
 
-                            <ui:ToggleSwitch Content="Save Debug Records" IsChecked="{Binding SaveDebugRecords}" Margin="0,6,0,4"/>
-                            <TextBlock Text="Saves timestamped .wav files to the Records folder for troubleshooting."
-                                       Style="{StaticResource HintText}"/>
-                        </StackPanel>
+                                <ui:ToggleSwitch Content="Save Debug Records"
+                                                 IsChecked="{Binding SaveDebugRecords}"
+                                                 Style="{StaticResource AccentToggleSwitch}"
+                                                 Margin="0,4,0,2" />
+                                <TextBlock Text="Saves timestamped .wav files to the Records folder for troubleshooting."
+                                           Style="{StaticResource HintText}" />
+                            </StackPanel>
+                        </Border>
                     </Expander>
                 </StackPanel>
             </Border>
         </StackPanel>
     </ScrollViewer>
 </UserControl>
+
+

@@ -10,57 +10,121 @@
     MinWidth="980"
     Icon="Resources/Speakly_new_logo.ico"
     WindowStartupLocation="CenterScreen"
-    Background="{DynamicResource ApplicationBackgroundBrush}"
+    Background="#FF1E2330"
     FontFamily="Segoe UI Variable Text">
 
     <Grid>
+        <Border x:Name="SidebarPaneBackdrop"
+                Width="220"
+                HorizontalAlignment="Left"
+                VerticalAlignment="Stretch"
+                Background="{DynamicResource BrushBgSidebar}" />
+
         <!-- NavigationView is self-contained: its own pane (left) + content area (right).
              No external Frame needed – pages are navigated directly via RootNavigation.Navigate(). -->
         <ui:NavigationView x:Name="RootNavigation"
+                           Background="#FF1D263F"
+                           BorderBrush="{DynamicResource BrushBgSidebar}"
+                           BorderThickness="0"
+                           Margin="-1,0,-1,0"
                            PaneDisplayMode="Left"
-                           PaneTitle="Speakly"
+                           PaneTitle=""
                            IsBackButtonVisible="Collapsed"
                            IsPaneToggleVisible="True"
+                           FrameMargin="0"
+                           IsTopSeparatorVisible="False"
+                           IsFooterSeparatorVisible="False"
                            OpenPaneLength="220"
                            CompactPaneLength="52">
+            <ui:NavigationView.Resources>
+                <!-- Keep every pane layer (header/menu/footer + separators) on one sidebar surface -->
+                <SolidColorBrush x:Key="SolidBackgroundFillColorBaseBrush" Color="{StaticResource ColorBgSidebar}" />
+                <SolidColorBrush x:Key="SolidBackgroundFillColorBaseAltBrush" Color="{StaticResource ColorBgSidebar}" />
+                <SolidColorBrush x:Key="ApplicationBackgroundBrush" Color="{StaticResource ColorBgSidebar}" />
+                <SolidColorBrush x:Key="LayerFillColorDefaultBrush" Color="{StaticResource ColorBgSidebar}" />
+                <SolidColorBrush x:Key="LayerFillColorAltBrush" Color="{StaticResource ColorBgSidebar}" />
+                <SolidColorBrush x:Key="LayerOnMicaBaseAltFillColorDefaultBrush" Color="{StaticResource ColorBgSidebar}" />
+                <SolidColorBrush x:Key="LayerOnAcrylicFillColorDefaultBrush" Color="{StaticResource ColorBgSidebar}" />
+                <SolidColorBrush x:Key="LayerOnAccentAcrylicFillColorDefaultBrush" Color="{StaticResource ColorBgSidebar}" />
+                <SolidColorBrush x:Key="ControlFillColorDefaultBrush" Color="{StaticResource ColorBgSidebar}" />
+                <SolidColorBrush x:Key="ControlStrongFillColorDefaultBrush" Color="{StaticResource ColorBgSidebar}" />
+                <SolidColorBrush x:Key="ControlSolidFillColorDefaultBrush" Color="{StaticResource ColorBgSidebar}" />
+                <SolidColorBrush x:Key="CardBackgroundFillColorDefaultBrush" Color="{StaticResource ColorBgSidebar}" />
+                <SolidColorBrush x:Key="ControlStrokeColorDefaultBrush" Color="{StaticResource ColorBgSidebar}" />
+                <SolidColorBrush x:Key="ControlStrongStrokeColorDefaultBrush" Color="{StaticResource ColorBgSidebar}" />
+                <SolidColorBrush x:Key="DividerStrokeColorDefaultBrush" Color="{StaticResource ColorBgSidebar}" />
+                <SolidColorBrush x:Key="CardStrokeColorDefaultBrush" Color="{StaticResource ColorBgSidebar}" />
+                <SolidColorBrush x:Key="SurfaceStrokeColorDefaultBrush" Color="{StaticResource ColorBgSidebar}" />
+                <SolidColorBrush x:Key="LeftNavigationViewSeparatorBrush" Color="{StaticResource ColorBgSidebar}" />
+                <SolidColorBrush x:Key="NavigationViewContentGridBorderBrush" Color="{StaticResource ColorBgSidebar}" />
+                <SolidColorBrush x:Key="NavigationViewContentBackground" Color="#FF1E2330" />
+            </ui:NavigationView.Resources>
+            <ui:NavigationView.PaneHeader>
+                <StackPanel Orientation="Horizontal" Margin="12,10,0,8">
+                    <Border Width="28"
+                            Height="28"
+                            CornerRadius="8"
+                            Margin="0,0,10,0"
+                            Background="{DynamicResource BrushAccentSubtle}">
+                        <Image Source="pack://application:,,,/Resources/Speakly_new_logo.ico"
+                               Width="18"
+                               Height="18"
+                               Stretch="Uniform"
+                               HorizontalAlignment="Center"
+                               VerticalAlignment="Center" />
+                    </Border>
+                    <TextBlock Text="Speakly"
+                               VerticalAlignment="Center"
+                               Foreground="{DynamicResource BrushTextPrimary}"
+                               FontSize="16"
+                               FontWeight="SemiBold" />
+                </StackPanel>
+            </ui:NavigationView.PaneHeader>
             <ui:NavigationView.MenuItems>
                 <ui:NavigationViewItem Content="Home"
+                                       Style="{StaticResource NavItemStyle}"
                                        TargetPageType="{x:Type pages:HomePage}">
                     <ui:NavigationViewItem.Icon>
                         <ui:SymbolIcon Symbol="Home20"/>
                     </ui:NavigationViewItem.Icon>
                 </ui:NavigationViewItem>
                 <ui:NavigationViewItem Content="General"
+                                       Style="{StaticResource NavItemStyle}"
                                        TargetPageType="{x:Type pages:GeneralPage}">
                     <ui:NavigationViewItem.Icon>
                         <ui:SymbolIcon Symbol="Settings20"/>
                     </ui:NavigationViewItem.Icon>
                 </ui:NavigationViewItem>
                 <ui:NavigationViewItem Content="Hotkeys"
+                                       Style="{StaticResource NavItemStyle}"
                                        TargetPageType="{x:Type pages:HotkeysPage}">
                     <ui:NavigationViewItem.Icon>
                         <ui:SymbolIcon Symbol="Keyboard20"/>
                     </ui:NavigationViewItem.Icon>
                 </ui:NavigationViewItem>
                 <ui:NavigationViewItem Content="Audio"
+                                       Style="{StaticResource NavItemStyle}"
                                        TargetPageType="{x:Type pages:AudioPage}">
                     <ui:NavigationViewItem.Icon>
                         <ui:SymbolIcon Symbol="Mic20"/>
                     </ui:NavigationViewItem.Icon>
                 </ui:NavigationViewItem>
                 <ui:NavigationViewItem Content="Transcription"
+                                       Style="{StaticResource NavItemStyle}"
                                        TargetPageType="{x:Type pages:TranscriptionPage}">
                     <ui:NavigationViewItem.Icon>
                         <ui:SymbolIcon Symbol="DocumentText20"/>
                     </ui:NavigationViewItem.Icon>
                 </ui:NavigationViewItem>
                 <ui:NavigationViewItem Content="Refinement"
+                                       Style="{StaticResource NavItemStyle}"
                                        TargetPageType="{x:Type pages:RefinementPage}">
                     <ui:NavigationViewItem.Icon>
                         <ui:SymbolIcon Symbol="EmojiSparkle20"/>
                     </ui:NavigationViewItem.Icon>
                 </ui:NavigationViewItem>
                 <ui:NavigationViewItem Content="API Keys"
+                                       Style="{StaticResource NavItemStyle}"
                                        TargetPageType="{x:Type pages:ApiKeysPage}">
                     <ui:NavigationViewItem.Icon>
                         <ui:SymbolIcon Symbol="Key20"/>
@@ -70,18 +134,21 @@
 
             <ui:NavigationView.FooterMenuItems>
                 <ui:NavigationViewItem Content="History"
+                                       Style="{StaticResource NavItemStyle}"
                                        TargetPageType="{x:Type pages:HistoryPage}">
                     <ui:NavigationViewItem.Icon>
                         <ui:SymbolIcon Symbol="History20"/>
                     </ui:NavigationViewItem.Icon>
                 </ui:NavigationViewItem>
                 <ui:NavigationViewItem Content="Statistics"
+                                       Style="{StaticResource NavItemStyle}"
                                        TargetPageType="{x:Type pages:StatisticsPage}">
                     <ui:NavigationViewItem.Icon>
                         <ui:SymbolIcon Symbol="DataHistogram20"/>
                     </ui:NavigationViewItem.Icon>
                 </ui:NavigationViewItem>
                 <ui:NavigationViewItem Content="Info"
+                                       Style="{StaticResource NavItemStyle}"
                                        TargetPageType="{x:Type pages:InfoPage}">
                     <ui:NavigationViewItem.Icon>
                         <ui:SymbolIcon Symbol="Info20"/>
@@ -90,5 +157,20 @@
             </ui:NavigationView.FooterMenuItems>
 
         </ui:NavigationView>
+
+        <Border x:Name="SidebarLeftEdgeCover"
+                Width="2"
+                HorizontalAlignment="Left"
+                VerticalAlignment="Stretch"
+                Background="{DynamicResource BrushBgSidebar}"
+                IsHitTestVisible="False"
+                Panel.ZIndex="100" />
+        <Border x:Name="SidebarRightEdgeCover"
+                Width="4"
+                HorizontalAlignment="Left"
+                VerticalAlignment="Stretch"
+                Background="{DynamicResource BrushBgSidebar}"
+                IsHitTestVisible="False"
+                Panel.ZIndex="100" />
     </Grid>
 </Window>

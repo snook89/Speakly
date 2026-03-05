@@ -125,7 +125,21 @@ namespace Speakly.Services
             var preferredTerms = PersonalDictionaryService.GetCombinedTermsForActiveProfile(config, maxTerms: 30);
             if (preferredTerms.Count > 0)
             {
-                query.Add($"keywords={Uri.EscapeDataString(string.Join(",", preferredTerms))}");
+                // Deepgram Nova-3/Flux reject legacy "keywords" and require "keyterm".
+                // Keep backward compatibility for older models.
+                if (SupportsKeytermHints(selectedModel))
+                {
+                    foreach (var term in preferredTerms)
+                    {
+                        var normalized = term?.Trim();
+                        if (string.IsNullOrWhiteSpace(normalized)) continue;
+                        query.Add($"keyterm={Uri.EscapeDataString(normalized)}");
+                    }
+                }
+                else
+                {
+                    query.Add($"keywords={Uri.EscapeDataString(string.Join(",", preferredTerms))}");
+                }
             }
 
             var resolvedLanguage = ResolveLanguageForStreaming(config.Language, selectedModel);
@@ -166,6 +180,13 @@ namespace Speakly.Services
             if (string.IsNullOrWhiteSpace(model)) return false;
             var normalizedModel = model.Trim().ToLowerInvariant();
             return normalizedModel.StartsWith("nova-3") || normalizedModel.StartsWith("nova-2");
+        }
+
+        private static bool SupportsKeytermHints(string? model)
+        {
+            if (string.IsNullOrWhiteSpace(model)) return false;
+            var normalizedModel = model.Trim().ToLowerInvariant();
+            return normalizedModel.StartsWith("nova-3") || normalizedModel.StartsWith("flux");
         }
 
         private string GetHandshakeFailureDetails()

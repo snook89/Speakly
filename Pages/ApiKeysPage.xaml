@@ -2,97 +2,184 @@
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
-             FontFamily="Segoe UI Variable Text">
-    <ScrollViewer VerticalScrollBarVisibility="Auto">
-        <StackPanel Margin="24,16,24,24">
-            <TextBlock Text="API Keys" Style="{StaticResource PageTitle}"/>
+             FontFamily="Segoe UI Variable Text"
+             Background="#FF1E2330">
+    <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="{StaticResource PagePadding}">
+        <StackPanel MaxWidth="760">
+            <StackPanel Margin="0,0,0,28">
+                <TextBlock Text="CREDENTIALS" Style="{StaticResource PageEyebrow}" />
+                <TextBlock Text="API Keys" Style="{StaticResource PageTitle}" Margin="0" />
+            </StackPanel>
 
-            <Border Style="{StaticResource SectionCard}">
+            <Border Style="{StaticResource PageFeatureCard}" Margin="0">
                 <StackPanel>
-                    <TextBlock Text="Provider API Keys" Style="{StaticResource SectionTitle}"/>
+                    <TextBlock Text="PROVIDER KEYS" Style="{StaticResource PageFeatureLabel}" />
+                    <TextBlock Text="Provider API Keys" Style="{StaticResource SectionTitle}" />
 
-                    <TextBlock Text="Deepgram API Key" Style="{StaticResource FieldLabel}"/>
-                    <Grid x:Name="DeepgramRow" Margin="0,0,0,16">
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="*"/>
-                            <ColumnDefinition Width="Auto"/>
-                        </Grid.ColumnDefinitions>
-                        <PasswordBox x:Name="DeepgramPwdBox" Grid.Column="0" PasswordChanged="DeepgramPwdBox_PasswordChanged"/>
-                        <ui:TextBox x:Name="DeepgramTxtBox" Grid.Column="0" Visibility="Collapsed" TextChanged="DeepgramTxtBox_TextChanged"/>
-                        <ui:Button Grid.Column="1" x:Name="DeepgramReveal"
-                                   Content="Show"
-                                   Icon="{ui:SymbolIcon Eye24}"
-                                   Style="{StaticResource RevealButton}"
-                                   Margin="8,0,0,0" Click="RevealApiKey_Click" Tag="Deepgram"/>
-                        <Border x:Name="DeepgramGlow" Grid.ColumnSpan="2"
-                                BorderThickness="2" IsHitTestVisible="False" Opacity="0" Panel.ZIndex="10">
-                            <Border.Effect><DropShadowEffect x:Name="DeepgramGlowFx" BlurRadius="18" ShadowDepth="0" Opacity="0.95"/></Border.Effect>
-                        </Border>
-                    </Grid>
+                    <Border Style="{StaticResource PageFeatureSurface}">
+                        <StackPanel>
+                            <TextBlock Text="Deepgram API Key" Style="{StaticResource FieldLabel}" />
+                            <Grid x:Name="DeepgramRow">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+                                <PasswordBox x:Name="DeepgramPwdBox"
+                                             Grid.Column="0"
+                                             PasswordChanged="DeepgramPwdBox_PasswordChanged"
+                                             Style="{StaticResource InputPassword}" />
+                                <ui:TextBox x:Name="DeepgramTxtBox"
+                                            Grid.Column="0"
+                                            Visibility="Collapsed"
+                                            TextChanged="DeepgramTxtBox_TextChanged"
+                                            Style="{StaticResource InputDefault}" />
+                                <ui:Button Grid.Column="1"
+                                           x:Name="DeepgramReveal"
+                                           Content="Show"
+                                           Icon="{ui:SymbolIcon Eye24}"
+                                           Style="{StaticResource RevealButton}"
+                                           Click="RevealApiKey_Click"
+                                           Tag="Deepgram" />
+                                <Border x:Name="DeepgramGlow"
+                                        Grid.Column="0"
+                                        BorderThickness="2"
+                                        CornerRadius="10"
+                                        IsHitTestVisible="False"
+                                        Opacity="0"
+                                        Panel.ZIndex="10">
+                                    <Border.Effect>
+                                        <DropShadowEffect x:Name="DeepgramGlowFx" BlurRadius="18" ShadowDepth="0" Opacity="0.95" />
+                                    </Border.Effect>
+                                </Border>
+                            </Grid>
+                        </StackPanel>
+                    </Border>
 
-                    <TextBlock Text="OpenAI API Key" Style="{StaticResource FieldLabel}"/>
-                    <Grid x:Name="OpenAIRow" Margin="0,0,0,16">
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="*"/>
-                            <ColumnDefinition Width="Auto"/>
-                        </Grid.ColumnDefinitions>
-                        <PasswordBox x:Name="OpenAIPwdBox" Grid.Column="0" PasswordChanged="OpenAIPwdBox_PasswordChanged"/>
-                        <ui:TextBox x:Name="OpenAITxtBox" Grid.Column="0" Visibility="Collapsed" TextChanged="OpenAITxtBox_TextChanged"/>
-                        <ui:Button Grid.Column="1" x:Name="OpenAIReveal"
-                                   Content="Show"
-                                   Icon="{ui:SymbolIcon Eye24}"
-                                   Style="{StaticResource RevealButton}"
-                                   Margin="8,0,0,0" Click="RevealApiKey_Click" Tag="OpenAI"/>
-                        <Border x:Name="OpenAIGlow" Grid.ColumnSpan="2"
-                                BorderThickness="2" IsHitTestVisible="False" Opacity="0" Panel.ZIndex="10">
-                            <Border.Effect><DropShadowEffect x:Name="OpenAIGlowFx" BlurRadius="18" ShadowDepth="0" Opacity="0.95"/></Border.Effect>
-                        </Border>
-                    </Grid>
+                    <Border Style="{StaticResource PageFeatureSurface}">
+                        <StackPanel>
+                            <TextBlock Text="OpenAI API Key" Style="{StaticResource FieldLabel}" />
+                            <Grid x:Name="OpenAIRow">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+                                <PasswordBox x:Name="OpenAIPwdBox"
+                                             Grid.Column="0"
+                                             PasswordChanged="OpenAIPwdBox_PasswordChanged"
+                                             Style="{StaticResource InputPassword}" />
+                                <ui:TextBox x:Name="OpenAITxtBox"
+                                            Grid.Column="0"
+                                            Visibility="Collapsed"
+                                            TextChanged="OpenAITxtBox_TextChanged"
+                                            Style="{StaticResource InputDefault}" />
+                                <ui:Button Grid.Column="1"
+                                           x:Name="OpenAIReveal"
+                                           Content="Show"
+                                           Icon="{ui:SymbolIcon Eye24}"
+                                           Style="{StaticResource RevealButton}"
+                                           Click="RevealApiKey_Click"
+                                           Tag="OpenAI" />
+                                <Border x:Name="OpenAIGlow"
+                                        Grid.Column="0"
+                                        BorderThickness="2"
+                                        CornerRadius="10"
+                                        IsHitTestVisible="False"
+                                        Opacity="0"
+                                        Panel.ZIndex="10">
+                                    <Border.Effect>
+                                        <DropShadowEffect x:Name="OpenAIGlowFx" BlurRadius="18" ShadowDepth="0" Opacity="0.95" />
+                                    </Border.Effect>
+                                </Border>
+                            </Grid>
+                        </StackPanel>
+                    </Border>
 
-                    <TextBlock Text="OpenRouter API Key" Style="{StaticResource FieldLabel}"/>
-                    <Grid x:Name="OpenRouterRow" Margin="0,0,0,16">
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="*"/>
-                            <ColumnDefinition Width="Auto"/>
-                        </Grid.ColumnDefinitions>
-                        <PasswordBox x:Name="OpenRouterPwdBox" Grid.Column="0" PasswordChanged="OpenRouterPwdBox_PasswordChanged"/>
-                        <ui:TextBox x:Name="OpenRouterTxtBox" Grid.Column="0" Visibility="Collapsed" TextChanged="OpenRouterTxtBox_TextChanged"/>
-                        <ui:Button Grid.Column="1" x:Name="OpenRouterReveal"
-                                   Content="Show"
-                                   Icon="{ui:SymbolIcon Eye24}"
-                                   Style="{StaticResource RevealButton}"
-                                   Margin="8,0,0,0" Click="RevealApiKey_Click" Tag="OpenRouter"/>
-                        <Border x:Name="OpenRouterGlow" Grid.ColumnSpan="2"
-                                BorderThickness="2" IsHitTestVisible="False" Opacity="0" Panel.ZIndex="10">
-                            <Border.Effect><DropShadowEffect x:Name="OpenRouterGlowFx" BlurRadius="18" ShadowDepth="0" Opacity="0.95"/></Border.Effect>
-                        </Border>
-                    </Grid>
+                    <Border Style="{StaticResource PageFeatureSurface}">
+                        <StackPanel>
+                            <TextBlock Text="OpenRouter API Key" Style="{StaticResource FieldLabel}" />
+                            <Grid x:Name="OpenRouterRow">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+                                <PasswordBox x:Name="OpenRouterPwdBox"
+                                             Grid.Column="0"
+                                             PasswordChanged="OpenRouterPwdBox_PasswordChanged"
+                                             Style="{StaticResource InputPassword}" />
+                                <ui:TextBox x:Name="OpenRouterTxtBox"
+                                            Grid.Column="0"
+                                            Visibility="Collapsed"
+                                            TextChanged="OpenRouterTxtBox_TextChanged"
+                                            Style="{StaticResource InputDefault}" />
+                                <ui:Button Grid.Column="1"
+                                           x:Name="OpenRouterReveal"
+                                           Content="Show"
+                                           Icon="{ui:SymbolIcon Eye24}"
+                                           Style="{StaticResource RevealButton}"
+                                           Click="RevealApiKey_Click"
+                                           Tag="OpenRouter" />
+                                <Border x:Name="OpenRouterGlow"
+                                        Grid.Column="0"
+                                        BorderThickness="2"
+                                        CornerRadius="10"
+                                        IsHitTestVisible="False"
+                                        Opacity="0"
+                                        Panel.ZIndex="10">
+                                    <Border.Effect>
+                                        <DropShadowEffect x:Name="OpenRouterGlowFx" BlurRadius="18" ShadowDepth="0" Opacity="0.95" />
+                                    </Border.Effect>
+                                </Border>
+                            </Grid>
+                        </StackPanel>
+                    </Border>
 
-                    <TextBlock Text="Cerebras API Key" Style="{StaticResource FieldLabel}"/>
-                    <Grid x:Name="CerebrasRow" Margin="0,0,0,16">
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="*"/>
-                            <ColumnDefinition Width="Auto"/>
-                        </Grid.ColumnDefinitions>
-                        <PasswordBox x:Name="CerebrasPwdBox" Grid.Column="0" PasswordChanged="CerebrasPwdBox_PasswordChanged"/>
-                        <ui:TextBox x:Name="CerebrasTxtBox" Grid.Column="0" Visibility="Collapsed" TextChanged="CerebrasTxtBox_TextChanged"/>
-                        <ui:Button Grid.Column="1" x:Name="CerebrasReveal"
-                                   Content="Show"
-                                   Icon="{ui:SymbolIcon Eye24}"
-                                   Style="{StaticResource RevealButton}"
-                                   Margin="8,0,0,0" Click="RevealApiKey_Click" Tag="Cerebras"/>
-                        <Border x:Name="CerebrasGlow" Grid.ColumnSpan="2"
-                                BorderThickness="2" IsHitTestVisible="False" Opacity="0" Panel.ZIndex="10">
-                            <Border.Effect><DropShadowEffect x:Name="CerebrasGlowFx" BlurRadius="18" ShadowDepth="0" Opacity="0.95"/></Border.Effect>
-                        </Border>
-                    </Grid>
+                    <Border Style="{StaticResource PageFeatureSurface}" Margin="0,0,0,16">
+                        <StackPanel>
+                            <TextBlock Text="Cerebras API Key" Style="{StaticResource FieldLabel}" />
+                            <Grid x:Name="CerebrasRow">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+                                <PasswordBox x:Name="CerebrasPwdBox"
+                                             Grid.Column="0"
+                                             PasswordChanged="CerebrasPwdBox_PasswordChanged"
+                                             Style="{StaticResource InputPassword}" />
+                                <ui:TextBox x:Name="CerebrasTxtBox"
+                                            Grid.Column="0"
+                                            Visibility="Collapsed"
+                                            TextChanged="CerebrasTxtBox_TextChanged"
+                                            Style="{StaticResource InputDefault}" />
+                                <ui:Button Grid.Column="1"
+                                           x:Name="CerebrasReveal"
+                                           Content="Show"
+                                           Icon="{ui:SymbolIcon Eye24}"
+                                           Style="{StaticResource RevealButton}"
+                                           Click="RevealApiKey_Click"
+                                           Tag="Cerebras" />
+                                <Border x:Name="CerebrasGlow"
+                                        Grid.Column="0"
+                                        BorderThickness="2"
+                                        CornerRadius="10"
+                                        IsHitTestVisible="False"
+                                        Opacity="0"
+                                        Panel.ZIndex="10">
+                                    <Border.Effect>
+                                        <DropShadowEffect x:Name="CerebrasGlowFx" BlurRadius="18" ShadowDepth="0" Opacity="0.95" />
+                                    </Border.Effect>
+                                </Border>
+                            </Grid>
+                        </StackPanel>
+                    </Border>
 
                     <ui:Button Content="Test keys"
                                Command="{Binding TestApiCommand}"
                                HorizontalAlignment="Left"
-                               Style="{StaticResource PrimaryButton}"/>
+                               Style="{StaticResource PrimaryButton}" />
                 </StackPanel>
             </Border>
         </StackPanel>
     </ScrollViewer>
 </UserControl>
+
+

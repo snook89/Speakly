@@ -1,4 +1,3 @@
-using System.Collections.Generic;
 using System.Linq;
 using System.Windows.Controls;
 using Speakly.Services;
@@ -41,8 +40,10 @@ namespace Speakly.Pages
             SummaryText.Text =
                 $"Sessions: {summary.TotalSessions} | Successful: {summary.SuccessfulSessions} | Success rate: {summary.SuccessRate:0.0}% | Avg total latency: {summary.AverageTotalLatencyMs} ms";
 
-            LatencyText.Text =
-                $"Record: {summary.AverageRecordMs} ms | Transcribe: {summary.AverageTranscribeMs} ms | Refine: {summary.AverageRefineMs} ms | Insert: {summary.AverageInsertMs} ms";
+            RecordLatencyText.Text = summary.AverageRecordMs.ToString();
+            TranscribeLatencyText.Text = summary.AverageTranscribeMs.ToString();
+            RefineLatencyText.Text = summary.AverageRefineMs.ToString();
+            InsertLatencyText.Text = summary.AverageInsertMs.ToString();
             FailoverText.Text = $"Failover sessions: {summary.FailoverSessions} | Failover rate: {summary.FailoverRate:0.0}%";
 
             ErrorText.Text = summary.ErrorCounts.Count == 0

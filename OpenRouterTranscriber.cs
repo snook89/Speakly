@@ -2,6 +2,7 @@ using System;
 using System.IO;
 using System.Net.Http;
 using System.Net.Http.Headers;
+using System.Text;
 using System.Text.Json;
 using System.Threading.Tasks;
 using Speakly.Config;
@@ -9,8 +10,8 @@ using Speakly.Config;
 namespace Speakly.Services
 {
     /// <summary>
-    /// Transcribes audio using OpenRouter's OpenAI-compatible /v1/audio/transcriptions endpoint.
-    /// Supports any whisper-class model available on OpenRouter (e.g. openai/whisper-large-v3).
+    /// Transcribes audio via OpenRouter's chat completions endpoint using input_audio content.
+    /// Supports models that accept audio input and produce text output.
     /// </summary>
     public class OpenRouterTranscriber : ITranscriber
     {
@@ -62,7 +63,7 @@ namespace Speakly.Services
 
             var model = ConfigManager.Config.OpenRouterSttModel?.Trim();
             if (string.IsNullOrWhiteSpace(model))
-                model = "openai/whisper-large-v3";
+                model = "openai/gpt-audio-mini";
 
             try
             {
@@ -70,34 +71,51 @@ namespace Speakly.Services
                 int channels   = ConfigManager.Config.Channels;
                 byte[] wavBytes = CreateWavHeader(_audioBuffer.ToArray(), sampleRate, channels);
 
-                using var content = new MultipartFormDataContent();
-
-                var fileContent = new ByteArrayContent(wavBytes);
-                fileContent.Headers.ContentType = MediaTypeHeaderValue.Parse("audio/wav");
-                content.Add(fileContent, "file", "audio.wav");
-                content.Add(new StringContent(model), "model");
-
                 var configuredLanguage = ConfigManager.Config.Language?.Trim();
+                var resolvedLanguage = string.Empty;
                 if (string.Equals(configuredLanguage, "layout", StringComparison.OrdinalIgnoreCase))
-                {
-                    content.Add(new StringContent(InputLanguageResolver.ResolveCurrentLanguageCode("en")), "language");
-                }
+                    resolvedLanguage = InputLanguageResolver.ResolveCurrentLanguageCode("en");
                 else if (!string.IsNullOrWhiteSpace(configuredLanguage) &&
                          !string.Equals(configuredLanguage, "auto", StringComparison.OrdinalIgnoreCase))
-                {
-                    content.Add(new StringContent(configuredLanguage), "language");
-                }
+                    resolvedLanguage = configuredLanguage;
 
                 var dictionaryPrompt = PersonalDictionaryService.BuildSttHintPrompt(ConfigManager.Config, maxTerms: 40);
+                var instructionBuilder = new StringBuilder("Transcribe the provided audio into plain text. Return only the transcript.");
+                if (!string.IsNullOrWhiteSpace(resolvedLanguage))
+                    instructionBuilder.Append(" Expected language: ").Append(resolvedLanguage).Append('.');
                 if (!string.IsNullOrWhiteSpace(dictionaryPrompt))
+                    instructionBuilder.Append(" Prefer these terms when they are spoken exactly: ").Append(dictionaryPrompt);
+
+                var payload = new
                 {
-                    content.Add(new StringContent(dictionaryPrompt), "prompt");
-                }
+                    model,
+                    messages = new object[]
+                    {
+                        new
+                        {
+                            role = "user",
+                            content = new object[]
+                            {
+                                new { type = "text", text = instructionBuilder.ToString() },
+                                new
+                                {
+                                    type = "input_audio",
+                                    input_audio = new
+                                    {
+                                        data = Convert.ToBase64String(wavBytes),
+                                        format = "wav"
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    temperature = 0
+                };
 
                 var request = new HttpRequestMessage(HttpMethod.Post,
-                    "https://openrouter.ai/api/v1/audio/transcriptions")
+                    "https://openrouter.ai/api/v1/chat/completions")
                 {
-                    Content = content
+                    Content = new StringContent(JsonSerializer.Serialize(payload), Encoding.UTF8, "application/json")
                 };
                 request.Headers.Authorization =
                     new AuthenticationHeaderValue("Bearer", apiKey.Trim());
@@ -110,10 +128,11 @@ namespace Speakly.Services
 
                 if (response.IsSuccessStatusCode)
                 {
-                    using var doc = JsonDocument.Parse(responseString);
-                    var text = doc.RootElement.GetProperty("text").GetString();
+                    var text = ExtractTextFromChatCompletion(responseString);
                     if (!string.IsNullOrWhiteSpace(text))
                         TranscriptionReceived?.Invoke(this, new TranscriptionEventArgs(text, true));
+                    else
+                        ErrorReceived?.Invoke(this, "OpenRouter Transcription Failed: empty response text.");
                 }
                 else
                 {
@@ -129,6 +148,65 @@ namespace Speakly.Services
             {
                 _audioBuffer.SetLength(0);
             }
+        }
+
+        private static string ExtractTextFromChatCompletion(string responseJson)
+        {
+            try
+            {
+                using var doc = JsonDocument.Parse(responseJson);
+                var root = doc.RootElement;
+
+                if (!root.TryGetProperty("choices", out var choices) ||
+                    choices.ValueKind != JsonValueKind.Array ||
+                    choices.GetArrayLength() == 0)
+                {
+                    return string.Empty;
+                }
+
+                var first = choices[0];
+                if (!first.TryGetProperty("message", out var message) || message.ValueKind != JsonValueKind.Object)
+                {
+                    return string.Empty;
+                }
+
+                if (!message.TryGetProperty("content", out var content))
+                {
+                    return string.Empty;
+                }
+
+                if (content.ValueKind == JsonValueKind.String)
+                {
+                    return content.GetString()?.Trim() ?? string.Empty;
+                }
+
+                if (content.ValueKind == JsonValueKind.Array)
+                {
+                    var builder = new StringBuilder();
+                    foreach (var part in content.EnumerateArray())
+                    {
+                        if (part.ValueKind == JsonValueKind.String)
+                        {
+                            builder.Append(part.GetString());
+                            continue;
+                        }
+
+                        if (part.ValueKind != JsonValueKind.Object) continue;
+                        if (part.TryGetProperty("text", out var textProp) && textProp.ValueKind == JsonValueKind.String)
+                        {
+                            builder.Append(textProp.GetString());
+                        }
+                    }
+
+                    return builder.ToString().Trim();
+                }
+            }
+            catch
+            {
+                // Ignore parse errors and return empty.
+            }
+
+            return string.Empty;
         }
 
         private byte[] CreateWavHeader(byte[] rawPcmData, int sampleRate, int channels)

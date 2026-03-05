@@ -44,7 +44,15 @@ namespace Speakly.Pages
         {
             if (sender is ComboBox combo)
             {
-                EditableModelComboHelper.HandleTextChanged(combo);
+                EditableModelComboHelper.HandleKeyUp(combo, e.Key);
+            }
+        }
+
+        private void ModelCombo_DropDownOpened(object sender, EventArgs e)
+        {
+            if (sender is ComboBox combo)
+            {
+                EditableModelComboHelper.ResetFilter(combo);
             }
         }
 

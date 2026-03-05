@@ -2,47 +2,83 @@
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
-             FontFamily="Segoe UI Variable Text">
-    <ScrollViewer VerticalScrollBarVisibility="Auto">
-        <StackPanel Margin="24,16,24,24">
-            <TextBlock Text="Hotkeys" Style="{StaticResource PageTitle}"/>
+             FontFamily="Segoe UI Variable Text"
+             Background="#FF1E2330">
+    <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="{StaticResource PagePadding}">
+        <StackPanel MaxWidth="640">
+            <StackPanel Margin="0,0,0,28">
+                <TextBlock Text="SHORTCUTS" Style="{StaticResource PageEyebrow}" />
+                <TextBlock Text="Hotkeys" Style="{StaticResource PageTitle}" Margin="0" />
+            </StackPanel>
 
-            <Border Style="{StaticResource SectionCard}">
+            <Border Style="{StaticResource PageFeatureCard}">
                 <StackPanel>
-                    <TextBlock Text="Push-to-Talk Key" Style="{StaticResource SectionTitle}"/>
-                    <TextBlock Text="Hold to record, release to transcribe" Style="{StaticResource FieldLabel}"/>
+                    <TextBlock Text="PUSH TO TALK" Style="{StaticResource PageFeatureLabel}" />
+                    <TextBlock Text="Push-to-Talk Key" Style="{StaticResource SectionTitle}" />
+                    <TextBlock Text="Hold to record, release to transcribe" Style="{StaticResource HintText}" Margin="0,0,0,8" />
                     <Grid Margin="0,0,0,6">
                         <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="*"/>
-                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
                         </Grid.ColumnDefinitions>
-                        <ui:TextBox x:Name="PttHotkeyBox" Text="{Binding PttHotkey}" Grid.Column="0" IsReadOnly="True" Cursor="Hand"/>
-                        <ui:Button x:Name="SetPttBtn" Grid.Column="1" Content="Set key" Margin="8,0,0,0" Padding="12,0" Click="SetPtt_Click" Style="{StaticResource SecondaryButton}"/>
+                        <ui:TextBox x:Name="PttHotkeyBox"
+                                    Text="{Binding PttHotkey}"
+                                    Grid.Column="0"
+                                    IsReadOnly="True"
+                                    Cursor="Hand"
+                                    Style="{StaticResource InputDefault}" />
+                        <ui:Button x:Name="SetPttBtn"
+                                   Grid.Column="1"
+                                   Content="Set key"
+                                   Margin="8,0,0,0"
+                                   Click="SetPtt_Click"
+                                   Style="{StaticResource SecondaryButton}" />
                     </Grid>
-                    <TextBlock Text="Examples: Space · LeftCtrl · LeftAlt · F1 … F12" Style="{StaticResource HintText}"/>
+                    <TextBlock Text="Examples: Space · LeftCtrl · LeftAlt · F1 … F12" Style="{StaticResource HintText}" />
                 </StackPanel>
             </Border>
 
-            <Border Style="{StaticResource SectionCard}">
+            <Border Style="{StaticResource PageFeatureCard}">
                 <StackPanel>
-                    <TextBlock Text="Toggle Recording Key" Style="{StaticResource SectionTitle}"/>
-                    <TextBlock Text="Press once to start, press again to stop" Style="{StaticResource FieldLabel}"/>
+                    <TextBlock Text="TOGGLE RECORDING" Style="{StaticResource PageFeatureLabel}" />
+                    <TextBlock Text="Toggle Recording Key" Style="{StaticResource SectionTitle}" />
+                    <TextBlock Text="Press once to start, press again to stop" Style="{StaticResource HintText}" Margin="0,0,0,8" />
                     <Grid Margin="0,0,0,6">
                         <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="*"/>
-                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
                         </Grid.ColumnDefinitions>
-                        <ui:TextBox x:Name="RecordHotkeyBox" Text="{Binding RecordHotkey}" Grid.Column="0" IsReadOnly="True" Cursor="Hand"/>
-                        <ui:Button x:Name="SetRecBtn" Grid.Column="1" Content="Set key" Margin="8,0,0,0" Padding="12,0" Click="SetRec_Click" Style="{StaticResource SecondaryButton}"/>
+                        <ui:TextBox x:Name="RecordHotkeyBox"
+                                    Text="{Binding RecordHotkey}"
+                                    Grid.Column="0"
+                                    IsReadOnly="True"
+                                    Cursor="Hand"
+                                    Style="{StaticResource InputDefault}" />
+                        <ui:Button x:Name="SetRecBtn"
+                                   Grid.Column="1"
+                                   Content="Set key"
+                                   Margin="8,0,0,0"
+                                   Click="SetRec_Click"
+                                   Style="{StaticResource SecondaryButton}" />
                     </Grid>
-                    <TextBlock Text="Examples: F9 · Insert · Scroll Lock. Must be different from PTT key." Style="{StaticResource HintText}"/>
+                    <TextBlock Text="Examples: F9 · Insert · Scroll Lock. Must be different from PTT key." Style="{StaticResource HintText}" />
                 </StackPanel>
             </Border>
 
-            <ui:Button Content="Reset Hotkeys to Defaults"
-                       Style="{StaticResource SecondaryButton}"
-                       HorizontalAlignment="Left"
-                       Click="ResetDefaults_Click"/>
+            <Border Style="{StaticResource PageFeatureCard}" Margin="0">
+                <StackPanel>
+                    <TextBlock Text="DEFAULTS" Style="{StaticResource PageFeatureLabel}" />
+                    <TextBlock Text="Restore built-in key assignments if your shortcuts conflict."
+                               Style="{StaticResource PageFeatureHint}"
+                               Margin="0,0,0,10" />
+                    <ui:Button Content="Reset Hotkeys to Defaults"
+                               Style="{StaticResource SecondaryButton}"
+                               HorizontalAlignment="Left"
+                               Click="ResetDefaults_Click" />
+                </StackPanel>
+            </Border>
         </StackPanel>
     </ScrollViewer>
 </UserControl>
+
+

@@ -2,125 +2,368 @@
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
-             FontFamily="Segoe UI Variable Text">
-    <ScrollViewer VerticalScrollBarVisibility="Auto">
-        <StackPanel Margin="24,16,24,24">
-            <TextBlock Text="Home" Style="{StaticResource PageTitle}"/>
+             FontFamily="Segoe UI Variable Text"
+             Background="#FF1E2330">
+    <UserControl.Resources>
+        <CornerRadius x:Key="ProfilesRadiusLg">12</CornerRadius>
+        <CornerRadius x:Key="ProfilesRadiusSm">8</CornerRadius>
+        <Thickness x:Key="ProfilesCardPadding">20</Thickness>
 
-            <Border Style="{StaticResource SectionCard}">
-                <StackPanel>
-                    <TextBlock Text="Session Status" Style="{StaticResource SectionTitle}"/>
-                    <TextBlock Text="{Binding ActiveProfileName, StringFormat=Active profile: {0}}" Style="{StaticResource FieldLabel}"/>
-                    <TextBlock Text="{Binding LastInsertionStatus}" Style="{StaticResource HintText}" Margin="0,2,0,2"/>
-                    <TextBlock Text="{Binding LastInsertionMethod, StringFormat=Insertion method: {0}}" Style="{StaticResource HintText}"/>
-                </StackPanel>
+        <SolidColorBrush x:Key="ProfilesBgBrush" Color="#FF0F1117" />
+        <SolidColorBrush x:Key="ProfilesSurfaceBrush" Color="#FF181C25" />
+        <SolidColorBrush x:Key="ProfilesCardBrush" Color="#FF1E2330" />
+        <SolidColorBrush x:Key="ProfilesBorderBrush" Color="#FF2A3045" />
+        <SolidColorBrush x:Key="ProfilesBorderHighBrush" Color="#FF3A4560" />
+        <SolidColorBrush x:Key="ProfilesTextBrush" Color="#FFD4DAF0" />
+        <SolidColorBrush x:Key="ProfilesMutedBrush" Color="#FF6B7599" />
+        <SolidColorBrush x:Key="ProfilesAccentBrush" Color="#FF4F7CFF" />
+        <SolidColorBrush x:Key="ProfilesAccentHiBrush" Color="#FF7A9DFF" />
+        <SolidColorBrush x:Key="ProfilesDangerBrush" Color="#FFFF5A72" />
+        <SolidColorBrush x:Key="ProfilesGreenBrush" Color="#FF3DDC97" />
+
+        <Style x:Key="ProfilesCardStyle" TargetType="Border">
+            <Setter Property="Background" Value="{StaticResource ProfilesCardBrush}" />
+            <Setter Property="BorderBrush" Value="{StaticResource ProfilesBorderBrush}" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="CornerRadius" Value="{StaticResource ProfilesRadiusLg}" />
+            <Setter Property="Padding" Value="{StaticResource ProfilesCardPadding}" />
+            <Setter Property="Margin" Value="0,0,0,12" />
+            <Style.Triggers>
+                <Trigger Property="IsMouseOver" Value="True">
+                    <Setter Property="BorderBrush" Value="{StaticResource ProfilesBorderHighBrush}" />
+                </Trigger>
+            </Style.Triggers>
+        </Style>
+
+        <Style x:Key="ProfilesCardLabelStyle" TargetType="TextBlock">
+            <Setter Property="FontSize" Value="10" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="Foreground" Value="{StaticResource ProfilesMutedBrush}" />
+            <Setter Property="Margin" Value="0,0,0,14" />
+            <Setter Property="TextWrapping" Value="Wrap" />
+        </Style>
+
+        <Style x:Key="ProfilesFormLabelStyle" TargetType="TextBlock">
+            <Setter Property="FontSize" Value="12" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="Foreground" Value="{StaticResource ProfilesMutedBrush}" />
+            <Setter Property="Margin" Value="0,0,0,4" />
+            <Setter Property="TextWrapping" Value="Wrap" />
+        </Style>
+
+        <Style x:Key="ProfilesHintStyle" TargetType="TextBlock">
+            <Setter Property="FontSize" Value="11" />
+            <Setter Property="Foreground" Value="{StaticResource ProfilesMutedBrush}" />
+            <Setter Property="TextWrapping" Value="Wrap" />
+            <Setter Property="LineHeight" Value="18" />
+        </Style>
+
+        <Style x:Key="ProfilesTileLabelStyle" TargetType="TextBlock">
+            <Setter Property="FontSize" Value="10" />
+            <Setter Property="Foreground" Value="{StaticResource ProfilesMutedBrush}" />
+            <Setter Property="Margin" Value="0,0,0,3" />
+        </Style>
+
+        <Style x:Key="ProfilesTileValueStyle" TargetType="TextBlock">
+            <Setter Property="FontSize" Value="13" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="Foreground" Value="{StaticResource ProfilesTextBrush}" />
+            <Setter Property="TextWrapping" Value="Wrap" />
+        </Style>
+    </UserControl.Resources>
+    <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="{StaticResource PagePadding}">
+        <StackPanel MaxWidth="860">
+            <StackPanel Margin="0,0,0,28">
+                <TextBlock Text="HOME" Style="{StaticResource PageEyebrow}" />
+                <TextBlock Text="Home" Style="{StaticResource PageTitle}" Margin="0" />
+            </StackPanel>
+
+            <Border Style="{StaticResource PageFeatureCard}">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+
+                    <StackPanel Grid.Column="0">
+                        <TextBlock Text="ACTIVE SESSION" Style="{StaticResource PageFeatureLabel}" />
+                        <TextBlock Text="{Binding ActiveProfileName}" Style="{StaticResource SectionTitle}" Margin="0,0,0,4" />
+                        <TextBlock Text="{Binding LastInsertionStatus}" Style="{StaticResource HintText}" Margin="0,0,0,2" />
+                        <TextBlock Text="{Binding LastInsertionMethod, StringFormat=Insertion method: {0}}" Style="{StaticResource HintText}" />
+                    </StackPanel>
+
+                    <Border Grid.Column="1"
+                            Width="10"
+                            Height="10"
+                            CornerRadius="5"
+                            Background="{DynamicResource BrushSuccess}"
+                            VerticalAlignment="Center" />
+                </Grid>
             </Border>
 
-            <Border Style="{StaticResource SectionCard}">
+            <Border Style="{StaticResource PageFeatureCard}">
                 <StackPanel>
-                    <TextBlock Text="Quick Actions" Style="{StaticResource SectionTitle}"/>
+                    <TextBlock Text="ACTIONS" Style="{StaticResource PageFeatureLabel}" />
+                    <TextBlock Text="Quick Actions" Style="{StaticResource SectionTitle}" />
                     <WrapPanel>
                         <ui:Button Content="Run health checks"
                                    Command="{Binding RunHealthCheckCommand}"
-                                   Margin="0,0,8,8"
-                                   Style="{StaticResource SecondaryButton}"/>
+                                   Style="{StaticResource SecondaryButton}"
+                                   Margin="0,0,8,0" />
                         <ui:Button Content="Refresh models"
                                    Command="{Binding RefreshModelsCommand}"
-                                   Margin="0,0,8,8"
-                                   Style="{StaticResource SecondaryButton}"/>
+                                   Style="{StaticResource SecondaryButton}"
+                                   Margin="0,0,8,0" />
                         <ui:Button Content="Toggle refinement"
                                    Command="{Binding ToggleRefinementQuickCommand}"
-                                   Margin="0,0,8,8"
-                                   Style="{StaticResource SecondaryButton}"/>
+                                   Style="{StaticResource SecondaryButton}"
+                                   Margin="0,0,8,0" />
                         <ui:Button Content="Next profile"
                                    Command="{Binding CycleProfileCommand}"
                                    IsEnabled="{Binding CanCycleProfile}"
-                                   Margin="0,0,8,8"
-                                   Style="{StaticResource SecondaryButton}"/>
+                                   Style="{StaticResource SecondaryButton}"
+                                   Margin="0" />
                     </WrapPanel>
                 </StackPanel>
             </Border>
 
-            <Border Style="{StaticResource SectionCard}">
-                <StackPanel>
-                    <TextBlock Text="Profiles" Style="{StaticResource SectionTitle}"/>
-                    <TextBlock Text="Create multiple profiles and map them to app process names (example: code, notepad)."
-                               Style="{StaticResource HintText}"
-                               TextWrapping="Wrap"
-                               Margin="0,0,0,10"/>
+            <Border Style="{StaticResource PageFeatureCard}">
+                <StackPanel MaxWidth="540">
+                    <StackPanel Margin="0,0,0,20">
+                        <TextBlock Text="Profiles"
+                                   FontSize="20"
+                                   FontWeight="SemiBold"
+                                   Foreground="{StaticResource ProfilesTextBrush}" />
+                        <TextBlock Text="Map STT configurations to specific applications"
+                                   FontSize="12"
+                                   Foreground="{StaticResource ProfilesMutedBrush}" />
+                    </StackPanel>
 
-                    <TextBlock Text="Active Profile" Style="{StaticResource FieldLabel}"/>
-                    <ComboBox ItemsSource="{Binding Profiles}"
-                              SelectedItem="{Binding SelectedProfile}"
-                              DisplayMemberPath="Name"
-                              Margin="0,0,0,10"
-                              MaxWidth="360"
-                              HorizontalAlignment="Left"/>
+                    <Border Style="{StaticResource ProfilesCardStyle}">
+                        <StackPanel>
+                            <TextBlock Text="ACTIVE PROFILE" Style="{StaticResource ProfilesCardLabelStyle}" />
 
-                    <WrapPanel Margin="0,0,0,10">
-                        <ui:Button Content="Next profile"
-                                   Command="{Binding CycleProfileCommand}"
-                                   IsEnabled="{Binding CanCycleProfile}"
-                                   Margin="0,0,8,8"
-                                   Style="{StaticResource SecondaryButton}"/>
-                        <ui:Button Content="Save profile"
-                                   Command="{Binding SaveProfileCommand}"
-                                   Margin="0,0,8,8"
-                                   Style="{StaticResource PrimaryButton}"/>
-                        <ui:Button Content="Delete selected profile"
-                                   Command="{Binding DeleteProfileCommand}"
-                                   Margin="0,0,8,8"
-                                   Style="{StaticResource SecondaryButton}"
-                                   IsEnabled="{Binding CanDeleteSelectedProfile}"/>
-                    </WrapPanel>
+                            <Grid Margin="0,0,0,16">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                </Grid.ColumnDefinitions>
+                                <ComboBox Grid.Column="0"
+                                          ItemsSource="{Binding Profiles}"
+                                          SelectedItem="{Binding SelectedProfile}"
+                                          DisplayMemberPath="Name"
+                                          Style="{StaticResource DropdownDefault}"
+                                          MinWidth="260"
+                                          HorizontalAlignment="Left" />
+                            </Grid>
 
-                    <TextBlock Text="Profile Name" Style="{StaticResource FieldLabel}"/>
-                    <ui:TextBox Text="{Binding ProfileDraftName, UpdateSourceTrigger=PropertyChanged}"
-                               Margin="0,0,0,10"
-                               MaxWidth="420"
-                               HorizontalAlignment="Left"/>
+                            <UniformGrid Columns="2">
+                                <Border Margin="0,0,8,8"
+                                        Background="{StaticResource ProfilesSurfaceBrush}"
+                                        BorderBrush="{StaticResource ProfilesBorderBrush}"
+                                        BorderThickness="1"
+                                        CornerRadius="{StaticResource ProfilesRadiusSm}"
+                                        Padding="12,10">
+                                    <StackPanel>
+                                        <TextBlock Text="STT ENGINE" Style="{StaticResource ProfilesTileLabelStyle}" />
+                                        <TextBlock Text="{Binding SelectedProfileSttSummary}" Style="{StaticResource ProfilesTileValueStyle}" />
+                                    </StackPanel>
+                                </Border>
+                                <Border Margin="0,0,0,8"
+                                        Background="{StaticResource ProfilesSurfaceBrush}"
+                                        BorderBrush="{StaticResource ProfilesBorderBrush}"
+                                        BorderThickness="1"
+                                        CornerRadius="{StaticResource ProfilesRadiusSm}"
+                                        Padding="12,10">
+                                    <StackPanel>
+                                        <TextBlock Text="REFINEMENT" Style="{StaticResource ProfilesTileLabelStyle}" />
+                                        <TextBlock Text="{Binding SelectedProfileRefinementSummary}" Style="{StaticResource ProfilesTileValueStyle}" />
+                                    </StackPanel>
+                                </Border>
+                                <Border Margin="0,0,8,8"
+                                        Background="{StaticResource ProfilesSurfaceBrush}"
+                                        BorderBrush="{StaticResource ProfilesBorderBrush}"
+                                        BorderThickness="1"
+                                        CornerRadius="{StaticResource ProfilesRadiusSm}"
+                                        Padding="12,10">
+                                    <StackPanel>
+                                        <TextBlock Text="RUNTIME" Style="{StaticResource ProfilesTileLabelStyle}" />
+                                        <TextBlock Text="{Binding SelectedProfileRuntimeSummary}" Style="{StaticResource ProfilesTileValueStyle}" />
+                                    </StackPanel>
+                                </Border>
+                                <Border Margin="0,0,0,8"
+                                        Background="{StaticResource ProfilesSurfaceBrush}"
+                                        BorderBrush="{StaticResource ProfilesBorderBrush}"
+                                        BorderThickness="1"
+                                        CornerRadius="{StaticResource ProfilesRadiusSm}"
+                                        Padding="12,10">
+                                    <StackPanel>
+                                        <TextBlock Text="MATCH" Style="{StaticResource ProfilesTileLabelStyle}" />
+                                        <TextBlock Text="{Binding MatchedProfileForTargetStatus}" Style="{StaticResource ProfilesTileValueStyle}" />
+                                    </StackPanel>
+                                </Border>
+                            </UniformGrid>
 
-                    <TextBlock Text="Process Names for Auto-Selection" Style="{StaticResource FieldLabel}"/>
-                    <TextBox Text="{Binding ProfileProcessNamesInput, UpdateSourceTrigger=PropertyChanged}"
-                             Height="70"
-                             Margin="0,0,0,4"
-                             TextWrapping="Wrap"
-                             VerticalScrollBarVisibility="Auto"/>
-                    <TextBlock Text="Separate names by comma/newline. Include process name only (for example: code, chrome, notepad)."
-                               Style="{StaticResource HintText}"
-                               Margin="0,0,0,12"
-                               TextWrapping="Wrap"/>
+                            <Border Background="{StaticResource ProfilesSurfaceBrush}"
+                                    BorderBrush="{StaticResource ProfilesBorderBrush}"
+                                    BorderThickness="1"
+                                    CornerRadius="{StaticResource ProfilesRadiusSm}"
+                                    Padding="12,10">
+                                <StackPanel>
+                                    <TextBlock Text="DICTIONARY + MAPPINGS" Style="{StaticResource ProfilesTileLabelStyle}" />
+                                    <TextBlock Text="{Binding SelectedProfileDictionarySummary}" Style="{StaticResource ProfilesTileValueStyle}" />
+                                </StackPanel>
+                            </Border>
+                        </StackPanel>
+                    </Border>
 
-                    <TextBlock Text="Create New Profile" Style="{StaticResource FieldLabel}"/>
-                    <Grid Margin="0,0,0,0">
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="*"/>
-                            <ColumnDefinition Width="Auto"/>
-                        </Grid.ColumnDefinitions>
-                        <ui:TextBox Grid.Column="0"
-                                   Text="{Binding NewProfileName, UpdateSourceTrigger=PropertyChanged}"
-                                   PlaceholderText="Profile name (optional)"
-                                   Margin="0,0,8,0"/>
-                        <ui:Button Grid.Column="1"
-                                   Content="Create profile"
-                                   Command="{Binding CreateProfileCommand}"
-                                   Style="{StaticResource SecondaryButton}"/>
-                    </Grid>
+                    <Border Style="{StaticResource ProfilesCardStyle}">
+                        <StackPanel>
+                            <TextBlock Text="PROFILE SETTINGS" Style="{StaticResource ProfilesCardLabelStyle}" />
+
+                            <TextBlock Text="Profile name" Style="{StaticResource ProfilesFormLabelStyle}" />
+                            <Grid Margin="0,4,0,14">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+                                <ui:TextBox Grid.Column="0"
+                                            Text="{Binding ProfileDraftName, UpdateSourceTrigger=PropertyChanged}"
+                                            Style="{StaticResource InputDefault}" />
+                                <ui:Button Grid.Column="1"
+                                           Content="Rename"
+                                           Margin="8,0,0,0"
+                                           Command="{Binding SaveProfileCommand}"
+                                           Style="{StaticResource GhostButton}" />
+                            </Grid>
+
+                            <TextBlock Text="Process names" Style="{StaticResource ProfilesFormLabelStyle}" />
+                            <TextBox Margin="0,4,0,4"
+                                     MinHeight="72"
+                                     Text="{Binding ProfileProcessNamesInput, UpdateSourceTrigger=PropertyChanged}"
+                                     Style="{StaticResource InputTextArea}" />
+                            <TextBlock Style="{StaticResource ProfilesHintStyle}"
+                                       Text="One name per line or comma-separated. Use process name only (e.g. code, chrome, notepad)." />
+
+                            <Border Margin="0,10,0,0"
+                                    Background="{StaticResource ProfilesSurfaceBrush}"
+                                    BorderBrush="{StaticResource ProfilesBorderBrush}"
+                                    BorderThickness="1"
+                                    CornerRadius="{StaticResource ProfilesRadiusSm}"
+                                    Padding="14,10">
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <StackPanel Grid.Column="0">
+                                        <TextBlock Text="{Binding CurrentTargetProcessStatus}"
+                                                   Style="{StaticResource ProfilesHintStyle}"
+                                                   Foreground="{StaticResource ProfilesTextBrush}" />
+                                        <TextBlock Text="{Binding MatchedProfileForTargetStatus}"
+                                                   Style="{StaticResource ProfilesHintStyle}"
+                                                   Foreground="{StaticResource ProfilesAccentHiBrush}"
+                                                   Margin="0,2,0,0" />
+                                    </StackPanel>
+                                    <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+                                        <ui:Button Content="Use Current App"
+                                                   Command="{Binding CaptureProfileProcessFromCurrentAppCommand}"
+                                                   Style="{StaticResource GhostButton}"
+                                                   Margin="0,0,6,0" />
+                                        <ui:Button Content="Refresh"
+                                                   Command="{Binding RefreshTargetProfileMatchCommand}"
+                                                   Style="{StaticResource GhostButton}" />
+                                    </StackPanel>
+                                </Grid>
+                            </Border>
+
+                            <Border Height="1"
+                                    Background="{StaticResource ProfilesBorderBrush}"
+                                    Margin="0,16" />
+
+                            <StackPanel Orientation="Horizontal">
+                                <ui:Button Content="Save mappings"
+                                           Command="{Binding SaveProfileCommand}"
+                                           Style="{StaticResource PrimaryButton}"
+                                           Margin="0,0,8,0" />
+                                <ui:Button Content="Next profile"
+                                           Command="{Binding CycleProfileCommand}"
+                                           IsEnabled="{Binding CanCycleProfile}"
+                                           Style="{StaticResource GhostButton}" />
+                            </StackPanel>
+                        </StackPanel>
+                    </Border>
+
+                    <Border CornerRadius="{StaticResource ProfilesRadiusLg}"
+                            Padding="20"
+                            Background="#083F7CFF"
+                            BorderBrush="{StaticResource ProfilesBorderBrush}"
+                            BorderThickness="1"
+                            Margin="0,0,0,12">
+                        <Grid>
+                            <Rectangle RadiusX="12"
+                                       RadiusY="12"
+                                       StrokeThickness="1.5"
+                                       Stroke="{StaticResource ProfilesBorderBrush}"
+                                       StrokeDashArray="6,3" />
+                            <StackPanel Margin="14">
+                                <TextBlock Text="CREATE NEW PROFILE" Style="{StaticResource ProfilesCardLabelStyle}" />
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <ui:TextBox Grid.Column="0"
+                                                Text="{Binding NewProfileName, UpdateSourceTrigger=PropertyChanged}"
+                                                Style="{StaticResource InputDefault}"
+                                                PlaceholderText="e.g. Chrome, VS Code..." />
+                                    <ui:Button Grid.Column="1"
+                                               Content="Create profile"
+                                               Command="{Binding CreateProfileCommand}"
+                                               Style="{StaticResource PrimaryButton}"
+                                               Margin="8,0,0,0" />
+                                </Grid>
+                            </StackPanel>
+                        </Grid>
+                    </Border>
+
+                    <Border CornerRadius="{StaticResource ProfilesRadiusLg}"
+                            Padding="20"
+                            Background="#0AFF5A72"
+                            BorderBrush="#33FF5A72"
+                            BorderThickness="1"
+                            Margin="0">
+                        <StackPanel>
+                            <TextBlock Text="⚠  DANGER ZONE"
+                                       Style="{StaticResource ProfilesCardLabelStyle}"
+                                       Foreground="{StaticResource ProfilesDangerBrush}" />
+                            <TextBlock TextWrapping="Wrap"
+                                       FontSize="12"
+                                       Margin="0,0,0,12"
+                                       Foreground="{StaticResource ProfilesMutedBrush}"
+                                       Text="Deleting this profile permanently removes its settings and process mappings. This action cannot be undone." />
+                            <ui:Button Command="{Binding DeleteProfileCommand}"
+                                       IsEnabled="{Binding CanDeleteSelectedProfile}"
+                                       Style="{StaticResource DangerButton}"
+                                       HorizontalAlignment="Left">
+                                <ui:Button.Content>
+                                    <TextBlock>
+                                        <Run Text="Delete " />
+                                        <Run Text="{Binding SelectedProfile.Name}" />
+                                        <Run Text=" profile" />
+                                    </TextBlock>
+                                </ui:Button.Content>
+                            </ui:Button>
+                        </StackPanel>
+                    </Border>
 
                     <TextBlock Text="{Binding ProfileStatusMessage}"
-                               Style="{StaticResource HintText}"
-                               Margin="0,10,0,0"
-                               TextWrapping="Wrap"/>
+                               Style="{StaticResource ProfilesHintStyle}"
+                               Margin="0,10,0,0" />
                 </StackPanel>
             </Border>
 
-            <Border Style="{StaticResource SectionCard}">
-                <StackPanel>
-                    <TextBlock Text="Startup Health" Style="{StaticResource SectionTitle}"/>
-                    <TextBlock Text="{Binding HealthSummary}" Style="{StaticResource HintText}" TextWrapping="Wrap"/>
-                    <TextBlock Text="{Binding HealthDetails}" Style="{StaticResource HintText}" Margin="0,8,0,0" TextWrapping="Wrap"/>
-                </StackPanel>
-            </Border>
         </StackPanel>
     </ScrollViewer>
 </UserControl>
+
+

@@ -38,6 +38,10 @@ namespace Speakly.ViewModels
         private string _profileDraftName = string.Empty;
         private string _profileProcessNamesInput = string.Empty;
         private string _profileStatusMessage = "Tip: create additional profiles and map them to process names (for example: code, notepad).";
+        private string _currentTargetProcessStatus = "Current app: (not detected)";
+        private string _matchedProfileForTargetStatus = "Matched profile: (none)";
+        private bool _isCaptureProfileProcessInProgress;
+        private bool _isApplyingPromptPresetFromProfile;
         private string _globalDictionaryTermsText = string.Empty;
         private string _profileDictionaryTermsText = string.Empty;
         private string _selectedDictionarySuggestion = string.Empty;
@@ -59,6 +63,8 @@ namespace Speakly.ViewModels
         public ICommand CreateProfileCommand { get; }
         public ICommand SaveProfileCommand { get; }
         public ICommand DeleteProfileCommand { get; }
+        public ICommand CaptureProfileProcessFromCurrentAppCommand { get; }
+        public ICommand RefreshTargetProfileMatchCommand { get; }
         public ICommand OpenDebugLogsCommand { get; }
         public ICommand ClearPendingTransferCommand { get; }
         public ICommand AddSuggestionToGlobalDictionaryCommand { get; }
@@ -164,6 +170,7 @@ namespace Speakly.ViewModels
                 SyncActiveProfileFromLegacy();
                 OnPropertyChanged(); 
                 OnPropertyChanged(nameof(SelectedSttModelString));
+                OnPropertyChanged(nameof(IsOpenRouterSttProvider));
                 NotifyDeepgramLanguageGuardChanged();
             }
         }
@@ -182,6 +189,11 @@ namespace Speakly.ViewModels
             "Sakura",
             "Forest",
             "Ember"
+        };
+        public ObservableCollection<string> AvailableOverlayStyles { get; } = new ObservableCollection<string>
+        {
+            "Rectangular",
+            "Circle"
         };
         public ObservableCollection<string> AvailableTelemetryLevels { get; } = new ObservableCollection<string>
         {
@@ -230,6 +242,25 @@ namespace Speakly.ViewModels
         {
             get => ConfigManager.Config.EnableSttFailover;
             set { ConfigManager.Config.EnableSttFailover = value; SyncActiveProfileFromLegacy(); OnPropertyChanged(); }
+        }
+
+        public bool IsOpenRouterSttProvider =>
+            string.Equals(SttModel, "OpenRouter", StringComparison.OrdinalIgnoreCase);
+
+        public bool OpenRouterSttShowAllModels
+        {
+            get => ConfigManager.Config.OpenRouterSttShowAllModels;
+            set
+            {
+                if (ConfigManager.Config.OpenRouterSttShowAllModels == value)
+                {
+                    return;
+                }
+
+                ConfigManager.Config.OpenRouterSttShowAllModels = value;
+                OnPropertyChanged();
+                _ = RefreshProviderModelsAsync(true);
+            }
         }
 
         public string SelectedRefinementModelString
@@ -665,8 +696,10 @@ namespace Speakly.ViewModels
                     ConfigManager.SetActiveProfile(value.Id);
                     ApplyProfileToLegacyConfig(value);
                     RefreshFromConfig();
+                    ApplyPromptPresetForProfile(value);
                     LoadProfileEditorFields(value);
                     ProfileStatusMessage = $"Active profile: {value.Name}";
+                    RefreshTargetProfileMatch();
                     TelemetryManager.Track(
                         name: "profile_switch",
                         result: "ok",
@@ -680,6 +713,8 @@ namespace Speakly.ViewModels
                 OnPropertyChanged(nameof(ActiveProfileName));
                 OnPropertyChanged(nameof(CanDeleteSelectedProfile));
                 OnPropertyChanged(nameof(CanCycleProfile));
+                NotifySelectedProfileSummaryChanged();
+                CommandManager.InvalidateRequerySuggested();
             }
         }
 
@@ -728,6 +763,71 @@ namespace Speakly.ViewModels
             }
         }
 
+        public string CurrentTargetProcessStatus
+        {
+            get => _currentTargetProcessStatus;
+            private set
+            {
+                if (string.Equals(_currentTargetProcessStatus, value, StringComparison.Ordinal))
+                    return;
+                _currentTargetProcessStatus = value;
+                OnPropertyChanged();
+            }
+        }
+
+        public string MatchedProfileForTargetStatus
+        {
+            get => _matchedProfileForTargetStatus;
+            private set
+            {
+                if (string.Equals(_matchedProfileForTargetStatus, value, StringComparison.Ordinal))
+                    return;
+                _matchedProfileForTargetStatus = value;
+                OnPropertyChanged();
+            }
+        }
+
+        public string SelectedProfileSttSummary
+        {
+            get
+            {
+                var profile = SelectedProfile ?? ConfigManager.GetActiveProfile();
+                if (profile == null) return "STT: n/a";
+                return $"STT: {profile.SttProvider} / {profile.SttModel}";
+            }
+        }
+
+        public string SelectedProfileRefinementSummary
+        {
+            get
+            {
+                var profile = SelectedProfile ?? ConfigManager.GetActiveProfile();
+                if (profile == null) return "Refinement: n/a";
+                if (!profile.RefinementEnabled) return "Refinement: Disabled";
+                return $"Refinement: {profile.RefinementProvider} / {profile.RefinementModel}";
+            }
+        }
+
+        public string SelectedProfileRuntimeSummary
+        {
+            get
+            {
+                var profile = SelectedProfile ?? ConfigManager.GetActiveProfile();
+                if (profile == null) return "Language: n/a | Clipboard: n/a | Failover: n/a";
+                return $"Language: {profile.Language} | Clipboard: {(profile.CopyToClipboard ? "On" : "Off")} | STT failover: {(profile.EnableSttFailover ? "On" : "Off")}";
+            }
+        }
+
+        public string SelectedProfileDictionarySummary
+        {
+            get
+            {
+                var profile = SelectedProfile ?? ConfigManager.GetActiveProfile();
+                if (profile == null) return "Dictionary terms: 0 | Mapped apps: 0";
+                return $"Dictionary terms: {profile.DictionaryTerms.Count} | Mapped apps: {profile.ProcessNames.Count}";
+            }
+        }
+
         public bool CanDeleteSelectedProfile => Profiles.Count > 1 && SelectedProfile != null;
         public bool CanCycleProfile => Profiles.Count > 1;
 
@@ -741,11 +841,26 @@ namespace Speakly.ViewModels
             get => _selectedPromptEntry;
             set
             {
+                if (ReferenceEquals(_selectedPromptEntry, value))
+                    return;
+
                 _selectedPromptEntry = value;
                 OnPropertyChanged();
                 OnPropertyChanged(nameof(CanDeleteSelectedPrompt));
+
+                var active = SelectedProfile ?? ConfigManager.GetActiveProfile();
                 if (value != null)
+                {
+                    if (!_isApplyingPromptPresetFromProfile && active != null)
+                        active.PromptPresetName = value.Name;
                     RefinementPrompt = value.Text;
+                    return;
+                }
+
+                if (!_isApplyingPromptPresetFromProfile && active != null)
+                {
+                    active.PromptPresetName = string.Empty;
+                }
             }
         }
 
@@ -767,6 +882,74 @@ namespace Speakly.ViewModels
             SavedPrompts.Clear();
             foreach (var p in _promptList)
                 SavedPrompts.Add(p);
+
+            var active = SelectedProfile ?? ConfigManager.GetActiveProfile();
+            if (active != null)
+            {
+                ApplyPromptPresetForProfile(active);
+                if (SelectedPromptEntry != null || !string.IsNullOrWhiteSpace(active.RefinementPrompt))
+                    return;
+            }
+
+            if (SelectedPromptEntry == null || !SavedPrompts.Contains(SelectedPromptEntry))
+            {
+                _isApplyingPromptPresetFromProfile = true;
+                try
+                {
+                    SelectedPromptEntry = FindPromptByName("General")
+                        ?? SavedPrompts.FirstOrDefault();
+                }
+                finally
+                {
+                    _isApplyingPromptPresetFromProfile = false;
+                }
+            }
+        }
+
+        private PromptEntry? FindPromptByName(string? name)
+        {
+            if (string.IsNullOrWhiteSpace(name))
+                return null;
+
+            return SavedPrompts.FirstOrDefault(p =>
+                string.Equals(p.Name, name.Trim(), StringComparison.OrdinalIgnoreCase));
+        }
+
+        private PromptEntry? FindPromptByText(string? text)
+        {
+            if (string.IsNullOrWhiteSpace(text))
+                return null;
+
+            return SavedPrompts.FirstOrDefault(p =>
+                string.Equals(p.Text, text, StringComparison.Ordinal));
+        }
+
+        private void ApplyPromptPresetForProfile(AppProfile profile)
+        {
+            if (profile == null)
+                return;
+
+            PromptEntry? target = null;
+            if (!string.IsNullOrWhiteSpace(profile.PromptPresetName))
+                target = FindPromptByName(profile.PromptPresetName);
+
+            target ??= FindPromptByText(profile.RefinementPrompt);
+
+            if (target == null && string.IsNullOrWhiteSpace(profile.RefinementPrompt))
+                target = FindPromptByName("General") ?? SavedPrompts.FirstOrDefault();
+
+            _isApplyingPromptPresetFromProfile = true;
+            try
+            {
+                SelectedPromptEntry = target;
+            }
+            finally
+            {
+                _isApplyingPromptPresetFromProfile = false;
+            }
+
+            if (target != null)
+                profile.PromptPresetName = target.Name;
         }
 
         private void LoadProfiles()
@@ -831,11 +1014,14 @@ namespace Speakly.ViewModels
             active.RefinementProvider = ConfigManager.Config.RefinementModel;
             active.RefinementModel = SelectedRefinementModelString;
             active.RefinementPrompt = ConfigManager.Config.RefinementPrompt;
+            if (SelectedPromptEntry != null)
+                active.PromptPresetName = SelectedPromptEntry.Name;
             active.Language = ConfigManager.Config.Language;
             active.CopyToClipboard = ConfigManager.Config.CopyToClipboard;
             active.DictionaryTerms = PersonalDictionaryService.ParseTerms(_profileDictionaryTermsText);
             active.EnableSttFailover = ConfigManager.Config.EnableSttFailover;
             active.SttFailoverOrder = ConfigManager.Config.SttFailoverOrder.ToList();
+            NotifySelectedProfileSummaryChanged();
         }
 
         private void CycleProfile()
@@ -889,6 +1075,9 @@ namespace Speakly.ViewModels
                 RefinementProvider = baseProfile.RefinementProvider,
                 RefinementModel = baseProfile.RefinementModel,
                 RefinementPrompt = baseProfile.RefinementPrompt,
+                PromptPresetName = !string.IsNullOrWhiteSpace(baseProfile.PromptPresetName)
+                    ? baseProfile.PromptPresetName
+                    : SelectedPromptEntry?.Name ?? string.Empty,
                 Language = baseProfile.Language,
                 CopyToClipboard = baseProfile.CopyToClipboard,
                 DictionaryTerms = baseProfile.DictionaryTerms.ToList(),
@@ -903,6 +1092,8 @@ namespace Speakly.ViewModels
             ReloadProfiles(newProfile.Id);
             ConfigManager.SaveDebounced();
             ProfileStatusMessage = $"Created profile \"{newProfile.Name}\".";
+            NotifySelectedProfileSummaryChanged();
+            RefreshTargetProfileMatch();
             TelemetryManager.Track(
                 name: "profile_create",
                 result: "ok",
@@ -950,6 +1141,8 @@ namespace Speakly.ViewModels
             var selectedId = SelectedProfile.Id;
             ReloadProfiles(selectedId);
             ProfileStatusMessage = $"Saved profile \"{proposedName}\" ({parsedProcesses.Count} process mapping(s)).";
+            NotifySelectedProfileSummaryChanged();
+            RefreshTargetProfileMatch();
             TelemetryManager.Track(
                 name: "profile_save",
                 result: "ok",
@@ -985,6 +1178,8 @@ namespace Speakly.ViewModels
 
             ReloadProfiles(nextProfile.Id);
             ProfileStatusMessage = $"Deleted profile \"{deletedName}\".";
+            NotifySelectedProfileSummaryChanged();
+            RefreshTargetProfileMatch();
             TelemetryManager.Track(
                 name: "profile_delete",
                 result: "ok",
@@ -993,6 +1188,119 @@ namespace Speakly.ViewModels
                     ["profile_id"] = deletedId,
                     ["profile_name"] = deletedName
                 });
+        }
+
+        public void RefreshTargetProfileMatch()
+        {
+            UpdateTargetProfileMatch(TextInserter.CaptureForegroundWindowContext());
+        }
+
+        public void UpdateTargetProfileMatch(TargetWindowContext context)
+        {
+            var normalizedProcess = ProfileHelpers.NormalizeProcessName(context.ProcessName);
+            if (string.IsNullOrWhiteSpace(normalizedProcess))
+            {
+                CurrentTargetProcessStatus = "Current app: (not detected)";
+                var fallback = ConfigManager.GetActiveProfile();
+                MatchedProfileForTargetStatus = $"Matched profile: {fallback?.Name ?? "Default"}";
+                return;
+            }
+
+            CurrentTargetProcessStatus = $"Current app: {normalizedProcess}";
+            var match = ProfileResolverService.ResolveForForegroundWindow(context.Handle);
+            MatchedProfileForTargetStatus = $"Matched profile: {match.Name}";
+        }
+
+        private static bool IsSpeaklyProcess(string normalizedProcessName)
+        {
+            return string.Equals(normalizedProcessName, "speakly", StringComparison.OrdinalIgnoreCase);
+        }
+
+        private async Task CaptureProcessForSelectedProfileAsync()
+        {
+            if (SelectedProfile == null || _isCaptureProfileProcessInProgress)
+            {
+                return;
+            }
+
+            _isCaptureProfileProcessInProgress = true;
+            CommandManager.InvalidateRequerySuggested();
+            try
+            {
+                ProfileStatusMessage = "Switch to the target app now. Capturing foreground process for 5 seconds...";
+                var context = await CapturePreferredForegroundWindowAsync(TimeSpan.FromSeconds(5));
+                UpdateTargetProfileMatch(context);
+
+                var normalizedProcess = ProfileHelpers.NormalizeProcessName(context.ProcessName);
+                if (string.IsNullOrWhiteSpace(normalizedProcess) || IsSpeaklyProcess(normalizedProcess))
+                {
+                    ProfileStatusMessage = "No external app was captured. Click again, then immediately focus your target app.";
+                    return;
+                }
+
+                var processes = (ProfileProcessNamesInput ?? string.Empty)
+                    .Split(new[] { ',', ';', '\r', '\n', '\t' }, StringSplitOptions.RemoveEmptyEntries)
+                    .Select(ProfileHelpers.NormalizeProcessName)
+                    .Where(x => !string.IsNullOrWhiteSpace(x))
+                    .Distinct(StringComparer.OrdinalIgnoreCase)
+                    .ToList();
+
+                bool added = false;
+                if (!processes.Contains(normalizedProcess, StringComparer.OrdinalIgnoreCase))
+                {
+                    processes.Add(normalizedProcess);
+                    added = true;
+                }
+
+                SelectedProfile.ProcessNames = processes;
+                ProfileProcessNamesInput = string.Join(", ", processes);
+                ConfigManager.SetActiveProfile(SelectedProfile.Id);
+                ConfigManager.SaveDebounced();
+                NotifySelectedProfileSummaryChanged();
+                RefreshTargetProfileMatch();
+
+                ProfileStatusMessage = added
+                    ? $"Added process \"{normalizedProcess}\" to profile \"{SelectedProfile.Name}\"."
+                    : $"Process \"{normalizedProcess}\" is already mapped to profile \"{SelectedProfile.Name}\".";
+            }
+            finally
+            {
+                _isCaptureProfileProcessInProgress = false;
+                CommandManager.InvalidateRequerySuggested();
+            }
+        }
+
+        private static async Task<TargetWindowContext> CapturePreferredForegroundWindowAsync(TimeSpan timeout)
+        {
+            var deadlineUtc = DateTime.UtcNow + timeout;
+            var latest = TextInserter.CaptureForegroundWindowContext();
+
+            while (DateTime.UtcNow < deadlineUtc)
+            {
+                await Task.Delay(120);
+                var sample = TextInserter.CaptureForegroundWindowContext();
+                var normalizedProcess = ProfileHelpers.NormalizeProcessName(sample.ProcessName);
+                if (string.IsNullOrWhiteSpace(normalizedProcess))
+                {
+                    continue;
+                }
+
+                latest = sample;
+                if (!IsSpeaklyProcess(normalizedProcess))
+                {
+                    return sample;
+                }
+            }
+
+            return latest;
+        }
+
+        private void NotifySelectedProfileSummaryChanged()
+        {
+            OnPropertyChanged(nameof(SelectedProfileSttSummary));
+            OnPropertyChanged(nameof(SelectedProfileRefinementSummary));
+            OnPropertyChanged(nameof(SelectedProfileRuntimeSummary));
+            OnPropertyChanged(nameof(SelectedProfileDictionarySummary));
         }
 
         private void OpenDebugLogs()
@@ -1033,7 +1341,9 @@ namespace Speakly.ViewModels
             UpdateRefinementModelList();
             RefreshDictionaryTextFromConfig();
             OnPropertyChanged(nameof(SttModel));
+            OnPropertyChanged(nameof(IsOpenRouterSttProvider));
             OnPropertyChanged(nameof(SelectedSttModelString));
+            OnPropertyChanged(nameof(OpenRouterSttShowAllModels));
             OnPropertyChanged(nameof(DeepgramApiBaseUrl));
             OnPropertyChanged(nameof(EnableRefinement));
             OnPropertyChanged(nameof(RefinementModel));
@@ -1059,6 +1369,7 @@ namespace Speakly.ViewModels
             OnPropertyChanged(nameof(GlobalDictionaryTermsText));
             OnPropertyChanged(nameof(ProfileDictionaryTermsText));
             NotifyDeepgramLanguageGuardChanged();
+            NotifySelectedProfileSummaryChanged();
         }
 
         private void RefreshDictionaryTextFromConfig()
@@ -1319,8 +1630,9 @@ namespace Speakly.ViewModels
             get => ConfigManager.Config.Theme;
             set 
             { 
-                ConfigManager.Config.Theme = value; 
-                App.SetTheme(value);
+                const string darkTheme = "Dark";
+                ConfigManager.Config.Theme = darkTheme;
+                App.SetTheme(darkTheme);
                 OnPropertyChanged(); 
             }
         }
@@ -1343,6 +1655,28 @@ namespace Speakly.ViewModels
 
                 ConfigManager.Config.OverlaySkin = normalized;
                 App.SetOverlaySkin(normalized);
+                OnPropertyChanged();
+            }
+        }
+
+        public string OverlayStyle
+        {
+            get => ConfigManager.Config.OverlayStyle;
+            set
+            {
+                var normalized = value?.Trim();
+                if (string.IsNullOrWhiteSpace(normalized))
+                {
+                    normalized = "Rectangular";
+                }
+
+                if (!AvailableOverlayStyles.Any(s => string.Equals(s, normalized, StringComparison.OrdinalIgnoreCase)))
+                {
+                    normalized = "Rectangular";
+                }
+
+                ConfigManager.Config.OverlayStyle = normalized;
+                App.SetOverlayStyle(normalized);
                 OnPropertyChanged();
             }
         }
@@ -1378,6 +1712,14 @@ namespace Speakly.ViewModels
             DeleteProfileCommand = new RelayCommand(
                 _ => DeleteSelectedProfile(),
                 _ => CanDeleteSelectedProfile);
+
+            CaptureProfileProcessFromCurrentAppCommand = new RelayCommand(
+                _ => _ = CaptureProcessForSelectedProfileAsync(),
+                _ => SelectedProfile != null && !_isCaptureProfileProcessInProgress);
+
+            RefreshTargetProfileMatchCommand = new RelayCommand(
+                _ => RefreshTargetProfileMatch(),
+                _ => true);
 
             OpenDebugLogsCommand = new RelayCommand(_ => OpenDebugLogs());
             ClearPendingTransferCommand = new RelayCommand(
@@ -1456,6 +1798,7 @@ namespace Speakly.ViewModels
 
             RunHealthChecks();
             RefreshDictionaryTextFromConfig();
+            RefreshTargetProfileMatch();
 
             PropertyChanged += (_, args) =>
             {
@@ -1474,6 +1817,12 @@ namespace Speakly.ViewModels
                     or nameof(ProfileDraftName)
                     or nameof(ProfileProcessNamesInput)
                     or nameof(ProfileStatusMessage)
+                    or nameof(CurrentTargetProcessStatus)
+                    or nameof(MatchedProfileForTargetStatus)
+                    or nameof(SelectedProfileSttSummary)
+                    or nameof(SelectedProfileRefinementSummary)
+                    or nameof(SelectedProfileRuntimeSummary)
+                    or nameof(SelectedProfileDictionarySummary)
                     or nameof(CanDeleteSelectedProfile))
                     return;
 
@@ -1532,9 +1881,11 @@ namespace Speakly.ViewModels
             }
             else if (SttModel == "OpenRouter")
             {
+                AvailableSttModels.Add("openai/gpt-audio-mini");
+                AvailableSttModels.Add("openai/gpt-audio");
+                AvailableSttModels.Add("google/gemini-2.0-flash-001");
+                AvailableSttModels.Add("mistralai/voxtral-small-24b-2507");
                 AvailableSttModels.Add("openai/whisper-large-v3");
-                AvailableSttModels.Add("openai/whisper-1");
-                AvailableSttModels.Add("openai/whisper-large-v3-turbo");
             }
             PrioritizeSttFavorites();
             EnsureCurrentModelInList(AvailableSttModels, SelectedSttModelString);
@@ -1705,6 +2056,41 @@ namespace Speakly.ViewModels
             }
         }
 
+        private static string BuildProviderSummary(IEnumerable<string> models, int maxProviders = 6)
+        {
+            var summary = models
+                .Select(model =>
+                {
+                    var normalized = (model ?? string.Empty).Trim();
+                    if (string.IsNullOrWhiteSpace(normalized))
+                    {
+                        return "(other)";
+                    }
+
+                    var slashIndex = normalized.IndexOf('/');
+                    if (slashIndex <= 0)
+                    {
+                        return "(other)";
+                    }
+
+                    return normalized[..slashIndex];
+                })
+                .GroupBy(provider => provider, StringComparer.OrdinalIgnoreCase)
+                .OrderByDescending(group => group.Count())
+                .ThenBy(group => group.Key, StringComparer.OrdinalIgnoreCase)
+                .Select(group => $"{group.Key}: {group.Count()}")
+                .ToList();
+
+            if (summary.Count <= maxProviders)
+            {
+                return string.Join(", ", summary);
+            }
+
+            var visible = summary.Take(maxProviders);
+            var remaining = summary.Count - maxProviders;
+            return $"{string.Join(", ", visible)}, +{remaining} more";
+        }
+
         private static bool IsInModelList(ObservableCollection<string> models, string candidate)
         {
             return models.Any(m => string.Equals(m, candidate, StringComparison.OrdinalIgnoreCase));
@@ -1763,7 +2149,16 @@ namespace Speakly.ViewModels
             {
                 var config = ConfigManager.Config;
                 bool cerebrasSelectedModelMissing = false;
+                bool openRouterSttCatalogEmpty = false;
+                bool openRouterSttUsingAllModels = false;
+                int openRouterSttCount = 0;
+                string openRouterSttProviderSummary = string.Empty;
                 var selectedCerebrasModel = config.CerebrasRefinementModel?.Trim() ?? string.Empty;
+
+                // Always rebuild dynamic catalogs from current provider responses.
+                // This prevents stale model entries from persisting across refreshes.
+                _dynamicSttModels.Clear();
+                _dynamicRefinementModels.Clear();
 
                 if (!string.IsNullOrWhiteSpace(config.DeepgramApiKey))
                 {
@@ -1833,10 +2228,19 @@ namespace Speakly.ViewModels
 
                 if (!string.IsNullOrWhiteSpace(config.OpenRouterApiKey))
                 {
-                    var openRouterSttModels = await FetchOpenRouterSttModelsAsync(config.OpenRouterApiKey.Trim());
+                    openRouterSttUsingAllModels = config.OpenRouterSttShowAllModels;
+                    var openRouterSttModels = await FetchOpenRouterSttModelsAsync(
+                        config.OpenRouterApiKey.Trim(),
+                        includeAllModels: openRouterSttUsingAllModels);
+                    openRouterSttCount = openRouterSttModels.Count;
                     if (openRouterSttModels.Count > 0)
                     {
                         _dynamicSttModels["OpenRouter"] = openRouterSttModels;
+                        openRouterSttProviderSummary = BuildProviderSummary(openRouterSttModels);
+                    }
+                    else
+                    {
+                        openRouterSttCatalogEmpty = true;
                     }
 
                     var openRouterRefinementModels = await FetchOpenRouterChatModelsAsync(config.OpenRouterApiKey.Trim());
@@ -1863,6 +2267,30 @@ namespace Speakly.ViewModels
                     ModelRefreshStatus += $" | Warning: selected Cerebras model \"{selectedCerebrasModel}\" was not returned by the current model catalog.";
                 }
 
+                if (openRouterSttCatalogEmpty)
+                {
+                    if (openRouterSttUsingAllModels)
+                    {
+                        ModelRefreshStatus += " | OpenRouter returned no models in experimental all-models mode.";
+                    }
+                    else
+                    {
+                        ModelRefreshStatus += " | OpenRouter returned no audio-input STT models; keeping built-in OpenRouter STT defaults.";
+                    }
+                }
+                else if (openRouterSttCount > 0)
+                {
+                    ModelRefreshStatus += $" | OpenRouter STT models: {openRouterSttCount}";
+                    if (!string.IsNullOrWhiteSpace(openRouterSttProviderSummary))
+                    {
+                        ModelRefreshStatus += $" ({openRouterSttProviderSummary})";
+                    }
+                    if (openRouterSttUsingAllModels)
+                    {
+                        ModelRefreshStatus += " | mode: experimental all models";
+                    }
+                }
+
                 if (userInitiated)
                 {
                     RefreshModelsCompleted?.Invoke(true);
@@ -1887,9 +2315,7 @@ namespace Speakly.ViewModels
         /// <summary>
         /// Fetches OpenRouter chat/completion models suitable for text refinement.
         /// Only includes models whose architecture.modality ends with "->text",
-        /// which excludes image-generation, embedding, and audio-only model types.
-        /// Whisper/STT-class model IDs are also excluded since OpenRouter does not
-        /// support audio transcription endpoints.
+        /// which excludes image-generation and embedding-only model types.
         /// </summary>
         private async Task<List<string>> FetchOpenRouterChatModelsAsync(string apiKey)
         {
@@ -1915,7 +2341,7 @@ namespace Speakly.ViewModels
                 var id = idProp.GetString();
                 if (string.IsNullOrWhiteSpace(id)) continue;
 
-                // Exclude whisper/audio-only model IDs — OpenRouter doesn't route audio endpoints
+                // Exclude clearly transcription-focused model IDs from refinement list.
                 if (IsOpenRouterSttModel(id)) continue;
 
                 // Keep only refinement-capable text models. For OpenRouter, some entries
@@ -1929,7 +2355,7 @@ namespace Speakly.ViewModels
             return refinementModels;
         }
 
-        private async Task<List<string>> FetchOpenRouterSttModelsAsync(string apiKey)
+        private async Task<List<string>> FetchOpenRouterSttModelsAsync(string apiKey, bool includeAllModels = false)
         {
             using var request = new HttpRequestMessage(HttpMethod.Get, "https://openrouter.ai/api/v1/models");
             request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", apiKey);
@@ -1938,11 +2364,11 @@ namespace Speakly.ViewModels
             if (!response.IsSuccessStatusCode) return new List<string>();
 
             var json = await response.Content.ReadAsStringAsync();
-            var sttModels = new List<string>();
+            var sttModels = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
             using var document = JsonDocument.Parse(json);
             if (!document.RootElement.TryGetProperty("data", out var dataArray) || dataArray.ValueKind != JsonValueKind.Array)
-                return sttModels;
+                return sttModels.ToList();
 
             foreach (var item in dataArray.EnumerateArray())
             {
@@ -1951,13 +2377,78 @@ namespace Speakly.ViewModels
 
                 var id = idProp.GetString();
                 if (string.IsNullOrWhiteSpace(id)) continue;
-                if (!IsOpenRouterSttModel(id)) continue;
+                if (!includeAllModels && !IsOpenRouterAudioInputSttModel(item, id)) continue;
 
                 sttModels.Add(id);
             }
 
-            sttModels.Sort(StringComparer.OrdinalIgnoreCase);
-            return sttModels;
+            return sttModels
+                .OrderBy(m => m, StringComparer.OrdinalIgnoreCase)
+                .ToList();
+        }
+
+        private static bool IsOpenRouterAudioInputSttModel(JsonElement item, string modelId)
+        {
+            if (string.Equals(modelId, "openrouter/auto", StringComparison.OrdinalIgnoreCase))
+            {
+                return true;
+            }
+
+            // Strong ID hints used by dedicated transcription/ASR model IDs.
+            if (IsOpenRouterSttModel(modelId))
+            {
+                return true;
+            }
+
+            if (!item.TryGetProperty("architecture", out var arch) || arch.ValueKind != JsonValueKind.Object)
+            {
+                return false;
+            }
+
+            bool inputHasAudio = HasArchitectureModality(arch, "input_modalities", "audio");
+            bool outputHasText = HasArchitectureModality(arch, "output_modalities", "text");
+
+            if (inputHasAudio && outputHasText)
+            {
+                return true;
+            }
+
+            if (arch.TryGetProperty("modality", out var modalityProp) && modalityProp.ValueKind == JsonValueKind.String)
+            {
+                var modality = modalityProp.GetString() ?? string.Empty;
+                if (string.IsNullOrWhiteSpace(modality))
+                {
+                    return false;
+                }
+
+                if (modality.IndexOf("audio", StringComparison.OrdinalIgnoreCase) >= 0 &&
+                    modality.IndexOf("->text", StringComparison.OrdinalIgnoreCase) >= 0)
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        private static bool HasArchitectureModality(JsonElement architecture, string propertyName, string expectedValue)
+        {
+            if (!architecture.TryGetProperty(propertyName, out var modalities) || modalities.ValueKind != JsonValueKind.Array)
+            {
+                return false;
+            }
+
+            foreach (var entry in modalities.EnumerateArray())
+            {
+                if (entry.ValueKind != JsonValueKind.String) continue;
+                var value = entry.GetString();
+                if (string.Equals(value, expectedValue, StringComparison.OrdinalIgnoreCase))
+                {
+                    return true;
+                }
+            }
+
+            return false;
         }
 
         private static bool IsOpenRouterTextRefinementModel(JsonElement item, string modelId)
@@ -2137,11 +2628,9 @@ namespace Speakly.ViewModels
 
         private static bool IsOpenRouterSttModel(string modelId)
         {
-            // Match audio/speech/whisper-class models available via OpenRouter
+            // Match dedicated transcription/ASR model IDs.
             return modelId.Contains("whisper",    StringComparison.OrdinalIgnoreCase)
                 || modelId.Contains("transcri",   StringComparison.OrdinalIgnoreCase)
-                || modelId.Contains("audio",      StringComparison.OrdinalIgnoreCase)
-                || modelId.Contains("speech",     StringComparison.OrdinalIgnoreCase)
                 || modelId.Contains("asr",        StringComparison.OrdinalIgnoreCase);
         }
 

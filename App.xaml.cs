@@ -87,6 +87,8 @@ namespace Speakly
         private readonly List<byte[]> _sessionAudioChunks = new();
         private readonly object _finalSegmentLock = new();
         private readonly List<string> _finalTranscriptSegments = new();
+        private readonly object _interimTranscriptLock = new();
+        private string _latestInterimTranscript = string.Empty;
         private bool _finalTranscriptionProcessed;
         private bool _stopRequested;
         private bool _sttFailoverAttempted;
@@ -101,6 +103,9 @@ namespace Speakly
         private string _activeOperationId = string.Empty;
         private bool _updateCheckStarted;
         private readonly System.Threading.SemaphoreSlim _updateCheckGate = new(1, 1);
+        private readonly object _elevationPromptLock = new();
+        private DateTime _lastElevationPromptUtc = DateTime.MinValue;
+        private static readonly TimeSpan ElevationPromptCooldown = TimeSpan.FromSeconds(60);
 
         public App()
         {
@@ -182,6 +187,8 @@ namespace Speakly
                 _overlay.EnsureVisibleOnScreen();
                 _overlayHiddenByIdle = false;
             }
+
+            SetOverlayStyle(ConfigManager.Config.OverlayStyle);
 
             MainWindow.Show();
             _singleInstanceManager.StartActivationListener(() =>
@@ -282,6 +289,7 @@ namespace Speakly
             _lastActiveWindow = _targetWindowContext.Handle;
 
             Logger.Log($"{triggerSource}. Captured target window: {_targetWindowContext}");
+            ViewModel?.UpdateTargetProfileMatch(_targetWindowContext);
         }
 
         private void ConfigureOverlayIdleBehavior()
@@ -411,6 +419,8 @@ namespace Speakly
                         var vm = MainWindow?.DataContext as MainViewModel ?? ViewModel;
                         vm?.SetLastInsertionStatus($"{deferredResult.Method}+Deferred", false, deferredResult.ErrorCode);
                     });
+
+                    TryOfferOnDemandElevation(deferredResult, "deferred_paste_apply", foreground);
                 }
 
                 RefreshPendingTransferStatus();
@@ -467,6 +477,80 @@ namespace Speakly
                 or InsertionFailureReason.MissingTarget
                 or InsertionFailureReason.TargetWindowUnavailable
                 or InsertionFailureReason.InputBlockedByIntegrity;
+        }
+
+        private bool TryOfferOnDemandElevation(InsertResult insertResult, string source, TargetWindowContext targetContext)
+        {
+            if (insertResult.FailureReason != InsertionFailureReason.InputBlockedByIntegrity)
+            {
+                return false;
+            }
+
+            if (PrivilegeService.IsCurrentProcessElevated())
+            {
+                return false;
+            }
+
+            if (IsElevationPromptOnCooldown())
+            {
+                Logger.Log($"Skipping elevation prompt due to cooldown ({source}).");
+                return false;
+            }
+
+            var targetName = string.IsNullOrWhiteSpace(targetContext.ProcessName)
+                ? "the target app"
+                : targetContext.ProcessName;
+
+            Logger.Log($"Offering on-demand elevation ({source}, target={targetName}).");
+
+            bool restartElevated = false;
+            Dispatcher.Invoke(() =>
+            {
+                restartElevated = MessageBox.Show(
+                    $"Windows blocked text insertion into {targetName} because it is running with higher privileges." + Environment.NewLine +
+                    "Restart Speakly as administrator now?",
+                    "Speakly Permission Required",
+                    MessageBoxButton.YesNo,
+                    MessageBoxImage.Question) == MessageBoxResult.Yes;
+            });
+
+            if (!restartElevated)
+            {
+                Logger.Log("User declined on-demand elevation prompt.");
+                return false;
+            }
+
+            if (PrivilegeService.TryRestartElevated())
+            {
+                Logger.Log("On-demand elevation restart succeeded. Shutting down current instance.");
+                Dispatcher.BeginInvoke(new Action(Shutdown));
+                return true;
+            }
+
+            Dispatcher.Invoke(() =>
+            {
+                MessageBox.Show(
+                    "Could not restart Speakly as administrator. You can continue using clipboard paste for this target.",
+                    "Speakly Permission Required",
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Warning);
+            });
+            return false;
+        }
+
+        private bool IsElevationPromptOnCooldown()
+        {
+            lock (_elevationPromptLock)
+            {
+                var now = DateTime.UtcNow;
+                if (now - _lastElevationPromptUtc < ElevationPromptCooldown)
+                {
+                    return true;
+                }
+
+                _lastElevationPromptUtc = now;
+                return false;
+            }
         }
 
         private bool TryQueueDeferredPaste(string textToInsert, InsertResult insertResult)
@@ -878,7 +962,7 @@ namespace Speakly
                     _managedAudioProcessor.Reset();
                     AutoAdjustRefinementPromptForLanguage();
                     _overlay?.SetActiveLanguage(ResolveOverlayLanguageDisplay());
-                    _overlay?.SetStatus("RECORDING", Brushes.Red);
+                    _overlay?.SetStatus("PTT_RECORDING", Brushes.LimeGreen);
                     _startSound?.Play();
                     
                     // Start connection in background
@@ -911,7 +995,7 @@ namespace Speakly
                     AutoAdjustRefinementPromptForLanguage();
                     _overlay?.SetActiveLanguage(ResolveOverlayLanguageDisplay());
                     _isToggleRecording = true;
-                    _overlay?.SetStatus("RECORDING", Brushes.OrangeRed);
+                    _overlay?.SetStatus("RECORDING", Brushes.Red);
                     _startSound?.Play();
 
                     // Start connection in background
@@ -1055,6 +1139,14 @@ namespace Speakly
                 return;
             }
 
+            var interimFallback = SnapshotLatestInterimTranscript();
+            if (!string.IsNullOrWhiteSpace(interimFallback))
+            {
+                Logger.Log("No final segments received; using latest interim transcript as fallback.");
+                await HandleFinalTranscriptionAsync(interimFallback, ResolveSessionSttProvider(), ResolveSessionSttModel());
+                return;
+            }
+
             await RecoverIfNoFinalResultAsync();
         }
 
@@ -1159,7 +1251,13 @@ namespace Speakly
 
         private void OnTranscriptionReceived(object? sender, TranscriptionEventArgs e)
         {
-            if (!e.IsFinal || string.IsNullOrWhiteSpace(e.Text) || _finalTranscriptionProcessed) return;
+            if (string.IsNullOrWhiteSpace(e.Text) || _finalTranscriptionProcessed) return;
+
+            if (!e.IsFinal)
+            {
+                BufferLatestInterimTranscript(e.Text);
+                return;
+            }
 
             BufferFinalTranscriptSegment(e.Text, ConfigManager.Config.SttModel, ResolveActiveSttModel());
             Logger.Log($"Buffered final transcription segment (stopRequested={_stopRequested}): '{e.Text}'");
@@ -1167,6 +1265,24 @@ namespace Speakly
             {
                 ["text"] = e.Text
             });
+        }
+
+        private void BufferLatestInterimTranscript(string text)
+        {
+            var normalized = text?.Trim();
+            if (string.IsNullOrWhiteSpace(normalized)) return;
+            lock (_interimTranscriptLock)
+            {
+                _latestInterimTranscript = normalized;
+            }
+        }
+
+        private string SnapshotLatestInterimTranscript()
+        {
+            lock (_interimTranscriptLock)
+            {
+                return _latestInterimTranscript;
+            }
         }
 
         private void CaptureSessionAudio(byte[] data)
@@ -1375,30 +1491,55 @@ namespace Speakly
                 _sessionHasInserted = true;
             }
 
+            bool clipboardHasLatestText = insertResult.ClipboardUpdated;
             if (ConfigManager.Config.CopyToClipboard)
             {
                 if (_sessionText.Length > 0) _sessionText.Append(' ');
                 _sessionText.Append(textToInsert);
                 var fullSessionText = _sessionText.ToString();
-                Dispatcher.Invoke(() => Clipboard.SetText(fullSessionText));
-                Logger.Log($"Copied full session text to clipboard (length={fullSessionText.Length}).");
+                if (TrySetClipboardTextSafe(fullSessionText, out var clipboardError))
+                {
+                    clipboardHasLatestText = true;
+                    Logger.Log($"Copied full session text to clipboard (length={fullSessionText.Length}).");
+                }
+                else
+                {
+                    Logger.Log($"Failed to copy session text to clipboard ({clipboardError}).");
+                    TrackSessionEvent(
+                        name: "clipboard_copy_failed",
+                        level: "warning",
+                        success: false,
+                        result: "failed",
+                        errorCode: clipboardError,
+                        errorClass: clipboardError);
+                }
             }
 
             if (!insertResult.Success)
             {
-                if (TryQueueDeferredPaste(toType, insertResult))
+                if (!clipboardHasLatestText && TrySetClipboardTextSafe(textToInsert, out var recoveryClipboardError))
+                {
+                    clipboardHasLatestText = true;
+                    insertResult.ClipboardUpdated = true;
+                    Logger.Log("Insertion failed but recovery clipboard copy succeeded.");
+                }
+
+                bool restartTriggered = TryOfferOnDemandElevation(insertResult, "final_insert", _targetWindowContext);
+                if (!restartTriggered && TryQueueDeferredPaste(toType, insertResult))
                 {
                     insertResult.Method = $"{insertResult.Method}+DeferredQueued";
                 }
-                else
+                else if (!restartTriggered)
                 {
                     var targetName = string.IsNullOrWhiteSpace(_targetWindowContext.ProcessName)
                         ? "target app"
                         : _targetWindowContext.ProcessName;
                     var recoveryMessage =
                         $"Speakly could not safely insert text into the original target ({targetName})." + Environment.NewLine +
-                        "The latest result was copied to your clipboard." + Environment.NewLine +
-                        "Focus the target app and press Ctrl+V to paste." + Environment.NewLine + Environment.NewLine +
+                        (clipboardHasLatestText
+                            ? "The latest result was copied to your clipboard." + Environment.NewLine +
+                              "Focus the target app and press Ctrl+V to paste." + Environment.NewLine + Environment.NewLine
+                            : "Clipboard recovery also failed. Please retry once after closing apps that lock clipboard access." + Environment.NewLine + Environment.NewLine) +
                         $"Reason: {insertResult.ErrorCode}";
 
                     Dispatcher.Invoke(() =>
@@ -1507,6 +1648,37 @@ namespace Speakly
                     ["final_segment_count"] = SnapshotFinalSegmentCount().ToString()
                 });
             SetSessionState(SessionState.Idle);
+        }
+
+        private static bool TrySetClipboardTextSafe(string text, out string errorCode)
+        {
+            errorCode = string.Empty;
+            if (string.IsNullOrWhiteSpace(text))
+            {
+                errorCode = "clipboard_empty_text";
+                return false;
+            }
+
+            for (int attempt = 1; attempt <= 6; attempt++)
+            {
+                try
+                {
+                    Application.Current.Dispatcher.Invoke(() => Clipboard.SetText(text));
+                    return true;
+                }
+                catch (Exception ex)
+                {
+                    errorCode = ex.GetType().Name;
+                    Thread.Sleep(40);
+                }
+            }
+
+            if (string.IsNullOrWhiteSpace(errorCode))
+            {
+                errorCode = "clipboard_unavailable";
+            }
+
+            return false;
         }
 
         private async Task<bool> TryRunSttFailoverAsync(string errorCode)
@@ -1716,7 +1888,7 @@ namespace Speakly
             AutoAdjustRefinementPromptForLanguage();
             _overlay?.SetActiveLanguage(ResolveOverlayLanguageDisplay());
             _isToggleRecording = true;
-            _overlay?.SetStatus("RECORDING", Brushes.OrangeRed);
+            _overlay?.SetStatus("RECORDING", Brushes.Red);
             _startSound?.Play();
 
             var connectTask = _transcriber != null ? _transcriber.ConnectAsync() : Task.CompletedTask;
@@ -1769,8 +1941,12 @@ namespace Speakly
 
         public static void SetTheme(string themeName)
         {
-            bool isLight = string.Equals(themeName, "Light", StringComparison.OrdinalIgnoreCase);
-            var appTheme = isLight ? ApplicationTheme.Light : ApplicationTheme.Dark;
+            var appTheme = ApplicationTheme.Dark;
+            if (!string.Equals(ConfigManager.Config.Theme, "Dark", StringComparison.OrdinalIgnoreCase))
+            {
+                ConfigManager.Config.Theme = "Dark";
+                ConfigManager.Save();
+            }
             var merged = Application.Current.Resources.MergedDictionaries;
 
             // Replace the ThemesDictionary with a fresh instance.
@@ -1790,20 +1966,22 @@ namespace Speakly
             // the OS system theme, so it would stay dark-rendered even when the app switches to
             // Light, causing the NavigationView pane to appear black.
             ApplicationThemeManager.Apply(appTheme, Wpf.Ui.Controls.WindowBackdropType.None, updateAccent: true);
+            ApplicationAccentColorManager.Apply(
+                Color.FromRgb(0x06, 0xB6, 0xD4),
+                appTheme,
+                false,
+                false);
 
             // Explicitly flip the Win32 DWMWA_USE_IMMERSIVE_DARK_MODE attribute on the main
             // window so the title bar and NavigationView pane chrome match the app theme.
             var mainWindow = Application.Current.MainWindow;
             if (mainWindow != null)
             {
-                if (isLight)
-                    WindowBackgroundManager.RemoveDarkThemeFromWindow(mainWindow);
-                else
-                    WindowBackgroundManager.ApplyDarkThemeToWindow(mainWindow);
+                WindowBackgroundManager.ApplyDarkThemeToWindow(mainWindow);
             }
 
             // Swap the custom overlay/capture brush file (Dark vs Light colours)
-            string fileName = isLight ? "LightTheme.xaml" : "DarkTheme.xaml";
+            string fileName = "DarkTheme.xaml";
             string dictUri = $"pack://application:,,,/Themes/{fileName}";
             try
             {
@@ -1850,6 +2028,18 @@ namespace Speakly
             // Push new brush values to the overlay immediately (manual bindings break DynamicResource)
             if (Application.Current is App app)
                 app._overlay?.RefreshSkin();
+        }
+
+        public static void SetOverlayStyle(string styleName)
+        {
+            if (Application.Current is not App app)
+            {
+                return;
+            }
+
+            var normalizedStyle = NormalizeOverlayStyleName(styleName);
+            ConfigManager.Config.OverlayStyle = normalizedStyle;
+            app._overlay?.SetOverlayStyle(normalizedStyle);
         }
 
         public static void SetOverlayVisible(bool visible)
@@ -1949,6 +2139,16 @@ namespace Speakly
             return "Lavender";
         }
 
+        private static string NormalizeOverlayStyleName(string? styleName)
+        {
+            if (string.Equals(styleName, "Circle", StringComparison.OrdinalIgnoreCase))
+            {
+                return "Circle";
+            }
+
+            return "Rectangular";
+        }
+
         private void BeginSessionTiming()
         {
             _recordingStartedUtc = DateTime.UtcNow;
@@ -1975,6 +2175,10 @@ namespace Speakly
                 _finalTranscriptSegments.Clear();
                 _sessionSttProvider = ConfigManager.Config.SttModel;
                 _sessionSttModel = ResolveActiveSttModel();
+            }
+            lock (_interimTranscriptLock)
+            {
+                _latestInterimTranscript = string.Empty;
             }
             TrackSessionEvent("session_start", data: new Dictionary<string, string>
             {

@@ -2,102 +2,145 @@
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
-             FontFamily="Segoe UI Variable Text">
-    <ScrollViewer VerticalScrollBarVisibility="Auto">
-        <StackPanel Margin="24,16,24,24">
-            <TextBlock Text="General" Style="{StaticResource PageTitle}"/>
+             FontFamily="Segoe UI Variable Text"
+             Background="#FF1E2330">
+    <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="{StaticResource PagePadding}">
+        <StackPanel MaxWidth="640">
+            <StackPanel Margin="0,0,0,28">
+                <TextBlock Text="SETTINGS" Style="{StaticResource PageEyebrow}" />
+                <TextBlock Text="General" Style="{StaticResource PageTitle}" Margin="0" />
+            </StackPanel>
 
-            <Border Style="{StaticResource SectionCard}">
+            <Border Style="{StaticResource PageFeatureCard}">
                 <StackPanel>
-                    <TextBlock Text="Appearance" Style="{StaticResource SectionTitle}"/>
-                    <TextBlock Text="Theme" Style="{StaticResource FieldLabel}"/>
-                    <ComboBox SelectedValue="{Binding Theme}" SelectedValuePath="Content" Margin="0,0,0,6" MaxWidth="300" HorizontalAlignment="Left">
-                        <ComboBoxItem Content="Dark"/>
-                        <ComboBoxItem Content="Light"/>
-                    </ComboBox>
-                    <TextBlock Text="Overlay Skin" Style="{StaticResource FieldLabel}"/>
+                    <TextBlock Text="APPEARANCE" Style="{StaticResource PageFeatureLabel}" />
+                    <TextBlock Text="Appearance" Style="{StaticResource SectionTitle}" />
+                    <TextBlock Text="Overlay Skin" Style="{StaticResource FieldLabel}" />
                     <ComboBox ItemsSource="{Binding AvailableOverlaySkins}"
                               SelectedItem="{Binding OverlaySkin}"
-                              Margin="0,0,0,6"
+                              Style="{StaticResource DropdownDefault}"
+                              MinHeight="18"
+                              Padding="10,2"
+                              FontSize="12"
+                              Margin="0,0,0,10"
                               MaxWidth="300"
-                              HorizontalAlignment="Left"/>
-                    <TextBlock Text="Theme changes apply instantly." Style="{StaticResource HintText}"/>
+                              HorizontalAlignment="Left" />
+                    <TextBlock Text="Overlay Style" Style="{StaticResource FieldLabel}" />
+                    <ComboBox ItemsSource="{Binding AvailableOverlayStyles}"
+                              SelectedItem="{Binding OverlayStyle}"
+                              Style="{StaticResource DropdownDefault}"
+                              Margin="0,0,0,10"
+                              MaxWidth="300"
+                              HorizontalAlignment="Left" />
                 </StackPanel>
             </Border>
 
-            <Border Style="{StaticResource SectionCard}">
+            <Border Style="{StaticResource PageFeatureCard}">
                 <StackPanel>
-                    <TextBlock Text="Behavior" Style="{StaticResource SectionTitle}"/>
-                    <ui:ToggleSwitch Content="Show Floating Overlay" IsChecked="{Binding ShowOverlay}" Margin="0,0,0,10"/>
-                    <ui:ToggleSwitch Content="Minimize to Tray on Close" IsChecked="{Binding MinimizeToTray}" Margin="0,0,0,10"/>
-
-                    <TextBlock Text="Insertion Reliability" Style="{StaticResource FieldLabel}" Margin="0,14,0,6"/>
-                    <TextBlock Text="{Binding LastInsertionStatus}" Style="{StaticResource HintText}"/>
-                    <TextBlock Text="{Binding LastInsertionMethod, StringFormat=Method: {0}}" Style="{StaticResource HintText}"/>
+                    <TextBlock Text="BEHAVIOR" Style="{StaticResource PageFeatureLabel}" />
+                    <TextBlock Text="Behavior" Style="{StaticResource SectionTitle}" />
+                    <ui:ToggleSwitch Content="Show Floating Overlay"
+                                     IsChecked="{Binding ShowOverlay}"
+                                     Style="{StaticResource AccentToggleSwitch}" />
+                    <ui:ToggleSwitch Content="Minimize to Tray on Close"
+                                     IsChecked="{Binding MinimizeToTray}"
+                                     Style="{StaticResource AccentToggleSwitch}" />
 
                     <Expander Header="Advanced Settings" IsExpanded="False" Margin="0,12,0,0">
-                        <StackPanel Margin="0,10,0,0">
+                        <Border Style="{StaticResource PageFeatureSurface}">
+                            <StackPanel>
                             <TextBlock Text="For power users. Defaults are safe for most setups."
                                        Style="{StaticResource HintText}"
-                                       Margin="0,0,0,10"/>
+                                       Margin="0,0,0,10" />
 
                             <ui:ToggleSwitch Content="Start on Windows startup"
                                              IsChecked="{Binding StartWithWindows}"
-                                             Margin="0,0,0,10"/>
+                                             Style="{StaticResource AccentToggleSwitch}" />
                             <ui:ToggleSwitch Content="Overlay Auto-Hide when idle"
                                              IsChecked="{Binding OverlayAutoHideEnabled}"
-                                             Margin="0,0,0,10"/>
+                                             Style="{StaticResource AccentToggleSwitch}" />
                             <ui:ToggleSwitch Content="Auto-paste when target app regains focus"
                                              IsChecked="{Binding DeferredTargetPasteEnabled}"
-                                             Margin="0,0,0,6"/>
-                            <TextBlock Text="{Binding PendingTransferStatus}" Style="{StaticResource HintText}" Margin="0,0,0,8"/>
+                                             Style="{StaticResource AccentToggleSwitch}"
+                                             Margin="0,0,0,4" />
+                            <TextBlock Text="{Binding PendingTransferStatus}" Style="{StaticResource HintText}" Margin="0,0,0,8" />
                             <ui:Button Content="Clear Pending Auto-Paste"
                                        Command="{Binding ClearPendingTransferCommand}"
                                        HorizontalAlignment="Left"
-                                       Margin="0,0,0,10"/>
-                            <ui:ToggleSwitch Content="Copy result to clipboard" IsChecked="{Binding CopyToClipboard}" Margin="0,0,0,10"/>
-                            <TextBlock Text="After each transcription the final text is also placed on the clipboard, so you can Ctrl+V it anywhere even if the target window was not focused." Style="{StaticResource HintText}" Margin="0,0,0,10"/>
-                            <ui:ToggleSwitch Content="Enable STT failover on transient errors" IsChecked="{Binding EnableSttFailover}" Margin="0,0,0,10"/>
-                            <ui:ToggleSwitch Content="Enable Debug Logs" IsChecked="{Binding EnableDebugLogs}" Margin="0,0,0,8"/>
+                                       Style="{StaticResource DangerButton}"
+                                       Margin="0,0,0,10" />
+
+                            <ui:ToggleSwitch Content="Copy result to clipboard"
+                                             IsChecked="{Binding CopyToClipboard}"
+                                             Style="{StaticResource AccentToggleSwitch}" />
+                            <TextBlock Text="After each transcription the final text is also placed on the clipboard, so you can Ctrl+V it anywhere even if the target window was not focused."
+                                       Style="{StaticResource HintText}"
+                                       Margin="0,0,0,10" />
+
+                            <ui:ToggleSwitch Content="Enable STT failover on transient errors"
+                                             IsChecked="{Binding EnableSttFailover}"
+                                             Style="{StaticResource AccentToggleSwitch}" />
+                            <ui:ToggleSwitch Content="Enable Debug Logs"
+                                             IsChecked="{Binding EnableDebugLogs}"
+                                             Style="{StaticResource AccentToggleSwitch}"
+                                             Margin="0,0,0,4" />
                             <ui:Button Content="Open Debug Logs"
                                        Command="{Binding OpenDebugLogsCommand}"
                                        HorizontalAlignment="Left"
-                                       Margin="0,0,0,14"/>
+                                       Style="{StaticResource SecondaryButton}"
+                                       Margin="0,8,0,12" />
 
-                            <TextBlock Text="Telemetry" Style="{StaticResource FieldLabel}"/>
-                            <ui:ToggleSwitch Content="Enable Local Telemetry" IsChecked="{Binding TelemetryEnabled}" Margin="0,0,0,10"/>
-                            <TextBlock Text="Telemetry is stored locally only and is redacted by default." Style="{StaticResource HintText}" Margin="0,0,0,10"/>
+                            <TextBlock Text="TELEMETRY" Style="{StaticResource PageFeatureLabel}" Margin="0,8,0,8" />
+                            <TextBlock Text="Telemetry" Style="{StaticResource FieldLabel}" Margin="0,0,0,6" />
+                            <ui:ToggleSwitch Content="Enable Local Telemetry"
+                                             IsChecked="{Binding TelemetryEnabled}"
+                                             Style="{StaticResource AccentToggleSwitch}" />
+                            <TextBlock Text="Telemetry is stored locally only and is redacted by default."
+                                       Style="{StaticResource HintText}"
+                                       Margin="0,0,0,10" />
 
-                            <TextBlock Text="Telemetry Level" Style="{StaticResource FieldLabel}"/>
+                            <TextBlock Text="Telemetry Level" Style="{StaticResource FieldLabel}" />
                             <ComboBox ItemsSource="{Binding AvailableTelemetryLevels}"
                                       SelectedItem="{Binding TelemetryLevel}"
+                                      Style="{StaticResource DropdownDefault}"
                                       Margin="0,0,0,10"
                                       MaxWidth="240"
-                                      HorizontalAlignment="Left"/>
-                            <TextBlock Text="Redaction Mode" Style="{StaticResource FieldLabel}"/>
+                                      HorizontalAlignment="Left" />
+
+                            <TextBlock Text="Redaction Mode" Style="{StaticResource FieldLabel}" />
                             <ComboBox ItemsSource="{Binding AvailableTelemetryRedactionModes}"
                                       SelectedItem="{Binding TelemetryRedactionMode}"
+                                      Style="{StaticResource DropdownDefault}"
                                       Margin="0,0,0,10"
                                       MaxWidth="240"
-                                      HorizontalAlignment="Left"/>
+                                      HorizontalAlignment="Left" />
 
                             <Grid Margin="0,0,0,6">
                                 <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="Auto"/>
-                                    <ColumnDefinition Width="120"/>
-                                    <ColumnDefinition Width="24"/>
-                                    <ColumnDefinition Width="Auto"/>
-                                    <ColumnDefinition Width="120"/>
+                                    <ColumnDefinition Width="Auto" />
+                                    <ColumnDefinition Width="120" />
+                                    <ColumnDefinition Width="24" />
+                                    <ColumnDefinition Width="Auto" />
+                                    <ColumnDefinition Width="120" />
                                 </Grid.ColumnDefinitions>
-                                <TextBlock Grid.Column="0" Text="Retention (days)" VerticalAlignment="Center" Margin="0,0,8,0"/>
-                                <TextBox Grid.Column="1" Text="{Binding TelemetryRetentionDays, UpdateSourceTrigger=LostFocus}" VerticalAlignment="Center"/>
-                                <TextBlock Grid.Column="3" Text="Max file (MB)" VerticalAlignment="Center" Margin="0,0,8,0"/>
-                                <TextBox Grid.Column="4" Text="{Binding TelemetryMaxFileMb, UpdateSourceTrigger=LostFocus}" VerticalAlignment="Center"/>
+                                <TextBlock Grid.Column="0" Text="Retention (days)" VerticalAlignment="Center" Margin="0,0,8,0" Style="{StaticResource HintText}" />
+                                <TextBox Grid.Column="1"
+                                         Text="{Binding TelemetryRetentionDays, UpdateSourceTrigger=LostFocus}"
+                                         VerticalAlignment="Center"
+                                         Style="{StaticResource InputDefault}" />
+                                <TextBlock Grid.Column="3" Text="Max file (MB)" VerticalAlignment="Center" Margin="0,0,8,0" Style="{StaticResource HintText}" />
+                                <TextBox Grid.Column="4"
+                                         Text="{Binding TelemetryMaxFileMb, UpdateSourceTrigger=LostFocus}"
+                                         VerticalAlignment="Center"
+                                         Style="{StaticResource InputDefault}" />
                             </Grid>
-                        </StackPanel>
+                            </StackPanel>
+                        </Border>
                     </Expander>
                 </StackPanel>
             </Border>
         </StackPanel>
     </ScrollViewer>
 </UserControl>
+
+

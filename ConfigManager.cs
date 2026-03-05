@@ -77,6 +77,9 @@ namespace Speakly.Config
         [JsonPropertyName("overlay_skin")]
         public string OverlaySkin { get; set; } = "Lavender";
 
+        [JsonPropertyName("overlay_style")]
+        public string OverlayStyle { get; set; } = "Rectangular";
+
         // Per-Service STT Models
         [JsonPropertyName("deepgram_model")]
         public string DeepgramModel { get; set; } = "nova-2";
@@ -88,7 +91,10 @@ namespace Speakly.Config
         public string OpenAISttModel { get; set; } = "whisper-1";
 
         [JsonPropertyName("openrouter_stt_model")]
-        public string OpenRouterSttModel { get; set; } = "openai/whisper-large-v3";
+        public string OpenRouterSttModel { get; set; } = "openai/gpt-audio-mini";
+
+        [JsonPropertyName("openrouter_stt_show_all_models")]
+        public bool OpenRouterSttShowAllModels { get; set; } = false;
 
         // Per-Service Refinement Models
         [JsonPropertyName("openai_refinement_model")]
@@ -427,6 +433,7 @@ namespace Speakly.Config
                 RefinementProvider = config.RefinementModel,
                 RefinementModel = ResolveRefinementModel(config),
                 RefinementPrompt = config.RefinementPrompt,
+                PromptPresetName = ResolvePromptPresetName(config.RefinementPrompt),
                 Language = config.Language,
                 CopyToClipboard = config.CopyToClipboard,
                 DictionaryTerms = new List<string>(),
@@ -525,6 +532,9 @@ namespace Speakly.Config
             config.AutoMicGainTargetRms = Math.Clamp(config.AutoMicGainTargetRms, 0.02, 0.4);
             config.NormalizationTargetPeak = Math.Clamp(config.NormalizationTargetPeak, 0.2, 0.99);
             config.PersonalDictionaryGlobal = NormalizeDictionaryTerms(config.PersonalDictionaryGlobal);
+            config.OverlayStyle = string.Equals(config.OverlayStyle, "Circle", StringComparison.OrdinalIgnoreCase)
+                ? "Circle"
+                : "Rectangular";
 
             if (config.Profiles == null)
                 config.Profiles = new List<AppProfile>();
@@ -551,6 +561,8 @@ namespace Speakly.Config
                     profile.SttFailoverOrder = new List<string> { "Deepgram", "OpenAI", "OpenRouter" };
                 if (string.IsNullOrWhiteSpace(profile.RefinementPrompt))
                     profile.RefinementPrompt = AppConfig.DefaultRefinementPrompt;
+                if (string.IsNullOrWhiteSpace(profile.PromptPresetName))
+                    profile.PromptPresetName = ResolvePromptPresetName(profile.RefinementPrompt);
                 profile.DictionaryTerms = NormalizeDictionaryTerms(profile.DictionaryTerms);
             }
 
@@ -579,6 +591,13 @@ namespace Speakly.Config
                 "Cerebras" => config.CerebrasRefinementModel,
                 _ => config.OpenAIRefinementModel
             };
+        }
+
+        private static string ResolvePromptPresetName(string? promptText)
+        {
+            return string.Equals(promptText, AppConfig.DefaultRefinementPrompt, StringComparison.Ordinal)
+                ? "General"
+                : string.Empty;
         }
 
         private static List<string> NormalizeDictionaryTerms(IEnumerable<string>? terms)

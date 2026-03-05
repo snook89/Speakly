@@ -8,6 +8,8 @@ using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Interop;
 using System.Windows.Media;
+using System.Windows.Media.Animation;
+using System.Windows.Media.Effects;
 using System.Windows.Shapes;
 using System.Windows.Threading;
 
@@ -28,9 +30,21 @@ namespace Speakly
         private float _audioLevel;
         private string _activeLanguageCode = "EN";
         private string _currentStatus = "READY";
+        private string _overlayStyle = "Rectangular";
+        private bool _isApplyingCircleSize;
+        private double _lastCircleSize = CircleMaxSize;
+
+        private const string OverlayStyleRectangular = "Rectangular";
+        private const string OverlayStyleCircle = "Circle";
+        private const double CircleMinSize = 50;
+        private const double CircleMaxSize = 62;
 
         // Resize edge detection in device-independent pixels
         private const int ResizeEdge = 8;
+        private static readonly IntPtr HwndTopMost = new(-1);
+        private const uint SwpNoSize = 0x0001;
+        private const uint SwpNoMove = 0x0002;
+        private const uint SwpNoActivate = 0x0010;
 
         public FloatingOverlay()
         {
@@ -55,6 +69,7 @@ namespace Speakly
             {
                 var hwnd = new WindowInteropHelper(this).Handle;
                 HwndSource.FromHwnd(hwnd)?.AddHook(WndProcHook);
+                EnsureTopmost();
             };
             WaveCanvas.SizeChanged += (_, _) => BuildWaveBars();
 
@@ -79,62 +94,73 @@ namespace Speakly
                 _saveBoundsTimer.Stop();
                 PersistBounds();
             };
-            SizeChanged += (_, _) => QueuePersistBounds();
+            SizeChanged += (_, _) =>
+            {
+                EnforceCircleSizeBounds();
+                QueuePersistBounds();
+            };
             LocationChanged += (_, _) => QueuePersistBounds();
 
-            BuildWaveBars();
+            SetOverlayStyle(Config.ConfigManager.Config.OverlayStyle);
             ApplyVisualState("READY");
             SizeChanged += (_, _) => UpdateResponsiveLayout();
             Loaded += (_, _) =>
             {
                 EnsureVisibleOnScreen();
+                EnsureTopmost();
                 QueuePersistBounds();
             };
             Container.SizeChanged += (_, _) => UpdateContainerClip();
             Loaded += (_, _) => UpdateContainerClip();
+            Activated += (_, _) => EnsureTopmost();
             SystemEvents.DisplaySettingsChanged += SystemEvents_DisplaySettingsChanged;
             Closed += FloatingOverlay_Closed;
         }
 
-        // ── Responsive label/badge breakpoints ────────────────────────────────
-        // ≥180 → full,  120–179 → short,  <120 → icon only
-        // LanguageBadge hidden <160,  TimerBadge hidden <130
-        private static readonly Dictionary<string, string> ShortStatus = new(StringComparer.OrdinalIgnoreCase)
-        {
-            { "READY",        "RDY"  },
-            { "RECORDING",    "REC"  },
-            { "TRANSCRIBING", "TRNS" },
-            { "REFINING",     "REF"  },
-            { "ERROR",        "ERR"  },
-        };
-
         private void UpdateResponsiveLayout()
         {
-            double w = ActualWidth;
-
-            // Font scales down as window shrinks
-            double fontSize = w >= 200 ? 12 : w >= 140 ? 10 : w >= 100 ? 8.5 : 7;
-            StatusText.FontSize = fontSize;
-
-            // Status text visibility / content
-            if (w < 100)
+            if (IsCircleStyle)
             {
+                StatusStack.Visibility = Visibility.Collapsed;
+                BadgeStack.Visibility = Visibility.Collapsed;
+                WaveCanvas.Visibility = Visibility.Collapsed;
+                TimerBadge.Visibility = Visibility.Collapsed;
+                LanguageBadge.Visibility = Visibility.Collapsed;
                 StatusText.Visibility = Visibility.Collapsed;
-            }
-            else
-            {
-                StatusText.Visibility = Visibility.Visible;
-                StatusText.Text = w < 180
-                    ? (ShortStatus.TryGetValue(_currentStatus, out var s) ? s : _currentStatus[..Math.Min(4, _currentStatus.Length)])
-                    : _currentStatus;
+                SubStatusText.Visibility = Visibility.Collapsed;
+                MicClusterScaleTransform.ScaleX = 1;
+                MicClusterScaleTransform.ScaleY = 1;
+                return;
             }
 
-            // Badges — only relevant when recording
-            if (_isRecording || _isProcessing)
+            double w = ActualWidth;
+            double h = ActualHeight;
+            StatusStack.Visibility = Visibility.Visible;
+            BadgeStack.Visibility = Visibility.Visible;
+            WaveCanvas.Visibility = Visibility.Visible;
+            StatusText.Visibility = Visibility.Visible;
+            SubStatusText.Visibility = Visibility.Visible;
+            StatusText.FontSize = w >= 280 ? 13 : w >= 220 ? 12 : 11;
+            SubStatusText.FontSize = w >= 280 ? 11 : 10;
+
+            StatusText.Visibility = w < 130 ? Visibility.Collapsed : Visibility.Visible;
+            SubStatusText.Visibility = w < 190 ? Visibility.Collapsed : Visibility.Visible;
+
+            // Shrink mic cluster when overlay height approaches minimum to avoid visual clipping.
+            double heightFactor = (h - 56.0) / 8.0; // 56 -> 0, 64 -> 1
+            heightFactor = Math.Max(0, Math.Min(1, heightFactor));
+            double micScale = 0.82 + (heightFactor * 0.18);
+            if (w < 240)
             {
-                LanguageBadge.Visibility = (w >= 160 && _isRecording) ? Visibility.Visible : Visibility.Collapsed;
-                TimerBadge.Visibility    = (w >= 130 && _isRecording) ? Visibility.Visible : Visibility.Collapsed;
+                micScale = Math.Min(micScale, 0.9);
             }
+
+            MicClusterScaleTransform.ScaleX = micScale;
+            MicClusterScaleTransform.ScaleY = micScale;
+
+            // Timer is optional UI noise; keep language badge as the only right-side badge by default.
+            TimerBadge.Visibility = Visibility.Collapsed;
+            LanguageBadge.Visibility = (w >= 160 && _isRecording) ? Visibility.Visible : Visibility.Collapsed;
         }
 
         // ── All-direction resize via WM_NCHITTEST ─────────────────────────────
@@ -257,6 +283,63 @@ namespace Speakly
             _saveBoundsTimer.Start();
         }
 
+        private void EnforceCircleSizeBounds()
+        {
+            if (!IsCircleStyle || _isApplyingCircleSize)
+            {
+                return;
+            }
+
+            _isApplyingCircleSize = true;
+            try
+            {
+                double width = IsFinite(Width) ? Width : _lastCircleSize;
+                double height = IsFinite(Height) ? Height : _lastCircleSize;
+
+                double rawTarget;
+                bool growing = width > _lastCircleSize + 0.25 || height > _lastCircleSize + 0.25;
+                bool shrinking = width < _lastCircleSize - 0.25 || height < _lastCircleSize - 0.25;
+
+                if (growing)
+                {
+                    rawTarget = Math.Max(width, height);
+                }
+                else if (shrinking)
+                {
+                    rawTarget = Math.Min(width, height);
+                }
+                else
+                {
+                    rawTarget = Math.Min(width, height);
+                }
+
+                if (!IsFinite(rawTarget) || rawTarget <= 0)
+                {
+                    rawTarget = CircleMaxSize;
+                }
+
+                double target = Clamp(rawTarget, CircleMinSize, CircleMaxSize);
+                _lastCircleSize = target;
+
+                if (Math.Abs(Width - target) > 0.5)
+                {
+                    Width = target;
+                }
+
+                if (Math.Abs(Height - target) > 0.5)
+                {
+                    Height = target;
+                }
+
+                Container.CornerRadius = new CornerRadius(target / 2.0);
+                UpdateCircleVisualMetrics(target);
+            }
+            finally
+            {
+                _isApplyingCircleSize = false;
+            }
+        }
+
         private void PersistBounds()
         {
             if (!IsFinite(Left) || !IsFinite(Top) || !IsFinite(Width) || !IsFinite(Height))
@@ -266,13 +349,23 @@ namespace Speakly
 
             Config.ConfigManager.Config.OverlayLeft = Left;
             Config.ConfigManager.Config.OverlayTop = Top;
-            Config.ConfigManager.Config.OverlayWidth = Width;
-            Config.ConfigManager.Config.OverlayHeight = Height;
+            if (!IsCircleStyle)
+            {
+                Config.ConfigManager.Config.OverlayWidth = Width;
+                Config.ConfigManager.Config.OverlayHeight = Height;
+            }
             Config.ConfigManager.Save();
         }
 
         private void BuildWaveBars()
         {
+            if (IsCircleStyle)
+            {
+                WaveCanvas.Children.Clear();
+                _bars.Clear();
+                return;
+            }
+
             WaveCanvas.Children.Clear();
             _bars.Clear();
 
@@ -308,6 +401,12 @@ namespace Speakly
 
         private void AnimateWave()
         {
+            if (IsCircleStyle)
+            {
+                _audioLevel = 0f;
+                return;
+            }
+
             if (_bars.Count == 0)
             {
                 BuildWaveBars();
@@ -373,28 +472,23 @@ namespace Speakly
                     Show();
                     EnsureVisibleOnScreen();
                 }
+                EnsureTopmost();
 
                 string normalized = string.IsNullOrWhiteSpace(status)
                     ? "READY"
                     : status.Trim().ToUpperInvariant();
-
-                // Only TRANSCRIBING or REFINING counts as "was processing"—not RECORDING.
-                // This prevents a spurious toast when recording stops before transcription arrives.
-                bool wasProcessing =
-                    _currentStatus.Equals("TRANSCRIBING", StringComparison.OrdinalIgnoreCase) ||
-                    _currentStatus.Equals("REFINING", StringComparison.OrdinalIgnoreCase);
+                bool isPttRecording = normalized.Equals("PTT_RECORDING", StringComparison.OrdinalIgnoreCase);
+                bool isRecording = isPttRecording || normalized.Equals("RECORDING", StringComparison.OrdinalIgnoreCase);
 
                 _currentStatus = normalized;
-                StatusText.Text = normalized;
 
-                if (normalized.Equals("RECORDING", StringComparison.OrdinalIgnoreCase))
+                if (isRecording)
                 {
                     _isRecording = true;
                     _isProcessing = false;
                     _recordStart = DateTime.Now;
                     _timer.Start();
                     TimerText.Text = "0:00";
-                    TimerBadge.Visibility = Visibility.Visible;
                     LanguageText.Text = _activeLanguageCode;
                     LanguageBadge.Visibility = Visibility.Visible;
                 }
@@ -447,6 +541,19 @@ namespace Speakly
             _audioLevel = Math.Clamp(level, 0f, 1f);
         }
 
+        public void SetOverlayStyle(string overlayStyle)
+        {
+            Dispatcher.Invoke(() =>
+            {
+                _overlayStyle = NormalizeOverlayStyleName(overlayStyle);
+                ApplyOverlayStyleLayout();
+                ApplyVisualState(_currentStatus);
+                UpdateResponsiveLayout();
+                EnsureVisibleOnScreen();
+                QueuePersistBounds();
+            });
+        }
+
         /// <summary>Called after the overlay skin dictionary is swapped so DynamicResource-broken
         /// manually-set brushes get re-evaluated immediately.</summary>
         public void RefreshSkin()
@@ -454,36 +561,217 @@ namespace Speakly
             Dispatcher.Invoke(() =>
             {
                 ApplyVisualState(_currentStatus);
+                UpdateContainerClip();
                 BuildWaveBars(); // rebuild bars with new brush colour
             });
         }
 
         private void ApplyVisualState(string status)
         {
-            bool isRecording = status.Equals("RECORDING", StringComparison.OrdinalIgnoreCase);
+            bool isPttRecording = status.Equals("PTT_RECORDING", StringComparison.OrdinalIgnoreCase);
+            bool isRecording = isPttRecording || status.Equals("RECORDING", StringComparison.OrdinalIgnoreCase);
             bool isProcessing = status.Equals("TRANSCRIBING", StringComparison.OrdinalIgnoreCase)
                 || status.Equals("REFINING", StringComparison.OrdinalIgnoreCase);
+            bool isError = status.Equals("ERROR", StringComparison.OrdinalIgnoreCase);
 
-            string backgroundKey = isRecording
-                ? "OverlaySkin.PillowRecordingBrush"
-                : isProcessing
-                    ? "OverlaySkin.PillowProcessingBrush"
-                    : "OverlaySkin.PillowIdleBrush";
-
-            string borderKey = isRecording
-                ? "OverlaySkin.PillowRecordingBorderBrush"
-                : isProcessing
-                    ? "OverlaySkin.PillowProcessingBorderBrush"
-                    : "OverlaySkin.PillowIdleBorderBrush";
-
-            if (TryFindResource(backgroundKey) is Brush background)
+            if (status.Equals("READY", StringComparison.OrdinalIgnoreCase))
             {
-                Container.Background = background;
+                StatusText.Text = "Ready";
+                SubStatusText.Text = "Hold hotkey to speak";
+            }
+            else if (isRecording)
+            {
+                StatusText.Text = "Listening...";
+                SubStatusText.Text = "Release to transcribe";
+            }
+            else if (isProcessing)
+            {
+                StatusText.Text = "Transcribing...";
+                SubStatusText.Text = "AI is processing";
+            }
+            else if (isError)
+            {
+                StatusText.Text = "Error";
+                SubStatusText.Text = "Transcription error";
+            }
+            else
+            {
+                StatusText.Text = status;
+                SubStatusText.Text = string.Empty;
             }
 
-            if (TryFindResource(borderKey) is Brush border)
+            StatusText.Foreground = GetSkinBrush(
+                "OverlaySkin.StatusForegroundBrush",
+                "BrushTextPrimary",
+                Color.FromRgb(0xE7, 0xE9, 0xEC));
+            SubStatusText.Foreground = GetSkinBrush(
+                "OverlaySkin.SubtleTextBrush",
+                "BrushTextSecondary",
+                Color.FromRgb(0xA9, 0xB0, 0xB7));
+
+            if (isRecording)
             {
-                Container.BorderBrush = border;
+                if (IsCircleStyle)
+                {
+                    var activeColor = isPttRecording
+                        ? Color.FromRgb(0x22, 0xC5, 0x5E)
+                        : Color.FromRgb(0xEF, 0x44, 0x44);
+
+                    Container.Background = GetSkinBrush(
+                        "OverlaySkin.PillowIdleBrush",
+                        "OverlayContainerBrush",
+                        Color.FromArgb(0xE6, 0x11, 0x12, 0x14));
+                    Container.BorderBrush = new SolidColorBrush(Color.FromArgb(220, activeColor.R, activeColor.G, activeColor.B));
+                    MicBg.Background = new SolidColorBrush(Color.FromArgb(42, activeColor.R, activeColor.G, activeColor.B));
+                    MicBg.BorderBrush = new SolidColorBrush(Color.FromArgb(230, activeColor.R, activeColor.G, activeColor.B));
+                    MicRingTrack.Stroke = new SolidColorBrush(Color.FromArgb(120, activeColor.R, activeColor.G, activeColor.B));
+                    MicRingActive.Stroke = new SolidColorBrush(activeColor);
+                    MicIcon.Foreground = new SolidColorBrush(activeColor);
+                    ApplyCircleGlow(activeColor);
+                }
+                else
+                {
+                    Container.Background = GetSkinBrush(
+                        "OverlaySkin.PillowRecordingBrush",
+                        "OverlayContainerBrush",
+                        Color.FromArgb(0xE6, 0x11, 0x12, 0x14));
+                    Container.BorderBrush = GetSkinBrush(
+                        "OverlaySkin.PillowRecordingBorderBrush",
+                        "BrushAccent",
+                        Color.FromRgb(0x06, 0xB6, 0xD4));
+                    MicBg.Background = GetSkinBrush(
+                        "OverlaySkin.PillowRecordingBrush",
+                        "BrushAccentSubtle",
+                        Color.FromArgb(0x19, 0x06, 0xB6, 0xD4));
+                    MicBg.BorderBrush = GetSkinBrush(
+                        "OverlaySkin.PillowRecordingBorderBrush",
+                        "BrushAccent",
+                        Color.FromRgb(0x06, 0xB6, 0xD4));
+                    MicRingTrack.Stroke = GetSkinBrush(
+                        "OverlaySkin.PillowRecordingBorderBrush",
+                        "BrushAccentSubtle",
+                        Color.FromArgb(0xA0, 0x06, 0xB6, 0xD4));
+                    MicRingActive.Stroke = GetSkinBrush(
+                        "OverlaySkin.IconRecordingBrush",
+                        "BrushAccent",
+                        Color.FromRgb(0x06, 0xB6, 0xD4));
+                    MicIcon.Foreground = GetSkinBrush(
+                        "OverlaySkin.IconRecordingBrush",
+                        "OverlaySkin.AccentBrush",
+                        Color.FromRgb(0x06, 0xB6, 0xD4));
+                    ApplyCircleGlow(null);
+                }
+                StartRingSpin(950);
+                if (IsCircleStyle)
+                {
+                    StopPulse();
+                }
+                else
+                {
+                    StartPulse();
+                }
+            }
+            else if (isProcessing)
+            {
+                Container.Background = GetSkinBrush(
+                    "OverlaySkin.PillowProcessingBrush",
+                    "OverlayContainerBrush",
+                    Color.FromArgb(0xE6, 0x11, 0x12, 0x14));
+                Container.BorderBrush = GetSkinBrush(
+                    "OverlaySkin.PillowProcessingBorderBrush",
+                    "BrushWarning",
+                    Color.FromRgb(0xF5, 0x9E, 0x0B));
+                MicBg.Background = GetSkinBrush(
+                    "OverlaySkin.PillowProcessingBrush",
+                    "BrushAccentSubtle",
+                    Color.FromArgb(0x19, 0x06, 0xB6, 0xD4));
+                MicBg.BorderBrush = GetSkinBrush(
+                    "OverlaySkin.PillowProcessingBorderBrush",
+                    "BrushBorderDefault",
+                    Color.FromRgb(0x2A, 0x31, 0x3C));
+                MicRingTrack.Stroke = GetSkinBrush(
+                    "OverlaySkin.PillowProcessingBorderBrush",
+                    "BrushWarning",
+                    Color.FromArgb(0xAA, 0xF5, 0x9E, 0x0B));
+                MicRingActive.Stroke = GetSkinBrush(
+                    "OverlaySkin.IconProcessingBrush",
+                    "BrushWarning",
+                    Color.FromRgb(0xF5, 0x9E, 0x0B));
+                MicIcon.Foreground = GetSkinBrush(
+                    "OverlaySkin.IconProcessingBrush",
+                    "BrushWarning",
+                    Color.FromRgb(0xF5, 0x9E, 0x0B));
+                ApplyCircleGlow(null);
+                StartRingSpin(1400);
+                StopPulse();
+            }
+            else if (isError)
+            {
+                Container.Background = GetSkinBrush(
+                    "OverlaySkin.CancelBrush",
+                    "BrushDangerSubtle",
+                    Color.FromArgb(0x2E, 0xEF, 0x44, 0x44));
+                Container.BorderBrush = GetSkinBrush(
+                    "OverlaySkin.CancelBorderBrush",
+                    "BrushDanger",
+                    Color.FromRgb(0xEF, 0x44, 0x44));
+                MicBg.Background = GetSkinBrush(
+                    "OverlaySkin.CancelBrush",
+                    "BrushDangerSubtle",
+                    Color.FromArgb(0x2E, 0xEF, 0x44, 0x44));
+                MicBg.BorderBrush = GetSkinBrush(
+                    "OverlaySkin.CancelBorderBrush",
+                    "BrushDanger",
+                    Color.FromRgb(0xEF, 0x44, 0x44));
+                MicRingTrack.Stroke = GetSkinBrush(
+                    "OverlaySkin.CancelBorderBrush",
+                    "BrushDangerSubtle",
+                    Color.FromArgb(0xAA, 0xEF, 0x44, 0x44));
+                MicRingActive.Stroke = GetSkinBrush(
+                    "OverlaySkin.CancelForegroundBrush",
+                    "BrushDanger",
+                    Color.FromRgb(0xEF, 0x44, 0x44));
+                MicIcon.Foreground = GetSkinBrush(
+                    "OverlaySkin.CancelForegroundBrush",
+                    "BrushDanger",
+                    Color.FromRgb(0xEF, 0x44, 0x44));
+                ApplyCircleGlow(null);
+                StartRingSpin(1700);
+                StopPulse();
+            }
+            else
+            {
+                Container.Background = GetSkinBrush(
+                    "OverlaySkin.PillowIdleBrush",
+                    "OverlayContainerBrush",
+                    Color.FromArgb(0xE6, 0x11, 0x12, 0x14));
+                Container.BorderBrush = GetSkinBrush(
+                    "OverlaySkin.PillowIdleBorderBrush",
+                    "BrushBorderDefault",
+                    Color.FromRgb(0x2A, 0x31, 0x3C));
+                MicBg.Background = GetSkinBrush(
+                    "OverlaySkin.LanguageBadgeBrush",
+                    "BrushAccentSubtle",
+                    Color.FromArgb(0x19, 0x06, 0xB6, 0xD4));
+                MicBg.BorderBrush = GetSkinBrush(
+                    "OverlaySkin.PillowIdleBorderBrush",
+                    "BrushBorderDefault",
+                    Color.FromRgb(0x2A, 0x31, 0x3C));
+                MicRingTrack.Stroke = GetSkinBrush(
+                    "OverlaySkin.IconIdleBrush",
+                    "BrushAccent",
+                    Color.FromArgb(0x80, 0x06, 0xB6, 0xD4));
+                MicRingActive.Stroke = GetSkinBrush(
+                    "OverlaySkin.IconIdleBrush",
+                    "OverlaySkin.AccentBrush",
+                    Color.FromRgb(0x06, 0xB6, 0xD4));
+                MicIcon.Foreground = GetSkinBrush(
+                    "OverlaySkin.IconIdleBrush",
+                    "OverlaySkin.AccentBrush",
+                    Color.FromRgb(0x06, 0xB6, 0xD4));
+                ApplyCircleGlow(null);
+                StopRingSpin();
+                StopPulse();
             }
 
             var waveBrush = BuildWaveBrush();
@@ -495,16 +783,250 @@ namespace Speakly
 
         private Brush BuildWaveBrush()
         {
-            var resourceKey = _isRecording ? "OverlaySkin.IconRecordingBrush" : "OverlaySkin.IconProcessingBrush";
-            var baseBrush = TryFindResource(resourceKey) as Brush ?? TryFindResource("OverlaySkin.AccentBrush") as Brush;
+            Brush? baseBrush = null;
+            if (_isRecording)
+            {
+                baseBrush = GetBrushOrNull("OverlaySkin.AccentBrush")
+                    ?? GetBrushOrNull("BrushAccent");
+            }
+            else if (_isProcessing)
+            {
+                baseBrush = GetBrushOrNull("OverlaySkin.IconProcessingBrush")
+                    ?? GetBrushOrNull("BrushWarning");
+            }
+            else if (_currentStatus.Equals("ERROR", StringComparison.OrdinalIgnoreCase))
+            {
+                baseBrush = GetBrushOrNull("OverlaySkin.CancelForegroundBrush")
+                    ?? GetBrushOrNull("BrushDanger");
+            }
+
+            baseBrush ??= GetBrushOrNull("OverlaySkin.AccentBrush")
+                ?? GetBrushOrNull("BrushAccent");
 
             if (baseBrush is SolidColorBrush solid)
             {
                 var c = solid.Color;
-                return new SolidColorBrush(Color.FromArgb(190, c.R, c.G, c.B));
+                return new SolidColorBrush(Color.FromArgb(170, c.R, c.G, c.B));
             }
 
-            return new SolidColorBrush(Color.FromArgb(190, 90, 120, 220));
+            return new SolidColorBrush(Color.FromArgb(170, 6, 182, 212));
+        }
+
+        private bool IsCircleStyle =>
+            string.Equals(_overlayStyle, OverlayStyleCircle, StringComparison.OrdinalIgnoreCase);
+
+        private void ApplyOverlayStyleLayout()
+        {
+            if (IsCircleStyle)
+            {
+                ResizeMode = ResizeMode.CanResize;
+                MinWidth = CircleMinSize;
+                MaxWidth = CircleMaxSize;
+                MinHeight = CircleMinSize;
+                MaxHeight = CircleMaxSize;
+                _lastCircleSize = Clamp(
+                    IsFinite(Width) && IsFinite(Height) ? Math.Min(Width, Height) : CircleMaxSize,
+                    CircleMinSize,
+                    CircleMaxSize);
+                EnforceCircleSizeBounds();
+
+                Container.CornerRadius = new CornerRadius(Math.Min(Width, Height) / 2.0);
+                Container.BorderThickness = new Thickness(1.2);
+
+                MicColumn.Width = new GridLength(1, GridUnitType.Star);
+                StatusColumn.Width = new GridLength(0);
+                BadgesColumn.Width = new GridLength(0);
+                Grid.SetColumn(MicCluster, 0);
+                MicCluster.HorizontalAlignment = HorizontalAlignment.Center;
+                MicCluster.Margin = new Thickness(0);
+                UpdateCircleVisualMetrics(Math.Min(Width, Height));
+            }
+            else
+            {
+                ResizeMode = ResizeMode.CanResize;
+                MinWidth = 280;
+                MinHeight = 64;
+                MaxWidth = 1800;
+                MaxHeight = 600;
+
+                double configuredWidth = Config.ConfigManager.Config.OverlayWidth;
+                double configuredHeight = Config.ConfigManager.Config.OverlayHeight;
+                Width = IsFinite(configuredWidth) && configuredWidth >= MinWidth ? configuredWidth : Math.Max(MinWidth, Width);
+                Height = IsFinite(configuredHeight) && configuredHeight >= MinHeight ? configuredHeight : Math.Max(MinHeight, Height);
+
+                Container.CornerRadius = new CornerRadius(32);
+                Container.Padding = new Thickness(16, 10, 16, 10);
+                Container.BorderThickness = new Thickness(1);
+
+                MicColumn.Width = GridLength.Auto;
+                StatusColumn.Width = new GridLength(1, GridUnitType.Star);
+                BadgesColumn.Width = GridLength.Auto;
+                Grid.SetColumn(MicCluster, 0);
+                MicCluster.HorizontalAlignment = HorizontalAlignment.Left;
+                MicCluster.Margin = new Thickness(0, 0, 12, 0);
+                MicCluster.Width = 44;
+                MicCluster.Height = 44;
+                MicRingTrack.Width = 42;
+                MicRingTrack.Height = 42;
+                MicRingTrack.StrokeThickness = 1.2;
+                MicRingActive.Width = 42;
+                MicRingActive.Height = 42;
+                MicRingActive.StrokeThickness = 2.2;
+                MicRingRotate.CenterX = 21;
+                MicRingRotate.CenterY = 21;
+                MicBg.Width = 32;
+                MicBg.Height = 32;
+                MicBg.CornerRadius = new CornerRadius(16);
+                MicBg.BorderThickness = new Thickness(1);
+                MicIcon.FontSize = 16;
+                MicRingActive.StrokeDashArray = new DoubleCollection { 3, 3 };
+                _lastCircleSize = CircleMaxSize;
+            }
+
+            UpdateContainerClip();
+            BuildWaveBars();
+        }
+
+        private static string NormalizeOverlayStyleName(string? overlayStyle)
+        {
+            return string.Equals(overlayStyle, OverlayStyleCircle, StringComparison.OrdinalIgnoreCase)
+                ? OverlayStyleCircle
+                : OverlayStyleRectangular;
+        }
+
+        private void ApplyCircleGlow(Color? glowColor)
+        {
+            if (!IsCircleStyle || glowColor is null)
+            {
+                MicBg.Effect = null;
+                MicRingActive.Effect = null;
+                return;
+            }
+
+            var color = glowColor.Value;
+            double t = Clamp((Math.Min(Width, Height) - CircleMinSize) / Math.Max(1, CircleMaxSize - CircleMinSize), 0, 1);
+            double bgBlur = Lerp(10, 18, t);
+            double ringBlur = Lerp(8, 14, t);
+            MicBg.Effect = new DropShadowEffect
+            {
+                Color = color,
+                BlurRadius = bgBlur,
+                ShadowDepth = 0,
+                Opacity = 0.9
+            };
+            MicRingActive.Effect = new DropShadowEffect
+            {
+                Color = color,
+                BlurRadius = ringBlur,
+                ShadowDepth = 0,
+                Opacity = 0.95
+            };
+        }
+
+        private void UpdateCircleVisualMetrics(double size)
+        {
+            if (!IsCircleStyle)
+            {
+                return;
+            }
+
+            double t = Clamp((size - CircleMinSize) / Math.Max(1, CircleMaxSize - CircleMinSize), 0, 1);
+            double padding = Lerp(5, 8, t);
+            double cluster = Lerp(30, 38, t);
+            double ring = cluster - 2;
+            double iconHost = Lerp(22, 28, t);
+            double iconSize = Lerp(12, 14, t);
+            double trackThickness = Lerp(1.0, 1.2, t);
+            double activeThickness = Lerp(1.5, 1.8, t);
+            double dash = Lerp(2.2, 3.0, t);
+
+            Container.Padding = new Thickness(padding);
+            MicCluster.Width = cluster;
+            MicCluster.Height = cluster;
+
+            MicRingTrack.Width = ring;
+            MicRingTrack.Height = ring;
+            MicRingTrack.StrokeThickness = trackThickness;
+
+            MicRingActive.Width = ring;
+            MicRingActive.Height = ring;
+            MicRingActive.StrokeThickness = activeThickness;
+            MicRingActive.StrokeDashArray = new DoubleCollection { dash, dash };
+            MicRingRotate.CenterX = ring / 2.0;
+            MicRingRotate.CenterY = ring / 2.0;
+
+            MicBg.Width = iconHost;
+            MicBg.Height = iconHost;
+            MicBg.CornerRadius = new CornerRadius(iconHost / 2.0);
+            MicBg.BorderThickness = new Thickness(1);
+            MicIcon.FontSize = iconSize;
+        }
+
+        private static double Lerp(double from, double to, double t)
+        {
+            return from + ((to - from) * Clamp(t, 0, 1));
+        }
+
+        private void StartPulse()
+        {
+            var pulse = new DoubleAnimation(1.0, 1.06, TimeSpan.FromMilliseconds(600))
+            {
+                AutoReverse = true,
+                RepeatBehavior = RepeatBehavior.Forever,
+                EasingFunction = new SineEase { EasingMode = EasingMode.EaseInOut }
+            };
+
+            if (MicBg.RenderTransform is not ScaleTransform transform)
+            {
+                transform = new ScaleTransform(1, 1);
+                MicBg.RenderTransform = transform;
+                MicBg.RenderTransformOrigin = new Point(0.5, 0.5);
+            }
+
+            transform.BeginAnimation(ScaleTransform.ScaleXProperty, pulse);
+            transform.BeginAnimation(ScaleTransform.ScaleYProperty, pulse);
+        }
+
+        private void StartRingSpin(double durationMs)
+        {
+            var spin = new DoubleAnimation(0, 360, TimeSpan.FromMilliseconds(durationMs))
+            {
+                RepeatBehavior = RepeatBehavior.Forever,
+                EasingFunction = null
+            };
+            MicRingRotate.BeginAnimation(RotateTransform.AngleProperty, spin);
+        }
+
+        private void StopRingSpin()
+        {
+            MicRingRotate.BeginAnimation(RotateTransform.AngleProperty, null);
+            MicRingRotate.Angle = 0;
+        }
+
+        private void StopPulse()
+        {
+            if (MicBg.RenderTransform is not ScaleTransform transform) return;
+            transform.BeginAnimation(ScaleTransform.ScaleXProperty, null);
+            transform.BeginAnimation(ScaleTransform.ScaleYProperty, null);
+            transform.ScaleX = 1;
+            transform.ScaleY = 1;
+        }
+
+        private Brush GetBrush(string key, Color fallback)
+        {
+            return GetBrushOrNull(key) ?? new SolidColorBrush(fallback);
+        }
+
+        private Brush GetSkinBrush(string skinKey, string fallbackKey, Color fallback)
+        {
+            return GetBrushOrNull(skinKey)
+                ?? GetBrushOrNull(fallbackKey)
+                ?? new SolidColorBrush(fallback);
+        }
+
+        private Brush? GetBrushOrNull(string key)
+        {
+            return TryFindResource(key) as Brush;
         }
 
         private void ShowToast(string message)
@@ -532,11 +1054,23 @@ namespace Speakly
 
             // Border.CornerRadius does not clip child visuals; apply an explicit rounded clip
             // so translucent content doesn't show square corners.
-            const double radius = 20.5;
+            double radius = Math.Max(0, Container.CornerRadius.TopLeft - 1.5);
             var rect = new Rect(0, 0, Container.ActualWidth, Container.ActualHeight);
             if (rect.Width <= 0 || rect.Height <= 0) return;
 
             ContainerContent.Clip = new RectangleGeometry(rect, radius, radius);
+            Container.Clip = new RectangleGeometry(rect, radius + 1, radius + 1);
+        }
+
+        private void EnsureTopmost()
+        {
+            var hwnd = new WindowInteropHelper(this).Handle;
+            if (hwnd == IntPtr.Zero)
+            {
+                return;
+            }
+
+            _ = SetWindowPos(hwnd, HwndTopMost, 0, 0, 0, 0, SwpNoMove | SwpNoSize | SwpNoActivate);
         }
 
         public void EnsureVisibleOnScreen()
@@ -547,8 +1081,8 @@ namespace Speakly
                 const double minOverlayHeight = 40;
                 var workArea = GetNearestMonitorWorkArea();
 
-                double defaultWidth = IsFinite(ActualWidth) && ActualWidth > 0 ? ActualWidth : 420;
-                double defaultHeight = IsFinite(ActualHeight) && ActualHeight > 0 ? ActualHeight : 96;
+                double defaultWidth = IsFinite(ActualWidth) && ActualWidth > 0 ? ActualWidth : 280;
+                double defaultHeight = IsFinite(ActualHeight) && ActualHeight > 0 ? ActualHeight : 64;
 
                 if (!IsFinite(Width) || Width < minOverlayWidth)
                     Width = Math.Max(minOverlayWidth, defaultWidth);
@@ -654,6 +1188,17 @@ namespace Speakly
 
         [DllImport("user32.dll")]
         private static extern IntPtr MonitorFromRect(ref RECT lprc, uint dwFlags);
+
+        [DllImport("user32.dll", SetLastError = true)]
+        [return: MarshalAs(UnmanagedType.Bool)]
+        private static extern bool SetWindowPos(
+            IntPtr hWnd,
+            IntPtr hWndInsertAfter,
+            int X,
+            int Y,
+            int cx,
+            int cy,
+            uint uFlags);
 
         [DllImport("user32.dll", CharSet = CharSet.Auto)]
         [return: MarshalAs(UnmanagedType.Bool)]

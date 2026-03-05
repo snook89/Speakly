@@ -106,6 +106,7 @@ namespace Speakly
         private readonly object _elevationPromptLock = new();
         private DateTime _lastElevationPromptUtc = DateTime.MinValue;
         private static readonly TimeSpan ElevationPromptCooldown = TimeSpan.FromSeconds(60);
+        private bool _launchedFromWindowsStartup;
 
         public App()
         {
@@ -126,6 +127,8 @@ namespace Speakly
             }
 
             ConfigManager.Load();
+            _launchedFromWindowsStartup = e.Args.Any(arg =>
+                string.Equals(arg, StartupRegistrationService.StartupLaunchArgument, StringComparison.OrdinalIgnoreCase));
             if (!StartupRegistrationService.Reconcile(ConfigManager.Config.StartWithWindows, out var startupTaskStatus))
             {
                 Logger.Log($"Startup task reconcile failed: {startupTaskStatus}");
@@ -189,6 +192,11 @@ namespace Speakly
             }
 
             SetOverlayStyle(ConfigManager.Config.OverlayStyle);
+
+            if (_launchedFromWindowsStartup && ConfigManager.Config.MinimizeToTray)
+            {
+                MainWindow.WindowState = WindowState.Minimized;
+            }
 
             MainWindow.Show();
             _singleInstanceManager.StartActivationListener(() =>

@@ -7,6 +7,7 @@ namespace Speakly.Services
     public static class StartupRegistrationService
     {
         private const string StartupTaskName = "Speakly Startup";
+        public const string StartupLaunchArgument = "--windows-startup";
 
         public static bool Reconcile(bool enabled, out string message)
         {
@@ -44,7 +45,9 @@ namespace Speakly.Services
             }
 
             // /TR requires the executable path to be wrapped in quotes as part of the value.
-            var taskAction = $"\\\"{exePath}\\\"";
+            // Append a dedicated argument so the app can distinguish Windows autostart from
+            // a normal manual launch and start minimized only for the former.
+            var taskAction = $"\\\"{exePath}\\\" {StartupLaunchArgument}";
             var create = RunSchtasks(
                 $"/Create /F /TN \"{StartupTaskName}\" /SC ONLOGON /RL LIMITED /TR \"{taskAction}\"");
 

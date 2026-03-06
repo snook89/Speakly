@@ -2,7 +2,6 @@
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
-    xmlns:pages="clr-namespace:Speakly.Pages"
     Title="Speakly"
     Height="760"
     Width="1160"
@@ -13,164 +12,274 @@
     Background="#FF1E2330"
     FontFamily="Segoe UI Variable Text">
 
+    <Window.Resources>
+        <Style x:Key="SidebarToggleButtonStyle" TargetType="ToggleButton">
+            <Setter Property="Width" Value="36" />
+            <Setter Property="Height" Value="36" />
+            <Setter Property="Margin" Value="10,10,0,8" />
+            <Setter Property="HorizontalAlignment" Value="Left" />
+            <Setter Property="VerticalAlignment" Value="Top" />
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="Foreground" Value="#F0F4FF" />
+            <Setter Property="BorderBrush" Value="#2A3045" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="FocusVisualStyle" Value="{x:Null}" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="ToggleButton">
+                        <Border x:Name="Root"
+                                Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}"
+                                CornerRadius="8">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" />
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Root" Property="Background" Value="#172335" />
+                                <Setter TargetName="Root" Property="BorderBrush" Value="#06B6D4" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style x:Key="SidebarLabelStyle" TargetType="TextBlock">
+            <Setter Property="Visibility" Value="Visible" />
+            <Style.Triggers>
+                <DataTrigger Binding="{Binding IsChecked, ElementName=SidebarToggle}" Value="False">
+                    <Setter Property="Visibility" Value="Collapsed" />
+                </DataTrigger>
+            </Style.Triggers>
+        </Style>
+
+        <Style x:Key="SidebarListStyle" TargetType="ListBox">
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="Padding" Value="6,0" />
+            <Setter Property="Margin" Value="0" />
+            <Setter Property="FocusVisualStyle" Value="{x:Null}" />
+            <Setter Property="IsTabStop" Value="False" />
+            <Setter Property="ScrollViewer.VerticalScrollBarVisibility" Value="Disabled" />
+            <Setter Property="ScrollViewer.HorizontalScrollBarVisibility" Value="Disabled" />
+            <Setter Property="ScrollViewer.CanContentScroll" Value="False" />
+        </Style>
+
+        <Style x:Key="SidebarNavItemStyle" TargetType="ListBoxItem">
+            <Setter Property="Foreground" Value="#A8B3C6" />
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderBrush" Value="Transparent" />
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+            <Setter Property="Padding" Value="0" />
+            <Setter Property="Margin" Value="0,2" />
+            <Setter Property="FocusVisualStyle" Value="{x:Null}" />
+            <Setter Property="IsTabStop" Value="False" />
+            <EventSetter Event="PreviewMouseLeftButtonDown" Handler="SidebarNavItem_PreviewMouseLeftButtonDown" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="ListBoxItem">
+                        <Border x:Name="Root"
+                                Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}"
+                                CornerRadius="8"
+                                Padding="0">
+                            <ContentPresenter HorizontalAlignment="Stretch" VerticalAlignment="Center" />
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsSelected" Value="True">
+                                <Setter TargetName="Root" Property="Background" Value="#1506B6D4" />
+                                <Setter TargetName="Root" Property="BorderBrush" Value="#06B6D4" />
+                                <Setter TargetName="Root" Property="BorderThickness" Value="1" />
+                                <Setter Property="Foreground" Value="#F0F4FF" />
+                            </Trigger>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Root" Property="Background" Value="#172335" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style x:Key="SidebarNavButtonStyle" TargetType="Border">
+            <Setter Property="CornerRadius" Value="8" />
+            <Setter Property="Padding" Value="12,10" />
+            <Setter Property="Height" Value="40" />
+            <Setter Property="HorizontalAlignment" Value="Stretch" />
+        </Style>
+
+        <Style x:Key="SidebarNavContentStyle" TargetType="StackPanel">
+            <Setter Property="Orientation" Value="Horizontal" />
+            <Setter Property="HorizontalAlignment" Value="Left" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+        </Style>
+
+        <Style x:Key="SidebarBrandRowStyle" TargetType="Border">
+            <Setter Property="Margin" Value="6,4,6,12" />
+            <Setter Property="Padding" Value="6,8" />
+            <Setter Property="HorizontalAlignment" Value="Stretch" />
+        </Style>
+    </Window.Resources>
+
     <Grid>
-        <Border x:Name="SidebarPaneBackdrop"
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="Auto" />
+            <ColumnDefinition Width="*" />
+        </Grid.ColumnDefinitions>
+
+        <Border x:Name="SidebarHost"
+                Grid.Column="0"
                 Width="220"
-                HorizontalAlignment="Left"
-                VerticalAlignment="Stretch"
-                Background="{DynamicResource BrushBgSidebar}" />
-
-        <!-- NavigationView is self-contained: its own pane (left) + content area (right).
-             No external Frame needed – pages are navigated directly via RootNavigation.Navigate(). -->
-        <ui:NavigationView x:Name="RootNavigation"
-                           Background="#FF1D263F"
-                           BorderBrush="{DynamicResource BrushBgSidebar}"
-                           BorderThickness="0"
-                           Margin="-1,0,-1,0"
-                           PaneDisplayMode="Left"
-                           PaneTitle=""
-                           IsBackButtonVisible="Collapsed"
-                           IsPaneToggleVisible="True"
-                           FrameMargin="0"
-                           IsTopSeparatorVisible="False"
-                           IsFooterSeparatorVisible="False"
-                           OpenPaneLength="220"
-                           CompactPaneLength="52">
-            <ui:NavigationView.Resources>
-                <!-- Keep every pane layer (header/menu/footer + separators) on one sidebar surface -->
-                <SolidColorBrush x:Key="SolidBackgroundFillColorBaseBrush" Color="{StaticResource ColorBgSidebar}" />
-                <SolidColorBrush x:Key="SolidBackgroundFillColorBaseAltBrush" Color="{StaticResource ColorBgSidebar}" />
-                <SolidColorBrush x:Key="ApplicationBackgroundBrush" Color="{StaticResource ColorBgSidebar}" />
-                <SolidColorBrush x:Key="LayerFillColorDefaultBrush" Color="{StaticResource ColorBgSidebar}" />
-                <SolidColorBrush x:Key="LayerFillColorAltBrush" Color="{StaticResource ColorBgSidebar}" />
-                <SolidColorBrush x:Key="LayerOnMicaBaseAltFillColorDefaultBrush" Color="{StaticResource ColorBgSidebar}" />
-                <SolidColorBrush x:Key="LayerOnAcrylicFillColorDefaultBrush" Color="{StaticResource ColorBgSidebar}" />
-                <SolidColorBrush x:Key="LayerOnAccentAcrylicFillColorDefaultBrush" Color="{StaticResource ColorBgSidebar}" />
-                <SolidColorBrush x:Key="ControlFillColorDefaultBrush" Color="{StaticResource ColorBgSidebar}" />
-                <SolidColorBrush x:Key="ControlStrongFillColorDefaultBrush" Color="{StaticResource ColorBgSidebar}" />
-                <SolidColorBrush x:Key="ControlSolidFillColorDefaultBrush" Color="{StaticResource ColorBgSidebar}" />
-                <SolidColorBrush x:Key="CardBackgroundFillColorDefaultBrush" Color="{StaticResource ColorBgSidebar}" />
-                <SolidColorBrush x:Key="ControlStrokeColorDefaultBrush" Color="{StaticResource ColorBgSidebar}" />
-                <SolidColorBrush x:Key="ControlStrongStrokeColorDefaultBrush" Color="{StaticResource ColorBgSidebar}" />
-                <SolidColorBrush x:Key="DividerStrokeColorDefaultBrush" Color="{StaticResource ColorBgSidebar}" />
-                <SolidColorBrush x:Key="CardStrokeColorDefaultBrush" Color="{StaticResource ColorBgSidebar}" />
-                <SolidColorBrush x:Key="SurfaceStrokeColorDefaultBrush" Color="{StaticResource ColorBgSidebar}" />
-                <SolidColorBrush x:Key="LeftNavigationViewSeparatorBrush" Color="{StaticResource ColorBgSidebar}" />
-                <SolidColorBrush x:Key="NavigationViewContentGridBorderBrush" Color="{StaticResource ColorBgSidebar}" />
-                <SolidColorBrush x:Key="NavigationViewContentBackground" Color="#FF1E2330" />
-            </ui:NavigationView.Resources>
-            <ui:NavigationView.PaneHeader>
-                <StackPanel Orientation="Horizontal" Margin="12,10,0,8">
-                    <Border Width="28"
-                            Height="28"
-                            CornerRadius="8"
-                            Margin="0,0,10,0"
-                            Background="{DynamicResource BrushAccentSubtle}">
-                        <Image Source="pack://application:,,,/Resources/Speakly_new_logo.ico"
-                               Width="18"
-                               Height="18"
-                               Stretch="Uniform"
-                               HorizontalAlignment="Center"
-                               VerticalAlignment="Center" />
-                    </Border>
-                    <TextBlock Text="Speakly"
-                               VerticalAlignment="Center"
-                               Foreground="{DynamicResource BrushTextPrimary}"
-                               FontSize="16"
-                               FontWeight="SemiBold" />
-                </StackPanel>
-            </ui:NavigationView.PaneHeader>
-            <ui:NavigationView.MenuItems>
-                <ui:NavigationViewItem Content="Home"
-                                       Style="{StaticResource NavItemStyle}"
-                                       TargetPageType="{x:Type pages:HomePage}">
-                    <ui:NavigationViewItem.Icon>
-                        <ui:SymbolIcon Symbol="Home20"/>
-                    </ui:NavigationViewItem.Icon>
-                </ui:NavigationViewItem>
-                <ui:NavigationViewItem Content="General"
-                                       Style="{StaticResource NavItemStyle}"
-                                       TargetPageType="{x:Type pages:GeneralPage}">
-                    <ui:NavigationViewItem.Icon>
-                        <ui:SymbolIcon Symbol="Settings20"/>
-                    </ui:NavigationViewItem.Icon>
-                </ui:NavigationViewItem>
-                <ui:NavigationViewItem Content="Hotkeys"
-                                       Style="{StaticResource NavItemStyle}"
-                                       TargetPageType="{x:Type pages:HotkeysPage}">
-                    <ui:NavigationViewItem.Icon>
-                        <ui:SymbolIcon Symbol="Keyboard20"/>
-                    </ui:NavigationViewItem.Icon>
-                </ui:NavigationViewItem>
-                <ui:NavigationViewItem Content="Audio"
-                                       Style="{StaticResource NavItemStyle}"
-                                       TargetPageType="{x:Type pages:AudioPage}">
-                    <ui:NavigationViewItem.Icon>
-                        <ui:SymbolIcon Symbol="Mic20"/>
-                    </ui:NavigationViewItem.Icon>
-                </ui:NavigationViewItem>
-                <ui:NavigationViewItem Content="Transcription"
-                                       Style="{StaticResource NavItemStyle}"
-                                       TargetPageType="{x:Type pages:TranscriptionPage}">
-                    <ui:NavigationViewItem.Icon>
-                        <ui:SymbolIcon Symbol="DocumentText20"/>
-                    </ui:NavigationViewItem.Icon>
-                </ui:NavigationViewItem>
-                <ui:NavigationViewItem Content="Refinement"
-                                       Style="{StaticResource NavItemStyle}"
-                                       TargetPageType="{x:Type pages:RefinementPage}">
-                    <ui:NavigationViewItem.Icon>
-                        <ui:SymbolIcon Symbol="EmojiSparkle20"/>
-                    </ui:NavigationViewItem.Icon>
-                </ui:NavigationViewItem>
-                <ui:NavigationViewItem Content="API Keys"
-                                       Style="{StaticResource NavItemStyle}"
-                                       TargetPageType="{x:Type pages:ApiKeysPage}">
-                    <ui:NavigationViewItem.Icon>
-                        <ui:SymbolIcon Symbol="Key20"/>
-                    </ui:NavigationViewItem.Icon>
-                </ui:NavigationViewItem>
-            </ui:NavigationView.MenuItems>
-
-            <ui:NavigationView.FooterMenuItems>
-                <ui:NavigationViewItem Content="History"
-                                       Style="{StaticResource NavItemStyle}"
-                                       TargetPageType="{x:Type pages:HistoryPage}">
-                    <ui:NavigationViewItem.Icon>
-                        <ui:SymbolIcon Symbol="History20"/>
-                    </ui:NavigationViewItem.Icon>
-                </ui:NavigationViewItem>
-                <ui:NavigationViewItem Content="Statistics"
-                                       Style="{StaticResource NavItemStyle}"
-                                       TargetPageType="{x:Type pages:StatisticsPage}">
-                    <ui:NavigationViewItem.Icon>
-                        <ui:SymbolIcon Symbol="DataHistogram20"/>
-                    </ui:NavigationViewItem.Icon>
-                </ui:NavigationViewItem>
-                <ui:NavigationViewItem Content="Info"
-                                       Style="{StaticResource NavItemStyle}"
-                                       TargetPageType="{x:Type pages:InfoPage}">
-                    <ui:NavigationViewItem.Icon>
-                        <ui:SymbolIcon Symbol="Info20"/>
-                    </ui:NavigationViewItem.Icon>
-                </ui:NavigationViewItem>
-            </ui:NavigationView.FooterMenuItems>
-
-        </ui:NavigationView>
-
-        <Border x:Name="SidebarLeftEdgeCover"
-                Width="2"
-                HorizontalAlignment="Left"
-                VerticalAlignment="Stretch"
                 Background="{DynamicResource BrushBgSidebar}"
-                IsHitTestVisible="False"
-                Panel.ZIndex="100" />
-        <Border x:Name="SidebarRightEdgeCover"
-                Width="4"
-                HorizontalAlignment="Left"
-                VerticalAlignment="Stretch"
-                Background="{DynamicResource BrushBgSidebar}"
-                IsHitTestVisible="False"
-                Panel.ZIndex="100" />
+                BorderBrush="#FF222B3D"
+                BorderThickness="0,0,1,0">
+            <Grid>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="*" />
+                    <RowDefinition Height="Auto" />
+                </Grid.RowDefinitions>
+
+                <ToggleButton x:Name="SidebarToggle"
+                              Grid.Row="0"
+                              IsChecked="True"
+                              Checked="SidebarToggle_Changed"
+                              Unchecked="SidebarToggle_Changed"
+                              Style="{StaticResource SidebarToggleButtonStyle}">
+                    <TextBlock Text="≡" FontSize="16" FontWeight="SemiBold" />
+                </ToggleButton>
+
+                <Border Grid.Row="1" Style="{StaticResource SidebarBrandRowStyle}">
+                    <StackPanel Style="{StaticResource SidebarNavContentStyle}">
+                        <Border Width="28"
+                                Height="28"
+                                CornerRadius="8"
+                                Background="{DynamicResource BrushAccentSubtle}">
+                            <Image Source="pack://application:,,,/Resources/Speakly_new_logo.ico"
+                                   Width="18"
+                                   Height="18"
+                                   Stretch="Uniform"
+                                   HorizontalAlignment="Center"
+                                   VerticalAlignment="Center" />
+                        </Border>
+                        <TextBlock Margin="10,0,0,0"
+                                   VerticalAlignment="Center"
+                                   Foreground="{DynamicResource BrushTextPrimary}"
+                                   FontSize="16"
+                                   FontWeight="SemiBold"
+                                   Text="Speakly"
+                                   Style="{StaticResource SidebarLabelStyle}" />
+                    </StackPanel>
+                </Border>
+
+                <ListBox x:Name="MainNavList"
+                         Grid.Row="2"
+                         SelectionChanged="NavigationList_SelectionChanged"
+                         Style="{StaticResource SidebarListStyle}"
+                         KeyboardNavigation.TabNavigation="None"
+                         ItemContainerStyle="{StaticResource SidebarNavItemStyle}">
+                    <ListBoxItem x:Name="NavHome" Tag="Home" ToolTip="Home">
+                        <Border Style="{StaticResource SidebarNavButtonStyle}">
+                            <StackPanel Style="{StaticResource SidebarNavContentStyle}">
+                                <ui:SymbolIcon Symbol="Home20" Width="16" Height="16" />
+                                <TextBlock Margin="12,0,0,0" VerticalAlignment="Center" Text="Home" Style="{StaticResource SidebarLabelStyle}" />
+                            </StackPanel>
+                        </Border>
+                    </ListBoxItem>
+                    <ListBoxItem x:Name="NavGeneral" Tag="General" ToolTip="General">
+                        <Border Style="{StaticResource SidebarNavButtonStyle}">
+                            <StackPanel Style="{StaticResource SidebarNavContentStyle}">
+                                <ui:SymbolIcon Symbol="Settings20" Width="16" Height="16" />
+                                <TextBlock Margin="12,0,0,0" VerticalAlignment="Center" Text="General" Style="{StaticResource SidebarLabelStyle}" />
+                            </StackPanel>
+                        </Border>
+                    </ListBoxItem>
+                    <ListBoxItem x:Name="NavHotkeys" Tag="Hotkeys" ToolTip="Hotkeys">
+                        <Border Style="{StaticResource SidebarNavButtonStyle}">
+                            <StackPanel Style="{StaticResource SidebarNavContentStyle}">
+                                <ui:SymbolIcon Symbol="Keyboard20" Width="16" Height="16" />
+                                <TextBlock Margin="12,0,0,0" VerticalAlignment="Center" Text="Hotkeys" Style="{StaticResource SidebarLabelStyle}" />
+                            </StackPanel>
+                        </Border>
+                    </ListBoxItem>
+                    <ListBoxItem x:Name="NavAudio" Tag="Audio" ToolTip="Audio">
+                        <Border Style="{StaticResource SidebarNavButtonStyle}">
+                            <StackPanel Style="{StaticResource SidebarNavContentStyle}">
+                                <ui:SymbolIcon Symbol="Mic20" Width="16" Height="16" />
+                                <TextBlock Margin="12,0,0,0" VerticalAlignment="Center" Text="Audio" Style="{StaticResource SidebarLabelStyle}" />
+                            </StackPanel>
+                        </Border>
+                    </ListBoxItem>
+                    <ListBoxItem x:Name="NavTranscription" Tag="Transcription" ToolTip="Transcription">
+                        <Border Style="{StaticResource SidebarNavButtonStyle}">
+                            <StackPanel Style="{StaticResource SidebarNavContentStyle}">
+                                <ui:SymbolIcon Symbol="DocumentText20" Width="16" Height="16" />
+                                <TextBlock Margin="12,0,0,0" VerticalAlignment="Center" Text="Transcription" Style="{StaticResource SidebarLabelStyle}" />
+                            </StackPanel>
+                        </Border>
+                    </ListBoxItem>
+                    <ListBoxItem x:Name="NavRefinement" Tag="Refinement" ToolTip="Refinement">
+                        <Border Style="{StaticResource SidebarNavButtonStyle}">
+                            <StackPanel Style="{StaticResource SidebarNavContentStyle}">
+                                <ui:SymbolIcon Symbol="EmojiSparkle20" Width="16" Height="16" />
+                                <TextBlock Margin="12,0,0,0" VerticalAlignment="Center" Text="Refinement" Style="{StaticResource SidebarLabelStyle}" />
+                            </StackPanel>
+                        </Border>
+                    </ListBoxItem>
+                    <ListBoxItem x:Name="NavApiKeys" Tag="API Keys" ToolTip="API Keys">
+                        <Border Style="{StaticResource SidebarNavButtonStyle}">
+                            <StackPanel Style="{StaticResource SidebarNavContentStyle}">
+                                <ui:SymbolIcon Symbol="Key20" Width="16" Height="16" />
+                                <TextBlock Margin="12,0,0,0" VerticalAlignment="Center" Text="API Keys" Style="{StaticResource SidebarLabelStyle}" />
+                            </StackPanel>
+                        </Border>
+                    </ListBoxItem>
+                </ListBox>
+
+                <ListBox x:Name="FooterNavList"
+                         Grid.Row="3"
+                         SelectionChanged="NavigationList_SelectionChanged"
+                         Style="{StaticResource SidebarListStyle}"
+                         ItemContainerStyle="{StaticResource SidebarNavItemStyle}"
+                         KeyboardNavigation.TabNavigation="None"
+                         Margin="0,0,0,10"
+                         Padding="6,0">
+                    <ListBoxItem x:Name="NavHistory" Tag="History" ToolTip="History">
+                        <Border Style="{StaticResource SidebarNavButtonStyle}">
+                            <StackPanel Style="{StaticResource SidebarNavContentStyle}">
+                                <ui:SymbolIcon Symbol="History20" Width="16" Height="16" />
+                                <TextBlock Margin="12,0,0,0" VerticalAlignment="Center" Text="History" Style="{StaticResource SidebarLabelStyle}" />
+                            </StackPanel>
+                        </Border>
+                    </ListBoxItem>
+                    <ListBoxItem x:Name="NavStatistics" Tag="Statistics" ToolTip="Statistics">
+                        <Border Style="{StaticResource SidebarNavButtonStyle}">
+                            <StackPanel Style="{StaticResource SidebarNavContentStyle}">
+                                <ui:SymbolIcon Symbol="DataHistogram20" Width="16" Height="16" />
+                                <TextBlock Margin="12,0,0,0" VerticalAlignment="Center" Text="Statistics" Style="{StaticResource SidebarLabelStyle}" />
+                            </StackPanel>
+                        </Border>
+                    </ListBoxItem>
+                    <ListBoxItem x:Name="NavInfo" Tag="Info" ToolTip="Info">
+                        <Border Style="{StaticResource SidebarNavButtonStyle}">
+                            <StackPanel Style="{StaticResource SidebarNavContentStyle}">
+                                <ui:SymbolIcon Symbol="Info20" Width="16" Height="16" />
+                                <TextBlock Margin="12,0,0,0" VerticalAlignment="Center" Text="Info" Style="{StaticResource SidebarLabelStyle}" />
+                            </StackPanel>
+                        </Border>
+                    </ListBoxItem>
+                </ListBox>
+            </Grid>
+        </Border>
+
+        <Border Grid.Column="1" Background="#FF1E2330">
+            <ContentControl x:Name="ContentHost"
+                            Background="#FF1E2330" />
+        </Border>
     </Grid>
 </Window>

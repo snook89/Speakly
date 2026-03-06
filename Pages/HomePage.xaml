@@ -128,7 +128,7 @@
             </Border>
 
             <Border Style="{StaticResource PageFeatureCard}">
-                <StackPanel MaxWidth="540">
+                <StackPanel>
                     <StackPanel Margin="0,0,0,20">
                         <TextBlock Text="Profiles"
                                    FontSize="20"
@@ -153,7 +153,7 @@
                                           DisplayMemberPath="Name"
                                           Style="{StaticResource DropdownDefault}"
                                           MinWidth="260"
-                                          HorizontalAlignment="Left" />
+                                          HorizontalAlignment="Stretch" />
                             </Grid>
 
                             <UniformGrid Columns="2">

@@ -48,7 +48,8 @@ namespace Speakly.Pages
                 bool match =
                     entry.OriginalText.Contains(search, System.StringComparison.OrdinalIgnoreCase) ||
                     entry.RefinedText.Contains(search, System.StringComparison.OrdinalIgnoreCase) ||
-                    entry.SttProvider.Contains(search, System.StringComparison.OrdinalIgnoreCase);
+                    entry.SttProvider.Contains(search, System.StringComparison.OrdinalIgnoreCase) ||
+                    entry.RefinementProvider.Contains(search, System.StringComparison.OrdinalIgnoreCase);
                 if (!match) return false;
             }
 

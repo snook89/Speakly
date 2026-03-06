@@ -4,6 +4,18 @@
              xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
              FontFamily="Segoe UI Variable Text"
              Background="#FF1E2330">
+    <UserControl.Resources>
+        <Style x:Key="StatsCenteredHeaderStyle"
+               TargetType="DataGridColumnHeader"
+               BasedOn="{StaticResource {x:Type DataGridColumnHeader}}">
+            <Setter Property="HorizontalContentAlignment" Value="Center" />
+        </Style>
+
+        <Style x:Key="StatsCenteredCellTextStyle" TargetType="TextBlock">
+            <Setter Property="TextAlignment" Value="Center" />
+            <Setter Property="HorizontalAlignment" Value="Center" />
+        </Style>
+    </UserControl.Resources>
     <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="{StaticResource PagePadding}">
         <StackPanel MaxWidth="860">
             <StackPanel Margin="0,0,0,28">
@@ -100,10 +112,26 @@
                               HeadersVisibility="Column">
                         <DataGrid.Columns>
                             <DataGridTextColumn Header="Provider" Binding="{Binding Provider}" Width="*" />
-                            <DataGridTextColumn Header="Sessions" Binding="{Binding Sessions}" Width="90" />
-                            <DataGridTextColumn Header="Successes" Binding="{Binding Successes}" Width="100" />
-                            <DataGridTextColumn Header="Success Rate" Binding="{Binding SuccessRateText}" Width="120" />
-                            <DataGridTextColumn Header="Avg Latency" Binding="{Binding AvgLatencyText}" Width="120" />
+                            <DataGridTextColumn Header="Sessions"
+                                                Binding="{Binding Sessions}"
+                                                Width="90"
+                                                HeaderStyle="{StaticResource StatsCenteredHeaderStyle}"
+                                                ElementStyle="{StaticResource StatsCenteredCellTextStyle}" />
+                            <DataGridTextColumn Header="Successes"
+                                                Binding="{Binding Successes}"
+                                                Width="100"
+                                                HeaderStyle="{StaticResource StatsCenteredHeaderStyle}"
+                                                ElementStyle="{StaticResource StatsCenteredCellTextStyle}" />
+                            <DataGridTextColumn Header="Success Rate"
+                                                Binding="{Binding SuccessRateText}"
+                                                Width="120"
+                                                HeaderStyle="{StaticResource StatsCenteredHeaderStyle}"
+                                                ElementStyle="{StaticResource StatsCenteredCellTextStyle}" />
+                            <DataGridTextColumn Header="Avg Latency"
+                                                Binding="{Binding AvgLatencyText}"
+                                                Width="120"
+                                                HeaderStyle="{StaticResource StatsCenteredHeaderStyle}"
+                                                ElementStyle="{StaticResource StatsCenteredCellTextStyle}" />
                         </DataGrid.Columns>
                     </DataGrid>
                 </StackPanel>

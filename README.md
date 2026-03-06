@@ -88,7 +88,7 @@
       <sub>Floating overlay for status, quick actions, and at-a-glance feedback while dictating.</sub>
     </td>
     <td width="50%" align="center" valign="top">
-      <img src="Resources/README/circle-overlay-midnight-theme.png" alt="Speakly circular overlay" width="100%" />
+      <img src="Resources/README/circle-overlay-midnight-theme.png" alt="Speakly circular overlay" width="72%" />
       <br />
       <sub>Alternate overlay presentation with theme variations for different desktop setups.</sub>
     </td>

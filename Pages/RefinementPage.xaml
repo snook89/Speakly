@@ -15,10 +15,98 @@
                 <StackPanel>
                     <TextBlock Text="REFINEMENT ENGINE" Style="{StaticResource PageFeatureLabel}" />
                     <TextBlock Text="AI Text Refinement" Style="{StaticResource SectionTitle}" />
-                    <ui:ToggleSwitch Content="Enable AI Refinement"
-                                     IsChecked="{Binding EnableRefinement}"
-                                     Style="{StaticResource AccentToggleSwitch}"
-                                     Margin="0,0,0,10" />
+                    <Grid Margin="0,0,0,14">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="12" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+
+                        <Border Grid.Column="0" Style="{StaticResource PageFeatureSurface}">
+                            <StackPanel>
+                                <TextBlock Text="WORKFLOW" Style="{StaticResource PageFeatureLabel}" />
+                                <TextBlock Text="Mode and insertion behavior" Style="{StaticResource FieldLabel}" />
+
+                                <ui:ToggleSwitch Content="Enable AI refinement"
+                                                 IsChecked="{Binding EnableRefinement}"
+                                                 Style="{StaticResource AccentToggleSwitch}"
+                                                 Margin="0,2,0,10" />
+
+                                <TextBlock Text="Dictation mode" Style="{StaticResource FieldLabel}" />
+                                <ComboBox ItemsSource="{Binding AvailableDictationModes}"
+                                          SelectedItem="{Binding DictationMode}"
+                                          Style="{StaticResource DropdownDefault}"
+                                          Margin="0,0,0,8"
+                                          MinWidth="220"
+                                          MaxWidth="320"
+                                          HorizontalAlignment="Left" />
+
+                                <TextBlock Text="Choose the task shape first: notes, code, email, message, or plain dictation."
+                                           Style="{StaticResource HintText}"
+                                           Margin="0,0,0,10" />
+
+                                <TextBlock Text="Style preset" Style="{StaticResource FieldLabel}" />
+                                <ComboBox ItemsSource="{Binding AvailableStylePresets}"
+                                          SelectedItem="{Binding StylePreset}"
+                                          Style="{StaticResource DropdownDefault}"
+                                          Margin="0,0,0,6"
+                                          MinWidth="220"
+                                          MaxWidth="320"
+                                          HorizontalAlignment="Left" />
+
+                                <TextBlock Text="{Binding StylePresetDescription}"
+                                           Style="{StaticResource HintText}"
+                                           Margin="0,0,0,10" />
+
+                                <ui:InfoBar Title="Style conflict"
+                                            Message="{Binding PromptStyleConflictWarning}"
+                                            Severity="Warning"
+                                            IsOpen="{Binding HasPromptStyleConflictWarning}"
+                                            IsClosable="False"
+                                            Margin="0,0,0,10" />
+
+                                <StackPanel>
+                                    <StackPanel.Style>
+                                        <Style TargetType="StackPanel">
+                                            <Setter Property="Visibility" Value="Collapsed" />
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding IsCustomStylePreset}" Value="True">
+                                                    <Setter Property="Visibility" Value="Visible" />
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </StackPanel.Style>
+
+                                    <TextBlock Text="Custom style instructions" Style="{StaticResource FieldLabel}" />
+                                    <ui:TextBox Text="{Binding CustomStylePrompt, UpdateSourceTrigger=PropertyChanged}"
+                                                Style="{StaticResource InputTextArea}"
+                                                Height="86"
+                                                Margin="0,0,0,6" />
+                                    <TextBlock Text="Example: concise but warm, avoid corporate filler, keep short sentences."
+                                               Style="{StaticResource HintText}" />
+                                </StackPanel>
+                            </StackPanel>
+                        </Border>
+
+                        <Border Grid.Column="2" Style="{StaticResource PageFeatureSurface}">
+                            <StackPanel>
+                                <TextBlock Text="AUTOMATION" Style="{StaticResource PageFeatureLabel}" />
+                                <TextBlock Text="Reusable output helpers" Style="{StaticResource FieldLabel}" />
+
+                                <ui:ToggleSwitch Content="Enable snippet expansions"
+                                                 IsChecked="{Binding EnableSnippets}"
+                                                 Style="{StaticResource AccentToggleSwitch}" />
+                                <ui:ToggleSwitch Content="Learn from refinement corrections"
+                                                 IsChecked="{Binding LearnFromRefinementCorrections}"
+                                                 Style="{StaticResource AccentToggleSwitch}"
+                                                 Margin="0,0,0,8" />
+
+                                <TextBlock Text="Snippets apply after refinement. Learning suggestions stay manual so Speakly does not silently rewrite your phrasing."
+                                           TextWrapping="Wrap"
+                                           Style="{StaticResource HintText}" />
+                            </StackPanel>
+                        </Border>
+                    </Grid>
 
                     <StackPanel>
                         <StackPanel.Style>
@@ -32,106 +120,158 @@
                             </Style>
                         </StackPanel.Style>
 
-                        <TextBlock Text="Service" Style="{StaticResource FieldLabel}" />
-                        <ComboBox SelectedValue="{Binding RefinementModel}"
-                                  SelectedValuePath="Content"
-                                  Style="{StaticResource DropdownDefault}"
-                                  Margin="0,0,0,16"
-                                  MaxWidth="300"
-                                  MinWidth="240"
-                                  HorizontalAlignment="Left">
-                            <ComboBoxItem Content="OpenAI" />
-                            <ComboBoxItem Content="OpenRouter" />
-                            <ComboBoxItem Content="Cerebras" />
-                        </ComboBox>
+                        <Border Style="{StaticResource PageFeatureSurface}" Margin="0,0,0,14">
+                            <StackPanel>
+                                <TextBlock Text="MODEL SELECTION" Style="{StaticResource PageFeatureLabel}" />
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="220" />
+                                        <ColumnDefinition Width="16" />
+                                        <ColumnDefinition Width="*" />
+                                    </Grid.ColumnDefinitions>
+                                    <Grid.RowDefinitions>
+                                        <RowDefinition Height="Auto" />
+                                        <RowDefinition Height="Auto" />
+                                    </Grid.RowDefinitions>
 
-                        <TextBlock Text="Target Model" Style="{StaticResource FieldLabel}" />
-                        <Grid x:Name="ModelRow" Width="420" HorizontalAlignment="Left">
-                            <ComboBox x:Name="RefinementModelCombo"
-                                      ItemsSource="{Binding AvailableRefinementModels}"
-                                      Text="{Binding SelectedRefinementModelString}"
-                                      Style="{StaticResource DropdownDefault}"
-                                      Width="420"
-                                      HorizontalAlignment="Stretch"
-                                      IsEditable="True"
-                                      IsTextSearchEnabled="False"
-                                      StaysOpenOnEdit="True"
-                                      MaxDropDownHeight="460"
-                                      ScrollViewer.VerticalScrollBarVisibility="Visible"
-                                      KeyUp="ModelCombo_KeyUp"
-                                      DropDownOpened="ModelCombo_DropDownOpened"
-                                      DropDownClosed="ModelCombo_DropDownClosed"
-                                      PreviewKeyDown="ModelCombo_PreviewKeyDown"
-                                      Margin="0,0,0,12">
-                                <ComboBox.ItemTemplate>
-                                    <DataTemplate>
-                                        <StackPanel Orientation="Horizontal">
-                                            <TextBlock Text="★"
-                                                       Foreground="{DynamicResource BrushTextSecondary}"
-                                                       Margin="0,0,6,0">
-                                                <TextBlock.Visibility>
-                                                    <MultiBinding Converter="{StaticResource ModelFavoriteVisibilityConverter}"
-                                                                  ConverterParameter="Refinement">
-                                                        <Binding />
-                                                        <Binding RelativeSource="{RelativeSource AncestorType=UserControl}" Path="DataContext" />
-                                                    </MultiBinding>
-                                                </TextBlock.Visibility>
-                                            </TextBlock>
-                                            <TextBlock Text="{Binding}" />
-                                        </StackPanel>
-                                    </DataTemplate>
-                                </ComboBox.ItemTemplate>
-                                <ComboBox.ItemContainerStyle>
-                                    <Style TargetType="ComboBoxItem" BasedOn="{StaticResource {x:Type ComboBoxItem}}">
-                                        <Setter Property="Tag" Value="{Binding DataContext, RelativeSource={RelativeSource AncestorType=UserControl}}" />
-                                        <Setter Property="ContextMenu">
-                                            <Setter.Value>
-                                                <ContextMenu>
-                                                    <MenuItem Header="★ Toggle Favorite"
-                                                              Command="{Binding PlacementTarget.Tag.ToggleRefinementFavoriteModelCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
-                                                              CommandParameter="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource AncestorType=ContextMenu}}" />
-                                                </ContextMenu>
-                                            </Setter.Value>
-                                        </Setter>
-                                    </Style>
-                                </ComboBox.ItemContainerStyle>
-                            </ComboBox>
-                            <Border x:Name="ModelGlow"
-                                    BorderThickness="2"
-                                    CornerRadius="8"
-                                    IsHitTestVisible="False"
-                                    Opacity="0"
-                                    Panel.ZIndex="10"
-                                    Width="{Binding ElementName=RefinementModelCombo, Path=ActualWidth}"
-                                    Height="{Binding ElementName=RefinementModelCombo, Path=ActualHeight}"
-                                    HorizontalAlignment="Left"
-                                    VerticalAlignment="Top"
-                                    Margin="0,0,0,12">
-                                <Border.Effect>
-                                    <DropShadowEffect x:Name="ModelGlowFx" BlurRadius="18" ShadowDepth="0" Opacity="0.95" />
-                                </Border.Effect>
-                            </Border>
-                        </Grid>
+                                    <StackPanel Grid.Row="0" Grid.Column="0">
+                                        <TextBlock Text="Service" Style="{StaticResource FieldLabel}" />
+                                        <ComboBox SelectedValue="{Binding RefinementModel}"
+                                                  SelectedValuePath="Content"
+                                                  Style="{StaticResource DropdownDefault}"
+                                                  Margin="0,0,0,12"
+                                                  MinWidth="220"
+                                                  HorizontalAlignment="Stretch">
+                                            <ComboBoxItem Content="OpenAI" />
+                                            <ComboBoxItem Content="OpenRouter" />
+                                            <ComboBoxItem Content="Cerebras" />
+                                        </ComboBox>
 
-                        <ui:Button Content="Refresh models"
-                                   Command="{Binding RefreshModelsCommand}"
-                                   HorizontalAlignment="Left"
-                                   Style="{StaticResource SecondaryButton}"
-                                   Margin="0,0,0,10" />
+                                        <ui:Button Content="Refresh models"
+                                                   Command="{Binding RefreshModelsCommand}"
+                                                   HorizontalAlignment="Left"
+                                                   Style="{StaticResource SecondaryButton}"
+                                                   Margin="0,0,0,0" />
+                                    </StackPanel>
 
-                        <ui:InfoBar Title="Model status"
-                                    Message="{Binding ModelRefreshStatus}"
-                                    Severity="Informational"
-                                    IsOpen="{Binding HasModelRefreshStatus}"
-                                    Margin="0,0,0,12" />
+                                    <StackPanel Grid.Row="0" Grid.Column="2">
+                                        <TextBlock Text="Target model" Style="{StaticResource FieldLabel}" />
+                                        <Grid x:Name="ModelRow" HorizontalAlignment="Left">
+                                            <ComboBox x:Name="RefinementModelCombo"
+                                                      ItemsSource="{Binding AvailableRefinementModels}"
+                                                      Text="{Binding SelectedRefinementModelString}"
+                                                      Style="{StaticResource DropdownDefault}"
+                                                      Width="220"
+                                                      HorizontalAlignment="Left"
+                                                      IsEditable="True"
+                                                      IsTextSearchEnabled="False"
+                                                      StaysOpenOnEdit="True"
+                                                      MaxDropDownHeight="460"
+                                                      ScrollViewer.VerticalScrollBarVisibility="Visible"
+                                                      KeyUp="ModelCombo_KeyUp"
+                                                      DropDownOpened="ModelCombo_DropDownOpened"
+                                                      DropDownClosed="ModelCombo_DropDownClosed"
+                                                      PreviewKeyDown="ModelCombo_PreviewKeyDown"
+                                                      Margin="0,0,0,12">
+                                                <ComboBox.ItemTemplate>
+                                                    <DataTemplate>
+                                                        <StackPanel Orientation="Horizontal">
+                                                            <TextBlock Text="★"
+                                                                       Foreground="{DynamicResource BrushTextSecondary}"
+                                                                       Margin="0,0,6,0">
+                                                                <TextBlock.Visibility>
+                                                                    <MultiBinding Converter="{StaticResource ModelFavoriteVisibilityConverter}"
+                                                                                  ConverterParameter="Refinement">
+                                                                        <Binding />
+                                                                        <Binding RelativeSource="{RelativeSource AncestorType=UserControl}" Path="DataContext" />
+                                                                    </MultiBinding>
+                                                                </TextBlock.Visibility>
+                                                            </TextBlock>
+                                                            <TextBlock Text="{Binding}" />
+                                                        </StackPanel>
+                                                    </DataTemplate>
+                                                </ComboBox.ItemTemplate>
+                                                <ComboBox.ItemContainerStyle>
+                                                    <Style TargetType="ComboBoxItem" BasedOn="{StaticResource {x:Type ComboBoxItem}}">
+                                                        <Setter Property="Tag" Value="{Binding DataContext, RelativeSource={RelativeSource AncestorType=UserControl}}" />
+                                                        <Setter Property="ContextMenu">
+                                                            <Setter.Value>
+                                                                <ContextMenu>
+                                                                    <MenuItem Header="★ Toggle Favorite"
+                                                                              Command="{Binding PlacementTarget.Tag.ToggleRefinementFavoriteModelCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
+                                                                              CommandParameter="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource AncestorType=ContextMenu}}" />
+                                                                </ContextMenu>
+                                                            </Setter.Value>
+                                                        </Setter>
+                                                    </Style>
+                                                </ComboBox.ItemContainerStyle>
+                                            </ComboBox>
+                                            <Border x:Name="ModelGlow"
+                                                    BorderThickness="2"
+                                                    CornerRadius="8"
+                                                    IsHitTestVisible="False"
+                                                    Opacity="0"
+                                                    Panel.ZIndex="10"
+                                                    Width="{Binding ElementName=RefinementModelCombo, Path=ActualWidth}"
+                                                    Height="{Binding ElementName=RefinementModelCombo, Path=ActualHeight}"
+                                                    HorizontalAlignment="Left"
+                                                    VerticalAlignment="Top"
+                                                    Margin="0,0,0,12">
+                                                <Border.Effect>
+                                                    <DropShadowEffect x:Name="ModelGlowFx" BlurRadius="18" ShadowDepth="0" Opacity="0.95" />
+                                                </Border.Effect>
+                                            </Border>
+                                        </Grid>
+                                    </StackPanel>
+
+                                    <ui:InfoBar Grid.Row="1"
+                                                Grid.Column="0"
+                                                Grid.ColumnSpan="3"
+                                                Title="Model status"
+                                                Message="{Binding ModelRefreshStatus}"
+                                                Severity="Informational"
+                                                IsOpen="{Binding HasModelRefreshStatus}"
+                                                IsClosable="False"
+                                                Margin="0,8,0,0" />
+                                </Grid>
+                            </StackPanel>
+                        </Border>
 
                         <Expander Header="Advanced Settings" IsExpanded="False" Margin="0,0,0,14">
                             <Border Style="{StaticResource PageFeatureSurface}" Margin="0,10,0,0">
                                 <StackPanel>
                                     <TextBlock Text="ADVANCED" Style="{StaticResource PageFeatureLabel}" />
-                                    <TextBlock Text="For power users. Defaults are safe for most setups."
+                                    <TextBlock Text="Context-aware refinement and provider-specific tuning."
                                                Style="{StaticResource HintText}"
                                                Margin="0,0,0,10" />
+
+                                    <TextBlock Text="Contextual Refinement" Style="{StaticResource FieldLabel}" />
+                                    <TextBlock Text="Context rewrite behavior" Style="{StaticResource FieldLabel}" />
+                                    <ComboBox ItemsSource="{Binding AvailableContextualRefinementModes}"
+                                              SelectedItem="{Binding ContextualRefinementMode}"
+                                              Style="{StaticResource DropdownDefault}"
+                                              Margin="0,0,0,6"
+                                              MinWidth="240"
+                                              MaxWidth="320"
+                                              HorizontalAlignment="Left" />
+                                    <TextBlock Text="Conservative keeps context as a light hint. Aggressive rewrite expands vague replies into standalone text using selected or clipboard context."
+                                               Style="{StaticResource HintText}"
+                                               TextWrapping="Wrap"
+                                               Margin="0,0,0,10" />
+                                    <ui:ToggleSwitch Content="Use active app name as context"
+                                                     IsChecked="{Binding UseAppContextForRefinement}"
+                                                     Style="{StaticResource AccentToggleSwitch}" />
+                                    <ui:ToggleSwitch Content="Use active window title as context"
+                                                     IsChecked="{Binding UseWindowTitleContextForRefinement}"
+                                                     Style="{StaticResource AccentToggleSwitch}"
+                                                     Margin="0,0,0,4" />
+                                    <ui:ToggleSwitch Content="Use selected text as context"
+                                                     IsChecked="{Binding UseSelectedTextContextForRefinement}"
+                                                     Style="{StaticResource AccentToggleSwitch}" />
+                                    <ui:ToggleSwitch Content="Use clipboard text as context"
+                                                     IsChecked="{Binding UseClipboardContextForRefinement}"
+                                                     Style="{StaticResource AccentToggleSwitch}"
+                                                     Margin="0,0,0,10" />
 
                                     <StackPanel>
                                         <StackPanel.Style>
@@ -186,11 +326,14 @@
                             </Border>
                         </Expander>
 
-                        <Border Style="{StaticResource PageFeatureSurface}">
+                        <Border Style="{StaticResource PageFeatureSurface}" Margin="0,0,0,14">
                             <StackPanel>
                                 <TextBlock Text="PROMPTS" Style="{StaticResource PageFeatureLabel}" />
-                                <TextBlock Text="Prompt Presets" Style="{StaticResource FieldLabel}" />
-                                <Grid Margin="0,0,0,14" Width="560" HorizontalAlignment="Left">
+                                <TextBlock Text="Prompt workspace" Style="{StaticResource FieldLabel}" />
+                                <TextBlock Text="Keep prompt presets for tone and structure. Dictation mode still controls the main output style."
+                                           Style="{StaticResource HintText}"
+                                           Margin="0,0,0,10" />
+                                <Grid Margin="0,0,0,14">
                                     <Grid.ColumnDefinitions>
                                         <ColumnDefinition Width="*" />
                                         <ColumnDefinition Width="Auto" />
@@ -200,8 +343,10 @@
                                               SelectedItem="{Binding SelectedPromptEntry}"
                                               DisplayMemberPath="Name"
                                               Style="{StaticResource DropdownDefault}"
-                                              Width="300"
-                                              Margin="0,0,8,0" />
+                                              Margin="0,0,8,0"
+                                              MinWidth="240"
+                                              MaxWidth="360"
+                                              HorizontalAlignment="Left" />
                                     <ui:Button Grid.Column="1"
                                                Content="Delete"
                                                Command="{Binding DeleteSelectedPromptCommand}"
@@ -216,14 +361,14 @@
                                             IsOpen="{Binding IsRefinementPromptMissing}"
                                             Margin="0,0,0,12" />
 
-                                <TextBlock Text="Custom System Prompt" Style="{StaticResource FieldLabel}" />
+                                <TextBlock Text="Custom system prompt" Style="{StaticResource FieldLabel}" />
                                 <ui:TextBox x:Name="PromptTextBox"
                                             Text="{Binding RefinementPrompt, UpdateSourceTrigger=PropertyChanged}"
                                             Style="{StaticResource InputTextArea}"
                                             Height="160"
                                             Margin="0,0,0,12" />
 
-                                <TextBlock Text="Save current prompt as:" Style="{StaticResource FieldLabel}" />
+                                <TextBlock Text="Save current prompt as" Style="{StaticResource FieldLabel}" />
                                 <Grid Margin="0,0,0,4">
                                     <Grid.ColumnDefinitions>
                                         <ColumnDefinition Width="*" />
@@ -244,6 +389,133 @@
                                            Style="{StaticResource HintText}" />
                             </StackPanel>
                         </Border>
+
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="12" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+
+                            <Border Grid.Column="0" Style="{StaticResource PageFeatureSurface}">
+                            <StackPanel>
+                                <TextBlock Text="SNIPPETS" Style="{StaticResource PageFeatureLabel}" />
+                                <TextBlock Text="Reusable phrase expansions" Style="{StaticResource FieldLabel}" />
+                                <TextBlock Text="Best for sign-offs, recurring names, product references, or canned phrases."
+                                           Style="{StaticResource HintText}"
+                                           Margin="0,0,0,8" />
+
+                                <ListBox ItemsSource="{Binding SavedSnippets}"
+                                         SelectedItem="{Binding SelectedSnippetEntry}"
+                                         Style="{StaticResource InputList}"
+                                         MinHeight="110"
+                                         MaxHeight="180"
+                                         HorizontalContentAlignment="Stretch"
+                                         Margin="0,0,0,10">
+                                    <ListBox.ItemContainerStyle>
+                                        <Style TargetType="ListBoxItem">
+                                            <Setter Property="Background" Value="Transparent" />
+                                            <Setter Property="BorderThickness" Value="0" />
+                                            <Setter Property="Padding" Value="0" />
+                                            <Setter Property="Margin" Value="0" />
+                                            <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+                                            <Setter Property="FocusVisualStyle" Value="{x:Null}" />
+                                            <Setter Property="Template">
+                                                <Setter.Value>
+                                                    <ControlTemplate TargetType="ListBoxItem">
+                                                        <ContentPresenter />
+                                                    </ControlTemplate>
+                                                </Setter.Value>
+                                            </Setter>
+                                        </Style>
+                                    </ListBox.ItemContainerStyle>
+                                    <ListBox.ItemTemplate>
+                                        <DataTemplate>
+                                            <StackPanel>
+                                                <TextBlock Text="{Binding Trigger}" Style="{StaticResource FieldLabel}" />
+                                                <TextBlock Text="{Binding Replacement}" TextWrapping="Wrap" />
+                                            </StackPanel>
+                                        </DataTemplate>
+                                    </ListBox.ItemTemplate>
+                                </ListBox>
+
+                                <TextBlock Text="Spoken trigger" Style="{StaticResource FieldLabel}" />
+                                <ui:TextBox Text="{Binding NewSnippetTrigger, UpdateSourceTrigger=PropertyChanged}"
+                                            Style="{StaticResource InputDefault}"
+                                            PlaceholderText="for example: best regards"
+                                            Margin="0,0,0,8" />
+
+                                <TextBlock Text="Replacement" Style="{StaticResource FieldLabel}" />
+                                <ui:TextBox Text="{Binding NewSnippetReplacement, UpdateSourceTrigger=PropertyChanged}"
+                                            Style="{StaticResource InputTextArea}"
+                                            Height="90"
+                                            Margin="0,0,0,10" />
+
+                                <WrapPanel Orientation="Horizontal">
+                                    <ui:Button Content="Save snippet"
+                                               Command="{Binding SaveSnippetCommand}"
+                                               Style="{StaticResource PrimaryButton}"
+                                               Margin="0,0,8,0" />
+                                    <ui:Button Content="Delete selected"
+                                               Command="{Binding DeleteSelectedSnippetCommand}"
+                                               Style="{StaticResource DangerButton}"
+                                               IsEnabled="{Binding CanDeleteSelectedSnippet}" />
+                                </WrapPanel>
+                            </StackPanel>
+                            </Border>
+
+                            <Border Grid.Column="2" Style="{StaticResource PageFeatureSurface}">
+                            <StackPanel>
+                                <TextBlock Text="LEARNING" Style="{StaticResource PageFeatureLabel}" />
+                                <TextBlock Text="Correction review queue" Style="{StaticResource FieldLabel}" />
+                                <TextBlock Text="Suggestions come from transcript-to-refined improvements. Confirm the ones you want to keep."
+                                           Style="{StaticResource HintText}"
+                                           Margin="0,0,0,8" />
+
+                                <ListBox ItemsSource="{Binding CorrectionSuggestions}"
+                                         SelectedItem="{Binding SelectedCorrectionSuggestion}"
+                                         Style="{StaticResource InputList}"
+                                         MinHeight="110"
+                                         MaxHeight="180"
+                                         HorizontalContentAlignment="Stretch"
+                                         Margin="0,0,0,10">
+                                    <ListBox.ItemTemplate>
+                                        <DataTemplate>
+                                            <StackPanel>
+                                                <TextBlock Text="{Binding DisplayLabel}" TextWrapping="Wrap" />
+                                                <TextBlock Text="{Binding DisplayMeta}" Style="{StaticResource HintText}" TextWrapping="Wrap" />
+                                            </StackPanel>
+                                        </DataTemplate>
+                                    </ListBox.ItemTemplate>
+                                </ListBox>
+
+                                <WrapPanel Orientation="Horizontal">
+                                    <ui:Button Content="Add to dictionary"
+                                               Command="{Binding AddCorrectionSuggestionToDictionaryCommand}"
+                                               CommandParameter="{Binding SelectedCorrectionSuggestion}"
+                                               Style="{StaticResource SecondaryButton}"
+                                               Margin="0,0,8,8" />
+                                    <ui:Button Content="Save as snippet"
+                                               Command="{Binding AddCorrectionSuggestionToSnippetCommand}"
+                                               CommandParameter="{Binding SelectedCorrectionSuggestion}"
+                                               Style="{StaticResource SecondaryButton}"
+                                               Margin="0,0,8,8" />
+                                    <ui:Button Content="Dismiss"
+                                               Command="{Binding DismissCorrectionSuggestionCommand}"
+                                               CommandParameter="{Binding SelectedCorrectionSuggestion}"
+                                               Style="{StaticResource SecondaryButton}"
+                                               Margin="0,0,8,8" />
+                                    <ui:Button Content="Clear all"
+                                               Command="{Binding ClearCorrectionSuggestionsCommand}"
+                                               Style="{StaticResource DangerButton}"
+                                               Margin="0,0,0,8" />
+                                </WrapPanel>
+
+                                <TextBlock Text="Dictionary suggestions are best for stable product names. Snippets are better for short phrases with punctuation or formatting."
+                                           Style="{StaticResource HintText}" />
+                            </StackPanel>
+                            </Border>
+                        </Grid>
                     </StackPanel>
                 </StackPanel>
             </Border>

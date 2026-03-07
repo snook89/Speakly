@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
@@ -10,10 +11,7 @@ namespace Speakly
 {
     public partial class MainWindow : Window
     {
-        private const double SidebarExpandedWidth = 220;
-        private const double SidebarCollapsedWidth = 56;
-
-        private readonly Dictionary<string, Type> _pages = new()
+        private static readonly IReadOnlyDictionary<string, Type> RegisteredPages = new Dictionary<string, Type>
         {
             ["Home"] = typeof(Pages.HomePage),
             ["General"] = typeof(Pages.GeneralPage),
@@ -24,10 +22,18 @@ namespace Speakly
             ["API Keys"] = typeof(Pages.ApiKeysPage),
             ["History"] = typeof(Pages.HistoryPage),
             ["Statistics"] = typeof(Pages.StatisticsPage),
+            ["Docs"] = typeof(Pages.DocsPage),
             ["Info"] = typeof(Pages.InfoPage)
         };
 
+        private const double SidebarExpandedWidth = 220;
+        private const double SidebarCollapsedWidth = 56;
+
+        private readonly Dictionary<string, Type> _pages = new(RegisteredPages);
+
         private bool _syncingSelection;
+
+        public static IReadOnlyCollection<string> RegisteredSections => RegisteredPages.Keys.ToArray();
 
         public MainWindow()
         {
@@ -130,6 +136,17 @@ namespace Speakly
             Title = $"Speakly - {section}";
         }
 
+        public void NavigateToSection(string section)
+        {
+            if (!_pages.ContainsKey(section))
+            {
+                return;
+            }
+
+            SelectNavigationItem(section);
+            NavigateTo(section);
+        }
+
         private void MainWindow_Closing(object? sender, System.ComponentModel.CancelEventArgs e)
         {
             ConfigManager.Config.MainWindowLeft = Left;
@@ -149,6 +166,46 @@ namespace Speakly
                 }
 
                 current = VisualTreeHelper.GetParent(current);
+            }
+
+            return null;
+        }
+
+        private void SelectNavigationItem(string section)
+        {
+            _syncingSelection = true;
+            try
+            {
+                var item = FindNavigationItem(MainNavList, section);
+                if (item != null)
+                {
+                    FooterNavList.SelectedItem = null;
+                    MainNavList.SelectedItem = item;
+                    return;
+                }
+
+                item = FindNavigationItem(FooterNavList, section);
+                if (item != null)
+                {
+                    MainNavList.SelectedItem = null;
+                    FooterNavList.SelectedItem = item;
+                }
+            }
+            finally
+            {
+                _syncingSelection = false;
+            }
+        }
+
+        private static ListBoxItem? FindNavigationItem(ListBox listBox, string section)
+        {
+            foreach (var item in listBox.Items)
+            {
+                if (item is ListBoxItem listBoxItem &&
+                    string.Equals(listBoxItem.Tag as string, section, StringComparison.Ordinal))
+                {
+                    return listBoxItem;
+                }
             }
 
             return null;

@@ -90,6 +90,10 @@
                         <TextBlock Text="{Binding ActiveProfileName}" Style="{StaticResource SectionTitle}" Margin="0,0,0,4" />
                         <TextBlock Text="{Binding LastInsertionStatus}" Style="{StaticResource HintText}" Margin="0,0,0,2" />
                         <TextBlock Text="{Binding LastInsertionMethod, StringFormat=Insertion method: {0}}" Style="{StaticResource HintText}" />
+                        <TextBlock Text="{Binding ActiveDictationModeTitle}" Style="{StaticResource HintText}" Margin="0,4,0,0" />
+                        <TextBlock Text="{Binding ActiveDictationModeDescription}" Style="{StaticResource HintText}" Margin="0,2,0,0" TextWrapping="Wrap" />
+                        <TextBlock Text="{Binding ContextConfigurationSummary}" Style="{StaticResource HintText}" Margin="0,4,0,0" TextWrapping="Wrap" />
+                        <TextBlock Text="{Binding LastContextUsageStatus}" Style="{StaticResource HintText}" Margin="0,2,0,0" TextWrapping="Wrap" />
                     </StackPanel>
 
                     <Border Grid.Column="1"
@@ -105,11 +109,20 @@
                 <StackPanel>
                     <TextBlock Text="ACTIONS" Style="{StaticResource PageFeatureLabel}" />
                     <TextBlock Text="Quick Actions" Style="{StaticResource SectionTitle}" />
+                    <TextBlock Text="Switch task mode without leaving the Home page."
+                               Style="{StaticResource HintText}"
+                               Margin="0,0,0,12" />
+                    <Grid Margin="0,0,0,14">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+                        <ComboBox Grid.Column="0"
+                                  ItemsSource="{Binding AvailableDictationModes}"
+                                  SelectedItem="{Binding DictationMode}"
+                                  Style="{StaticResource DropdownDefault}"
+                                  MinWidth="220" />
+                    </Grid>
                     <WrapPanel>
-                        <ui:Button Content="Run health checks"
-                                   Command="{Binding RunHealthCheckCommand}"
-                                   Style="{StaticResource SecondaryButton}"
-                                   Margin="0,0,8,0" />
                         <ui:Button Content="Refresh models"
                                    Command="{Binding RefreshModelsCommand}"
                                    Style="{StaticResource SecondaryButton}"
@@ -211,6 +224,18 @@
                                 <StackPanel>
                                     <TextBlock Text="DICTIONARY + MAPPINGS" Style="{StaticResource ProfilesTileLabelStyle}" />
                                     <TextBlock Text="{Binding SelectedProfileDictionarySummary}" Style="{StaticResource ProfilesTileValueStyle}" />
+                                </StackPanel>
+                            </Border>
+
+                            <Border Background="{StaticResource ProfilesSurfaceBrush}"
+                                    BorderBrush="{StaticResource ProfilesBorderBrush}"
+                                    BorderThickness="1"
+                                    CornerRadius="{StaticResource ProfilesRadiusSm}"
+                                    Padding="12,10"
+                                    Margin="0,8,0,0">
+                                <StackPanel>
+                                    <TextBlock Text="DICTATION MODE" Style="{StaticResource ProfilesTileLabelStyle}" />
+                                    <TextBlock Text="{Binding SelectedProfileModeSummary}" Style="{StaticResource ProfilesTileValueStyle}" />
                                 </StackPanel>
                             </Border>
                         </StackPanel>

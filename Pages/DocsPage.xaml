@@ -1,0 +1,211 @@
+<UserControl x:Class="Speakly.Pages.DocsPage"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
+             xmlns:docs="clr-namespace:Speakly.Docs"
+             FontFamily="Segoe UI Variable Text"
+             Background="#FF1E2330">
+    <UserControl.Resources>
+        <BooleanToVisibilityConverter x:Key="BooleanToVisibilityConverter" />
+
+        <Style x:Key="DocsTopicListStyle" TargetType="ListBox">
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="Padding" Value="0" />
+            <Setter Property="Margin" Value="0" />
+        </Style>
+
+        <Style x:Key="DocsTopicItemStyle" TargetType="ListBoxItem">
+            <Setter Property="Padding" Value="0" />
+            <Setter Property="Margin" Value="0,0,0,6" />
+            <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="ListBoxItem">
+                        <Border x:Name="Root"
+                                Background="#141A25"
+                                BorderBrush="{DynamicResource BrushBorderSubtle}"
+                                BorderThickness="1"
+                                CornerRadius="10"
+                                Padding="12,10">
+                            <ContentPresenter />
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsSelected" Value="True">
+                                <Setter TargetName="Root" Property="Background" Value="#1506B6D4" />
+                                <Setter TargetName="Root" Property="BorderBrush" Value="#06B6D4" />
+                            </Trigger>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Root" Property="Background" Value="#172335" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+    </UserControl.Resources>
+
+    <Grid>
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="210" />
+            <ColumnDefinition Width="20" />
+            <ColumnDefinition Width="*" />
+        </Grid.ColumnDefinitions>
+
+        <Border Grid.Column="0"
+                Margin="24,24,0,24"
+                Style="{StaticResource PageFeatureCard}">
+            <StackPanel>
+                <TextBlock Text="DOCS" Style="{StaticResource PageFeatureLabel}" />
+                <TextBlock Text="Topics" Style="{StaticResource SectionTitle}" Margin="0,0,0,10" />
+                <TextBlock Text="Everything you need to understand how Speakly works and how to tune it."
+                           Style="{StaticResource HintText}"
+                           TextWrapping="Wrap"
+                           Margin="0,0,0,14" />
+
+                <ListBox ItemsSource="{Binding Topics}"
+                         SelectedItem="{Binding SelectedTopic}"
+                         Style="{StaticResource DocsTopicListStyle}"
+                         ItemContainerStyle="{StaticResource DocsTopicItemStyle}">
+                    <ListBox.ItemTemplate>
+                        <DataTemplate DataType="{x:Type docs:DocsTopic}">
+                            <TextBlock Text="{Binding Title}"
+                                       FontSize="14"
+                                       FontWeight="SemiBold"
+                                       Foreground="{DynamicResource BrushTextPrimary}" />
+                        </DataTemplate>
+                    </ListBox.ItemTemplate>
+                </ListBox>
+            </StackPanel>
+        </Border>
+
+        <ScrollViewer x:Name="TopicScrollViewer"
+                      Grid.Column="2"
+                      VerticalScrollBarVisibility="Auto"
+                      Padding="0,24,24,24">
+            <StackPanel MaxWidth="860">
+                <StackPanel Margin="0,0,0,24">
+                    <TextBlock Text="DOCS" Style="{StaticResource PageEyebrow}" />
+                    <TextBlock Text="{Binding SelectedTopic.Title}" Style="{StaticResource PageTitle}" Margin="0" />
+                    <TextBlock Text="{Binding SelectedTopic.Summary}"
+                               Style="{StaticResource HintText}"
+                               Margin="0,10,0,0"
+                               TextWrapping="Wrap" />
+                </StackPanel>
+
+                <Border Style="{StaticResource PageFeatureCard}" Margin="0,0,0,16">
+                    <StackPanel>
+                        <TextBlock Text="QUICK ACTIONS" Style="{StaticResource PageFeatureLabel}" />
+                        <TextBlock Text="Recommended next step" Style="{StaticResource SectionTitle}" />
+                        <TextBlock Text="{Binding SelectedTopicSummaryLine}"
+                                   Style="{StaticResource HintText}"
+                                   TextWrapping="Wrap"
+                                   Margin="0,0,0,12" />
+                        <ui:Button Content="{Binding OpenTargetPageButtonText}"
+                                   Style="{StaticResource SecondaryButton}"
+                                   HorizontalAlignment="Left"
+                                   Click="OpenTargetPageButton_Click"
+                                   Visibility="{Binding HasSelectedTopicTargetPage, Converter={StaticResource BooleanToVisibilityConverter}}" />
+                    </StackPanel>
+                </Border>
+
+                <ItemsControl ItemsSource="{Binding SelectedTopic.Sections}">
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate DataType="{x:Type docs:DocsSection}">
+                            <Border Style="{StaticResource PageFeatureCard}" Margin="0,0,0,16">
+                                <StackPanel>
+                                    <TextBlock Text="{Binding Title}" Style="{StaticResource SectionTitle}" />
+                                    <TextBlock Text="{Binding Body}"
+                                               Style="{StaticResource BodyText}"
+                                               TextWrapping="Wrap"
+                                               Margin="0,8,0,0" />
+                                </StackPanel>
+                            </Border>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+
+                <Border Style="{StaticResource PageFeatureCard}" Margin="0,0,0,16">
+                    <StackPanel>
+                        <TextBlock Text="DEFAULTS" Style="{StaticResource PageFeatureLabel}" />
+                        <TextBlock Text="Recommended default settings" Style="{StaticResource SectionTitle}" />
+                        <ItemsControl ItemsSource="{Binding SelectedTopic.RecommendedDefaults}" Margin="0,8,0,0">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <DockPanel Margin="0,0,0,8">
+                                        <TextBlock Text="•"
+                                                   Margin="0,0,8,0"
+                                                   Foreground="{DynamicResource BrushTextSecondary}" />
+                                        <TextBlock Text="{Binding}"
+                                                   Style="{StaticResource BodyText}"
+                                                   TextWrapping="Wrap" />
+                                    </DockPanel>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </StackPanel>
+                </Border>
+
+                <Border Style="{StaticResource PageFeatureCard}" Margin="0,0,0,16">
+                    <StackPanel>
+                        <TextBlock Text="EXAMPLES" Style="{StaticResource PageFeatureLabel}" />
+                        <TextBlock Text="Concrete examples" Style="{StaticResource SectionTitle}" />
+                        <ItemsControl ItemsSource="{Binding SelectedTopic.Examples}" Margin="0,10,0,0">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate DataType="{x:Type docs:DocsExample}">
+                                    <Border Style="{StaticResource PageFeatureSurface}" Margin="0,0,0,12">
+                                        <StackPanel>
+                                            <TextBlock Text="{Binding Scenario}"
+                                                       FontSize="15"
+                                                       FontWeight="SemiBold"
+                                                       Foreground="{DynamicResource BrushTextPrimary}" />
+                                            <TextBlock Text="Say / Do"
+                                                       Style="{StaticResource PageFeatureLabel}"
+                                                       Margin="0,10,0,2" />
+                                            <TextBlock Text="{Binding SpokenInput}"
+                                                       Style="{StaticResource BodyText}"
+                                                       TextWrapping="Wrap" />
+                                            <TextBlock Text="Expected result"
+                                                       Style="{StaticResource PageFeatureLabel}"
+                                                       Margin="0,10,0,2" />
+                                            <TextBlock Text="{Binding Result}"
+                                                       Style="{StaticResource BodyText}"
+                                                       TextWrapping="Wrap" />
+                                            <TextBlock Text="Why it helps"
+                                                       Style="{StaticResource PageFeatureLabel}"
+                                                       Margin="0,10,0,2" />
+                                            <TextBlock Text="{Binding WhyItHelps}"
+                                                       Style="{StaticResource HintText}"
+                                                       TextWrapping="Wrap" />
+                                        </StackPanel>
+                                    </Border>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </StackPanel>
+                </Border>
+
+                <Border Style="{StaticResource PageFeatureCard}">
+                    <StackPanel>
+                        <TextBlock Text="WATCH FOR" Style="{StaticResource PageFeatureLabel}" />
+                        <TextBlock Text="Common mistakes and gotchas" Style="{StaticResource SectionTitle}" />
+                        <ItemsControl ItemsSource="{Binding SelectedTopic.Gotchas}" Margin="0,8,0,0">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <DockPanel Margin="0,0,0,8">
+                                        <TextBlock Text="•"
+                                                   Margin="0,0,8,0"
+                                                   Foreground="{DynamicResource BrushTextSecondary}" />
+                                        <TextBlock Text="{Binding}"
+                                                   Style="{StaticResource BodyText}"
+                                                   TextWrapping="Wrap" />
+                                    </DockPanel>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </StackPanel>
+                </Border>
+            </StackPanel>
+        </ScrollViewer>
+    </Grid>
+</UserControl>

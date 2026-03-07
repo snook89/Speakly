@@ -29,6 +29,39 @@ namespace Speakly.Tests.Unit
         }
 
         [Fact]
+        public void CoerceToEditOnlyOutput_AllowsUsefulAggressiveExpansion()
+        {
+            var original = "Yes. I will send it tomorrow.";
+            var candidate = "Yes, I will send the final invoice tomorrow.";
+
+            var result = RefinementSafety.CoerceToEditOnlyOutput(original, candidate, aggressiveContextRewrite: true);
+
+            Assert.Equal(candidate, result);
+        }
+
+        [Fact]
+        public void CoerceToEditOnlyOutput_RejectsAggressiveMeaningInversion()
+        {
+            var original = "Tell him it is available tomorrow.";
+            var candidate = "Tell him no upgrade is available today.";
+
+            var result = RefinementSafety.CoerceToEditOnlyOutput(original, candidate, aggressiveContextRewrite: true);
+
+            Assert.Equal(original, result);
+        }
+
+        [Fact]
+        public void CoerceToEditOnlyOutput_RejectsLowOverlapAggressiveRewrite()
+        {
+            var original = "It is already there.";
+            var candidate = "The quarterly budget meeting was moved to Thursday afternoon.";
+
+            var result = RefinementSafety.CoerceToEditOnlyOutput(original, candidate, aggressiveContextRewrite: true);
+
+            Assert.Equal(original, result);
+        }
+
+        [Fact]
         public void BuildSafeSystemPrompt_IncludesNoSummarizeConstraint()
         {
             var prompt = RefinementSafety.BuildSafeSystemPrompt("Fix grammar.");

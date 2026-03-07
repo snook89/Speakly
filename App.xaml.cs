@@ -5,6 +5,7 @@ using System.Runtime.InteropServices;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Diagnostics;
+using System.ComponentModel;
 using System.Windows;
 using System.Windows.Input;
 using System.Windows.Media;
@@ -77,6 +78,7 @@ namespace Speakly
         // Whether at least one utterance has already been typed into the target window
         // this session — used to prepend a space before subsequent utterances.
         private bool _sessionHasInserted = false;
+        private string _lastInsertedBuffer = string.Empty;
         private DateTime _recordingStartedUtc;
         private DateTime _transcribingStartedUtc;
         private int _recordMs;
@@ -107,6 +109,7 @@ namespace Speakly
         private DateTime _lastElevationPromptUtc = DateTime.MinValue;
         private static readonly TimeSpan ElevationPromptCooldown = TimeSpan.FromSeconds(60);
         private bool _launchedFromWindowsStartup;
+        private string _latestContextSummary = string.Empty;
 
         public App()
         {
@@ -159,6 +162,8 @@ namespace Speakly
 
             ViewModel = new MainViewModel();
             ViewModel.RunHealthChecks();
+            ViewModel.PropertyChanged += ViewModel_PropertyChanged;
+            ViewModel.SetLastContextUsageStatus(BuildContextUsageStatus(_latestContextSummary));
 
             if (!ConfigManager.Config.FirstRunCompleted)
             {
@@ -188,6 +193,8 @@ namespace Speakly
                 _overlay = new FloatingOverlay();
                 _overlay.Show();
                 _overlay.EnsureVisibleOnScreen();
+                UpdateOverlayModeIndicator();
+                UpdateOverlayContextIndicator(_latestContextSummary);
                 _overlayHiddenByIdle = false;
             }
 
@@ -236,6 +243,26 @@ namespace Speakly
             return AppVersion;
         }
 
+        public static Task RetryHistoryInsertAsync(HistoryEntry entry)
+        {
+            if (Current is App app)
+            {
+                return app.RetryHistoryInsertInternalAsync(entry);
+            }
+
+            return Task.CompletedTask;
+        }
+
+        public static Task ReprocessHistoryEntryAsync(HistoryEntry entry)
+        {
+            if (Current is App app)
+            {
+                return app.ReprocessHistoryEntryInternalAsync(entry);
+            }
+
+            return Task.CompletedTask;
+        }
+
         private string ResolveDisplayVersion()
         {
             try
@@ -252,6 +279,153 @@ namespace Speakly
             }
 
             return AppVersion;
+        }
+
+        private async Task RetryHistoryInsertInternalAsync(HistoryEntry entry)
+        {
+            if (entry == null || string.IsNullOrWhiteSpace(entry.RefinedText))
+            {
+                return;
+            }
+
+            var targetContext = TextInserter.CaptureForegroundWindowContext();
+            UpdateOverlayContextIndicator(string.Empty);
+            _overlay?.SetStatus("RETRY", Brushes.Orange);
+            var swInsert = Stopwatch.StartNew();
+            var insertResult = await Task.Run(() => TextInserter.InsertText(entry.RefinedText, targetContext));
+            swInsert.Stop();
+            if (insertResult.Success)
+            {
+                _lastInsertedBuffer = entry.RefinedText;
+            }
+
+            PublishHistoryEntry(new HistoryEntry
+            {
+                Timestamp = DateTime.Now,
+                OriginalText = entry.OriginalText,
+                RefinedText = entry.RefinedText,
+                SttProvider = entry.SttProvider,
+                SttModel = entry.SttModel,
+                RefinementProvider = entry.RefinementProvider,
+                RefinementModel = entry.RefinementModel,
+                RecordMs = 0,
+                TranscribeMs = 0,
+                RefineMs = 0,
+                InsertMs = (int)swInsert.ElapsedMilliseconds,
+                Succeeded = insertResult.Success,
+                InsertionMethod = $"HistoryRetry:{insertResult.Method}",
+                ErrorCode = insertResult.Success ? string.Empty : insertResult.ErrorCode,
+                ProfileId = entry.ProfileId,
+                ProfileName = entry.ProfileName,
+                DictationMode = DictationExperienceService.NormalizeMode(entry.DictationMode),
+                ContextualRefinementMode = DictationExperienceService.NormalizeContextualRefinementMode(entry.ContextualRefinementMode),
+                ContextSummary = DictationExperienceService.BuildContextSummary(ConfigManager.Config, targetContext),
+                ActionSource = "HistoryRetry",
+                SourceEntryId = entry.Id,
+                SourceActionSource = entry.ActionSource,
+                SourceRefinedText = entry.RefinedText,
+                SourceTimestamp = entry.Timestamp
+            });
+            _overlay?.SetStatus("READY", Brushes.Aqua);
+        }
+
+        private async Task ReprocessHistoryEntryInternalAsync(HistoryEntry entry)
+        {
+            if (entry == null || string.IsNullOrWhiteSpace(entry.OriginalText))
+            {
+                return;
+            }
+
+            var targetContext = TextInserter.CaptureForegroundWindowContext();
+            var dictionaryTerms = PersonalDictionaryService.GetCombinedTerms(
+                ConfigManager.Config,
+                ConfigManager.GetActiveProfile(),
+                maxTerms: 80);
+            string correctedTranscript = PersonalDictionaryService.ApplyCorrections(
+                entry.OriginalText,
+                dictionaryTerms,
+                out _);
+
+            string activeMode = DictationExperienceService.NormalizeMode(ConfigManager.Config.DictationMode);
+            string contextSummary;
+            string textToInsert = correctedTranscript;
+            string learnedCandidateText = correctedTranscript;
+            int refineMs = 0;
+            var refinementContext = CaptureSupplementalRefinementContext(targetContext);
+            _overlay?.SetStatus("REPROCESS", Brushes.Yellow);
+
+            if (ConfigManager.Config.EnableRefinement)
+            {
+                var refiner = TextRefinerFactory.CreateRefiner(ConfigManager.Config.RefinementModel);
+                var prompt = DictationExperienceService.BuildEffectivePrompt(
+                    ConfigManager.Config,
+                    ConfigManager.GetActiveProfile(),
+                    targetContext,
+                    refinementContext,
+                    out contextSummary);
+                UpdateOverlayContextIndicator(contextSummary);
+                try
+                {
+                    var swRefine = Stopwatch.StartNew();
+                    textToInsert = await refiner.RefineTextAsync(correctedTranscript, prompt);
+                    swRefine.Stop();
+                    refineMs = (int)swRefine.ElapsedMilliseconds;
+                    learnedCandidateText = textToInsert;
+                }
+                catch
+                {
+                    textToInsert = correctedTranscript;
+                    learnedCandidateText = correctedTranscript;
+                    refineMs = 0;
+                }
+            }
+            else
+            {
+                contextSummary = DictationExperienceService.BuildContextSummary(ConfigManager.Config, targetContext, refinementContext);
+                UpdateOverlayContextIndicator(string.Empty);
+            }
+
+            if (ConfigManager.Config.EnableSnippets)
+            {
+                textToInsert = SnippetLibraryManager.Apply(textToInsert, SnippetLibraryManager.Load(), out _);
+            }
+
+            var swInsert = Stopwatch.StartNew();
+            var insertResult = await Task.Run(() => TextInserter.InsertText(textToInsert, targetContext));
+            swInsert.Stop();
+            if (insertResult.Success)
+            {
+                _lastInsertedBuffer = textToInsert;
+            }
+
+            PublishHistoryEntry(new HistoryEntry
+            {
+                Timestamp = DateTime.Now,
+                OriginalText = entry.OriginalText,
+                RefinedText = textToInsert,
+                SttProvider = entry.SttProvider,
+                SttModel = entry.SttModel,
+                RefinementProvider = ConfigManager.Config.EnableRefinement ? ConfigManager.Config.RefinementModel : "Disabled",
+                RefinementModel = ConfigManager.Config.EnableRefinement ? ResolveActiveRefinementModel() : string.Empty,
+                RecordMs = 0,
+                TranscribeMs = 0,
+                RefineMs = refineMs,
+                InsertMs = (int)swInsert.ElapsedMilliseconds,
+                Succeeded = insertResult.Success,
+                InsertionMethod = $"HistoryReprocess:{insertResult.Method}",
+                ErrorCode = insertResult.Success ? string.Empty : insertResult.ErrorCode,
+                ProfileId = ConfigManager.GetActiveProfile().Id,
+                ProfileName = ConfigManager.GetActiveProfile().Name,
+                DictationMode = activeMode,
+                ContextualRefinementMode = DictationExperienceService.NormalizeContextualRefinementMode(ConfigManager.Config.ContextualRefinementMode),
+                ContextSummary = contextSummary,
+                ActionSource = "HistoryReprocess",
+                SourceEntryId = entry.Id,
+                SourceActionSource = entry.ActionSource,
+                SourceRefinedText = entry.RefinedText,
+                SourceTimestamp = entry.Timestamp
+            });
+            _overlay?.SetStatus("READY", Brushes.Aqua);
         }
 
         private void ActivateFromSecondaryInstance()
@@ -722,11 +896,15 @@ namespace Speakly
             {
                 _overlay = new FloatingOverlay();
                 _overlay.Show();
+                UpdateOverlayModeIndicator();
+                UpdateOverlayContextIndicator(_latestContextSummary);
                 wasShownByThisCall = true;
             }
             else if (!_overlay.IsVisible)
             {
                 _overlay.Show();
+                UpdateOverlayModeIndicator();
+                UpdateOverlayContextIndicator(_latestContextSummary);
                 wasShownByThisCall = true;
             }
 
@@ -744,6 +922,51 @@ namespace Speakly
             }
 
             _overlayHiddenByIdle = false;
+        }
+
+        private void ViewModel_PropertyChanged(object? sender, PropertyChangedEventArgs e)
+        {
+            if (e.PropertyName == nameof(MainViewModel.DictationMode))
+            {
+                UpdateOverlayModeIndicator();
+            }
+            else if (e.PropertyName == nameof(MainViewModel.EnableRefinement))
+            {
+                UpdateOverlayContextIndicator(_latestContextSummary);
+            }
+        }
+
+        private void UpdateOverlayModeIndicator()
+        {
+            _overlay?.SetActiveMode(DictationExperienceService.NormalizeMode(ConfigManager.Config.DictationMode));
+        }
+
+        private void UpdateOverlayContextIndicator(string? contextSummary)
+        {
+            _latestContextSummary = contextSummary?.Trim() ?? string.Empty;
+            _overlay?.SetContextSummary(_latestContextSummary);
+
+            Dispatcher.Invoke(() =>
+            {
+                var vm = MainWindow?.DataContext as MainViewModel ?? ViewModel;
+                vm?.SetLastContextUsageStatus(BuildContextUsageStatus(_latestContextSummary));
+            });
+        }
+
+        private static string BuildContextUsageStatus(string? contextSummary)
+        {
+            if (!ConfigManager.Config.EnableRefinement)
+            {
+                return "Context used: refinement disabled.";
+            }
+
+            var normalized = contextSummary?.Trim() ?? string.Empty;
+            if (string.IsNullOrWhiteSpace(normalized))
+            {
+                return "Context used: none.";
+            }
+
+            return $"Context used: {normalized}";
         }
 
         private async Task<string> CheckForAppUpdatesAsync(bool userInitiated, bool includeStartupDelay)
@@ -968,6 +1191,7 @@ namespace Speakly
                     _sessionText.Clear();
                     _sessionHasInserted = false;
                     _managedAudioProcessor.Reset();
+                    UpdateOverlayContextIndicator(string.Empty);
                     AutoAdjustRefinementPromptForLanguage();
                     _overlay?.SetActiveLanguage(ResolveOverlayLanguageDisplay());
                     _overlay?.SetStatus("PTT_RECORDING", Brushes.LimeGreen);
@@ -1000,6 +1224,7 @@ namespace Speakly
                     _sessionText.Clear();
                     _sessionHasInserted = false;
                     _managedAudioProcessor.Reset();
+                    UpdateOverlayContextIndicator(string.Empty);
                     AutoAdjustRefinementPromptForLanguage();
                     _overlay?.SetActiveLanguage(ResolveOverlayLanguageDisplay());
                     _isToggleRecording = true;
@@ -1424,10 +1649,41 @@ namespace Speakly
                 });
             }
 
+            string activeMode = DictationExperienceService.NormalizeMode(_activeSessionProfile?.DictationMode ?? ConfigManager.Config.DictationMode);
+            var refinementContext = CaptureSupplementalRefinementContext(_targetWindowContext);
+            string contextSummary = DictationExperienceService.BuildContextSummary(ConfigManager.Config, _targetWindowContext, refinementContext);
+            var voiceCommand = DictationExperienceService.MatchVoiceCommand(
+                correctedTranscript,
+                ConfigManager.Config.EnableVoiceCommands,
+                ConfigManager.Config.VoiceCommandMode);
+
+            if (voiceCommand.IsMatch)
+            {
+                UpdateOverlayContextIndicator(string.Empty);
+                await ExecuteVoiceCommandAsync(originalText, correctedTranscript, sttProvider, sttModel, activeMode, contextSummary, voiceCommand);
+                return;
+            }
+
+            if (voiceCommand.SuppressTranscript)
+            {
+                UpdateOverlayContextIndicator(string.Empty);
+                await RecordUnrecognizedCommandAttemptAsync(originalText, correctedTranscript, sttProvider, sttModel, activeMode, contextSummary);
+                return;
+            }
+
             string textToInsert = correctedTranscript;
+            string learnedCandidateText = correctedTranscript;
             _transcribeMs = (int)Math.Max(0, (DateTime.UtcNow - _transcribingStartedUtc).TotalMilliseconds);
             bool refinementFallbackUsed = false;
             string refinementFallbackCode = string.Empty;
+            string effectivePrompt = DictationExperienceService.BuildEffectivePrompt(
+                ConfigManager.Config,
+                _activeSessionProfile,
+                _targetWindowContext,
+                refinementContext,
+                out contextSummary);
+
+            UpdateOverlayContextIndicator(ConfigManager.Config.EnableRefinement ? contextSummary : string.Empty);
 
             if (_refiner != null && ConfigManager.Config.EnableRefinement)
             {
@@ -1444,13 +1700,15 @@ namespace Speakly
                 var swRefine = Stopwatch.StartNew();
                 try
                 {
-                    textToInsert = await _refiner.RefineTextAsync(correctedTranscript, ConfigManager.Config.RefinementPrompt);
+                    textToInsert = await _refiner.RefineTextAsync(correctedTranscript, effectivePrompt);
+                    learnedCandidateText = textToInsert;
                 }
                 catch (Exception ex)
                 {
                     refinementFallbackUsed = true;
                     refinementFallbackCode = ErrorClassifier.Classify(ex.Message);
                     textToInsert = correctedTranscript;
+                    learnedCandidateText = correctedTranscript;
                     Logger.LogException("HandleFinalTranscriptionAsync.Refinement", ex);
                     Logger.Log($"Refinement fallback engaged ({ConfigManager.Config.RefinementModel}, code={refinementFallbackCode}).");
                 }
@@ -1469,6 +1727,40 @@ namespace Speakly
             else
             {
                 _refineMs = 0;
+            }
+
+            if (ConfigManager.Config.EnableSnippets)
+            {
+                textToInsert = SnippetLibraryManager.Apply(textToInsert, SnippetLibraryManager.Load(), out var snippetReplacements);
+                if (snippetReplacements > 0)
+                {
+                    Logger.Log($"Snippet expansions applied: {snippetReplacements}.");
+                    TrackSessionEvent(
+                        name: "snippets_applied",
+                        result: "ok",
+                        data: new Dictionary<string, string>
+                        {
+                            ["count"] = snippetReplacements.ToString()
+                        });
+                }
+            }
+
+            if (ConfigManager.Config.LearnFromRefinementCorrections)
+            {
+                var correctionSuggestions = RefinementLearningService.ExtractSuggestions(
+                    correctedTranscript,
+                    learnedCandidateText,
+                    dictionaryTerms,
+                    SnippetLibraryManager.Load(),
+                    maxSuggestions: 6);
+                if (correctionSuggestions.Count > 0)
+                {
+                    Dispatcher.Invoke(() =>
+                    {
+                        var vm = MainWindow?.DataContext as MainViewModel ?? ViewModel;
+                        vm?.AddCorrectionSuggestions(correctionSuggestions);
+                    });
+                }
             }
 
             Logger.Log($"Inserting text into target {_targetWindowContext}: '{textToInsert}'");
@@ -1497,6 +1789,7 @@ namespace Speakly
             if (insertResult.Success)
             {
                 _sessionHasInserted = true;
+                _lastInsertedBuffer = toType;
             }
 
             bool clipboardHasLatestText = insertResult.ClipboardUpdated;
@@ -1569,26 +1862,34 @@ namespace Speakly
                 errorClass: insertResult.ErrorCode,
                 durationMs: _insertMs);
 
-            HistoryManager.AddEntry(
-                original: originalText,
-                refined: textToInsert,
-                sttProvider: sttProvider,
-                sttModel: sttModel,
-                refinementProvider: ConfigManager.Config.EnableRefinement ? ConfigManager.Config.RefinementModel : "Disabled",
-                refinementModel: ConfigManager.Config.EnableRefinement ? ResolveActiveRefinementModel() : string.Empty,
-                recordMs: _recordMs,
-                transcribeMs: _transcribeMs,
-                refineMs: _refineMs,
-                insertMs: _insertMs,
-                succeeded: insertResult.Success,
-                errorCode: insertResult.Success ? string.Empty : insertResult.ErrorCode,
-                insertionMethod: insertResult.Method,
-                profileId: _activeSessionProfile?.Id ?? string.Empty,
-                profileName: _activeSessionProfile?.Name ?? "Default",
-                failoverAttempted: _sttFailoverAttempted,
-                failoverFrom: _failoverFromProvider,
-                failoverTo: _failoverToProvider,
-                finalProviderUsed: sttProvider);
+            var historyEntry = new HistoryEntry
+            {
+                Timestamp = DateTime.Now,
+                OriginalText = originalText,
+                RefinedText = textToInsert,
+                SttProvider = sttProvider,
+                SttModel = sttModel,
+                RefinementProvider = ConfigManager.Config.EnableRefinement ? ConfigManager.Config.RefinementModel : "Disabled",
+                RefinementModel = ConfigManager.Config.EnableRefinement ? ResolveActiveRefinementModel() : string.Empty,
+                RecordMs = _recordMs,
+                TranscribeMs = _transcribeMs,
+                RefineMs = _refineMs,
+                InsertMs = _insertMs,
+                Succeeded = insertResult.Success,
+                InsertionMethod = insertResult.Method,
+                ErrorCode = insertResult.Success ? string.Empty : insertResult.ErrorCode,
+                ProfileId = _activeSessionProfile?.Id ?? string.Empty,
+                ProfileName = _activeSessionProfile?.Name ?? "Default",
+                FailoverAttempted = _sttFailoverAttempted,
+                FailoverFrom = _failoverFromProvider,
+                FailoverTo = _failoverToProvider,
+                FinalProviderUsed = sttProvider,
+                DictationMode = activeMode,
+                ContextualRefinementMode = DictationExperienceService.NormalizeContextualRefinementMode(ConfigManager.Config.ContextualRefinementMode),
+                ContextSummary = contextSummary,
+                ActionSource = "Live"
+            };
+            PublishHistoryEntry(historyEntry);
 
             StatisticsManager.RecordSession(new SessionMetricEntry
             {
@@ -1611,35 +1912,6 @@ namespace Speakly
                 FinalProviderUsed = sttProvider
             });
 
-            Dispatcher.Invoke(() =>
-            {
-                var vm = MainWindow.DataContext as MainViewModel;
-                vm?.HistoryEntries.Insert(0, new HistoryEntry
-                {
-                    Timestamp = DateTime.Now,
-                    OriginalText = originalText,
-                    RefinedText = textToInsert,
-                    SttProvider = sttProvider,
-                    SttModel = sttModel,
-                    RefinementProvider = ConfigManager.Config.EnableRefinement ? ConfigManager.Config.RefinementModel : "Disabled",
-                    RefinementModel = ConfigManager.Config.EnableRefinement ? ResolveActiveRefinementModel() : string.Empty,
-                    RecordMs = _recordMs,
-                    TranscribeMs = _transcribeMs,
-                    RefineMs = _refineMs,
-                    InsertMs = _insertMs,
-                    Succeeded = insertResult.Success,
-                    InsertionMethod = insertResult.Method,
-                    ErrorCode = insertResult.Success ? string.Empty : insertResult.ErrorCode,
-                    ProfileId = _activeSessionProfile?.Id ?? string.Empty,
-                    ProfileName = _activeSessionProfile?.Name ?? "Default",
-                    FailoverAttempted = _sttFailoverAttempted,
-                    FailoverFrom = _failoverFromProvider,
-                    FailoverTo = _failoverToProvider,
-                    FinalProviderUsed = sttProvider
-                });
-                vm?.SetLastInsertionStatus(insertResult.Method, insertResult.Success, insertResult.ErrorCode);
-            });
-
             _overlay?.SetStatus("READY", Brushes.Aqua);
             MarkOverlayActivity(showOverlayIfNeeded: false);
             TrackSessionEvent(
@@ -1656,6 +1928,135 @@ namespace Speakly
                     ["final_segment_count"] = SnapshotFinalSegmentCount().ToString()
                 });
             SetSessionState(SessionState.Idle);
+        }
+
+        private async Task ExecuteVoiceCommandAsync(
+            string originalText,
+            string correctedTranscript,
+            string sttProvider,
+            string sttModel,
+            string activeMode,
+            string contextSummary,
+            VoiceCommandMatch command)
+        {
+            SetSessionState(SessionState.Refining);
+            _overlay?.SetStatus($"CMD:{command.DisplayName}", Brushes.Orange);
+            TrackSessionEvent("voice_command_start", data: new Dictionary<string, string>
+            {
+                ["command"] = command.DisplayName
+            });
+
+            var swInsert = Stopwatch.StartNew();
+            var selectionLength = command.Kind is VoiceCommandKind.DeleteThat or VoiceCommandKind.ScratchThat or VoiceCommandKind.SelectThat
+                ? _lastInsertedBuffer.Length
+                : 0;
+            var insertResult = await Task.Run(() => TextInserter.ExecuteVoiceCommand(_targetWindowContext, command.Kind, selectionLength));
+            swInsert.Stop();
+            _recordMs = _recordMs == 0 ? (int)Math.Max(0, (DateTime.UtcNow - _recordingStartedUtc).TotalMilliseconds) : _recordMs;
+            _transcribeMs = (int)Math.Max(0, (DateTime.UtcNow - _transcribingStartedUtc).TotalMilliseconds);
+            _refineMs = 0;
+            _insertMs = (int)swInsert.ElapsedMilliseconds;
+
+            if (insertResult.Success && command.Kind is VoiceCommandKind.DeleteThat or VoiceCommandKind.ScratchThat)
+            {
+                _lastInsertedBuffer = string.Empty;
+            }
+
+            PublishHistoryEntry(new HistoryEntry
+            {
+                Timestamp = DateTime.Now,
+                OriginalText = originalText,
+                RefinedText = string.Empty,
+                SttProvider = sttProvider,
+                SttModel = sttModel,
+                RefinementProvider = "Command",
+                RefinementModel = string.Empty,
+                RecordMs = _recordMs,
+                TranscribeMs = _transcribeMs,
+                RefineMs = 0,
+                InsertMs = _insertMs,
+                Succeeded = insertResult.Success,
+                InsertionMethod = insertResult.Method,
+                ErrorCode = insertResult.Success ? string.Empty : insertResult.ErrorCode,
+                ProfileId = _activeSessionProfile?.Id ?? string.Empty,
+                ProfileName = _activeSessionProfile?.Name ?? "Default",
+                DictationMode = activeMode,
+                ContextualRefinementMode = DictationExperienceService.NormalizeContextualRefinementMode(ConfigManager.Config.ContextualRefinementMode),
+                ContextSummary = contextSummary,
+                WasVoiceCommand = true,
+                VoiceCommandName = command.DisplayName,
+                ActionSource = "Live"
+            });
+
+            TrackSessionEvent(
+                name: "voice_command_result",
+                success: insertResult.Success,
+                result: command.DisplayName,
+                errorCode: insertResult.ErrorCode,
+                errorClass: insertResult.ErrorCode,
+                durationMs: _insertMs);
+
+            _overlay?.SetStatus("READY", Brushes.Aqua);
+            MarkOverlayActivity(showOverlayIfNeeded: false);
+            SetSessionState(SessionState.Idle);
+        }
+
+        private Task RecordUnrecognizedCommandAttemptAsync(
+            string originalText,
+            string correctedTranscript,
+            string sttProvider,
+            string sttModel,
+            string activeMode,
+            string contextSummary)
+        {
+            _transcribeMs = (int)Math.Max(0, (DateTime.UtcNow - _transcribingStartedUtc).TotalMilliseconds);
+            _refineMs = 0;
+            _insertMs = 0;
+            PublishHistoryEntry(new HistoryEntry
+            {
+                Timestamp = DateTime.Now,
+                OriginalText = originalText,
+                RefinedText = string.Empty,
+                SttProvider = sttProvider,
+                SttModel = sttModel,
+                RefinementProvider = "Command",
+                RefinementModel = string.Empty,
+                RecordMs = _recordMs,
+                TranscribeMs = _transcribeMs,
+                RefineMs = 0,
+                InsertMs = 0,
+                Succeeded = false,
+                InsertionMethod = "CommandsOnly",
+                ErrorCode = "command_not_recognized",
+                ProfileId = _activeSessionProfile?.Id ?? string.Empty,
+                ProfileName = _activeSessionProfile?.Name ?? "Default",
+                DictationMode = activeMode,
+                ContextualRefinementMode = DictationExperienceService.NormalizeContextualRefinementMode(ConfigManager.Config.ContextualRefinementMode),
+                ContextSummary = contextSummary,
+                WasVoiceCommand = true,
+                VoiceCommandName = "No command recognized",
+                ActionSource = "Live"
+            });
+            _overlay?.SetStatus("READY", Brushes.Aqua);
+            MarkOverlayActivity(showOverlayIfNeeded: false);
+            SetSessionState(SessionState.Idle);
+            return Task.CompletedTask;
+        }
+
+        private void PublishHistoryEntry(HistoryEntry entry)
+        {
+            if (entry == null)
+            {
+                return;
+            }
+
+            HistoryManager.AddEntry(entry);
+            Dispatcher.Invoke(() =>
+            {
+                var vm = MainWindow?.DataContext as MainViewModel ?? ViewModel;
+                vm?.HistoryEntries.Insert(0, entry);
+                vm?.SetLastInsertionStatus(entry.InsertionMethod, entry.Succeeded, entry.ErrorCode);
+            });
         }
 
         private static bool TrySetClipboardTextSafe(string text, out string errorCode)
@@ -1687,6 +2088,30 @@ namespace Speakly
             }
 
             return false;
+        }
+
+        private static RefinementContextSnapshot CaptureSupplementalRefinementContext(TargetWindowContext targetContext)
+        {
+            if (!ConfigManager.Config.EnableRefinement)
+            {
+                return RefinementContextSnapshot.Empty;
+            }
+
+            if (!ConfigManager.Config.UseSelectedTextContextForRefinement &&
+                !ConfigManager.Config.UseClipboardContextForRefinement)
+            {
+                return RefinementContextSnapshot.Empty;
+            }
+
+            try
+            {
+                return RefinementContextCaptureService.Capture(ConfigManager.Config, targetContext);
+            }
+            catch (Exception ex)
+            {
+                Logger.LogException("CaptureSupplementalRefinementContext", ex);
+                return RefinementContextSnapshot.Empty;
+            }
         }
 
         private async Task<bool> TryRunSttFailoverAsync(string errorCode)

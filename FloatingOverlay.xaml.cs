@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.ComponentModel;
+using System.Linq;
 using System.Runtime.InteropServices;
 using Microsoft.Win32;
 using System.Windows;
@@ -12,6 +13,7 @@ using System.Windows.Media.Animation;
 using System.Windows.Media.Effects;
 using System.Windows.Shapes;
 using System.Windows.Threading;
+using Speakly.Services;
 
 namespace Speakly
 {
@@ -29,6 +31,9 @@ namespace Speakly
         private bool _isProcessing;
         private float _audioLevel;
         private string _activeLanguageCode = "EN";
+        private string _activeModeDisplay = DictationExperienceService.PlainDictationMode;
+        private string _activeContextDisplay = string.Empty;
+        private string _activeContextTooltip = string.Empty;
         private string _currentStatus = "READY";
         private string _overlayStyle = "Rectangular";
         private bool _isApplyingCircleSize;
@@ -102,6 +107,7 @@ namespace Speakly
             LocationChanged += (_, _) => QueuePersistBounds();
 
             SetOverlayStyle(Config.ConfigManager.Config.OverlayStyle);
+            SetActiveMode(Config.ConfigManager.Config.DictationMode);
             ApplyVisualState("READY");
             SizeChanged += (_, _) => UpdateResponsiveLayout();
             Loaded += (_, _) =>
@@ -160,6 +166,10 @@ namespace Speakly
 
             // Timer is optional UI noise; keep language badge as the only right-side badge by default.
             TimerBadge.Visibility = Visibility.Collapsed;
+            ContextBadge.Visibility = string.IsNullOrWhiteSpace(_activeContextDisplay) || w < 250
+                ? Visibility.Collapsed
+                : Visibility.Visible;
+            ModeBadge.Visibility = w < 210 ? Visibility.Collapsed : Visibility.Visible;
             LanguageBadge.Visibility = (w >= 160 && _isRecording) ? Visibility.Visible : Visibility.Collapsed;
         }
 
@@ -255,6 +265,11 @@ namespace Speakly
         private void HideMenuItem_Click(object sender, RoutedEventArgs e)
         {
             Hide();
+        }
+
+        private void OverlayContextMenu_Opened(object sender, RoutedEventArgs e)
+        {
+            RebuildModesMenu();
         }
 
         private void FloatingOverlay_Closing(object? sender, CancelEventArgs e)
@@ -536,6 +551,31 @@ namespace Speakly
             });
         }
 
+        public void SetActiveMode(string mode)
+        {
+            Dispatcher.Invoke(() =>
+            {
+                _activeModeDisplay = DictationExperienceService.NormalizeMode(mode);
+                ModeText.Text = _activeModeDisplay;
+                ApplyVisualState(_currentStatus);
+                UpdateResponsiveLayout();
+            });
+        }
+
+        public void SetContextSummary(string? contextSummary)
+        {
+            Dispatcher.Invoke(() =>
+            {
+                var normalized = contextSummary?.Trim() ?? string.Empty;
+                _activeContextTooltip = normalized;
+                _activeContextDisplay = BuildContextBadgeText(normalized);
+                ContextText.Text = _activeContextDisplay;
+                ContextBadge.ToolTip = string.IsNullOrWhiteSpace(normalized) ? null : normalized;
+                ApplyVisualState(_currentStatus);
+                UpdateResponsiveLayout();
+            });
+        }
+
         public void UpdateAudioLevel(float level)
         {
             _audioLevel = Math.Clamp(level, 0f, 1f);
@@ -577,27 +617,27 @@ namespace Speakly
             if (status.Equals("READY", StringComparison.OrdinalIgnoreCase))
             {
                 StatusText.Text = "Ready";
-                SubStatusText.Text = "Hold hotkey to speak";
+                SubStatusText.Text = BuildSubStatus("Hold hotkey to speak");
             }
             else if (isRecording)
             {
                 StatusText.Text = "Listening...";
-                SubStatusText.Text = "Release to transcribe";
+                SubStatusText.Text = BuildSubStatus("Release to transcribe");
             }
             else if (isProcessing)
             {
                 StatusText.Text = "Transcribing...";
-                SubStatusText.Text = "AI is processing";
+                SubStatusText.Text = BuildSubStatus("AI is processing");
             }
             else if (isError)
             {
                 StatusText.Text = "Error";
-                SubStatusText.Text = "Transcription error";
+                SubStatusText.Text = BuildSubStatus("Transcription error");
             }
             else
             {
                 StatusText.Text = status;
-                SubStatusText.Text = string.Empty;
+                SubStatusText.Text = BuildSubStatus(string.Empty);
             }
 
             StatusText.Foreground = GetSkinBrush(
@@ -1037,15 +1077,130 @@ namespace Speakly
             _toastTimer.Start();
         }
 
+        private string BuildSubStatus(string baseText)
+        {
+            var parts = new List<string>();
+            if (!string.IsNullOrWhiteSpace(baseText))
+            {
+                parts.Add(baseText);
+            }
+
+            if (!string.IsNullOrWhiteSpace(_activeModeDisplay))
+            {
+                parts.Add(_activeModeDisplay);
+            }
+
+            var contextStatus = BuildContextStatusText();
+            if (!string.IsNullOrWhiteSpace(contextStatus))
+            {
+                parts.Add(contextStatus);
+            }
+
+            return string.Join(" | ", parts);
+        }
+
+        private string BuildContextStatusText()
+        {
+            if (string.IsNullOrWhiteSpace(_activeContextDisplay))
+            {
+                return string.Empty;
+            }
+
+            return $"Context: {BuildContextSourceText(_activeContextTooltip)}";
+        }
+
+        private static string BuildContextBadgeText(string? contextSummary)
+        {
+            var sources = GetContextSources(contextSummary);
+            if (sources.Count == 0)
+            {
+                return string.Empty;
+            }
+
+            return $"CTX {string.Join("+", sources.Select(AbbreviateContextSource))}";
+        }
+
+        private static string BuildContextSourceText(string? contextSummary)
+        {
+            var sources = GetContextSources(contextSummary);
+            return sources.Count == 0
+                ? string.Empty
+                : string.Join("+", sources);
+        }
+
+        private static List<string> GetContextSources(string? contextSummary)
+        {
+            var sources = new List<string>();
+            if (string.IsNullOrWhiteSpace(contextSummary))
+            {
+                return sources;
+            }
+
+            if (contextSummary.Contains("App:", StringComparison.OrdinalIgnoreCase))
+                sources.Add("App");
+            if (contextSummary.Contains("Window:", StringComparison.OrdinalIgnoreCase))
+                sources.Add("Window");
+            if (contextSummary.Contains("Selected text:", StringComparison.OrdinalIgnoreCase))
+                sources.Add("Selected");
+            if (contextSummary.Contains("Clipboard:", StringComparison.OrdinalIgnoreCase))
+                sources.Add("Clipboard");
+
+            return sources;
+        }
+
+        private static string AbbreviateContextSource(string source)
+        {
+            return source switch
+            {
+                "Selected" => "Sel",
+                "Clipboard" => "Clip",
+                _ => source
+            };
+        }
+
         private void ToggleRefinementMenuItem_Click(object sender, RoutedEventArgs e)
         {
             App.ViewModel.ToggleRefinementQuickCommand.Execute(null);
         }
 
+        private void NextModeMenuItem_Click(object sender, RoutedEventArgs e)
+        {
+            App.ViewModel.CycleDictationModeCommand.Execute(null);
+            SetActiveMode(App.ViewModel.DictationMode);
+            ShowToast($"Mode: {App.ViewModel.DictationMode}");
+        }
+
         private void NextProfileMenuItem_Click(object sender, RoutedEventArgs e)
         {
             App.ViewModel.CycleProfileCommand.Execute(null);
+            SetActiveMode(App.ViewModel.DictationMode);
             ShowToast($"Profile: {App.ViewModel.ActiveProfileName}");
+        }
+
+        private void RebuildModesMenu()
+        {
+            ModesMenuItem.Items.Clear();
+
+            foreach (var mode in App.ViewModel.AvailableDictationModes)
+            {
+                var item = new MenuItem
+                {
+                    Header = mode,
+                    Tag = mode,
+                    IsCheckable = true,
+                    IsChecked = string.Equals(mode, App.ViewModel.DictationMode, StringComparison.OrdinalIgnoreCase)
+                };
+
+                item.Click += (_, _) =>
+                {
+                    App.ViewModel.SetDictationModeCommand.Execute(item.Tag?.ToString());
+                    SetActiveMode(App.ViewModel.DictationMode);
+                    ShowToast($"Mode: {App.ViewModel.DictationMode}");
+                    RebuildModesMenu();
+                };
+
+                ModesMenuItem.Items.Add(item);
+            }
         }
 
         private void UpdateContainerClip()

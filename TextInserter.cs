@@ -1,5 +1,6 @@
 using System;
 using System.Diagnostics;
+using System.Linq;
 using System.Runtime.InteropServices;
 using System.Text;
 using System.Threading;
@@ -93,6 +94,15 @@ namespace Speakly.Services
         private static extern bool CloseHandle(IntPtr hObject);
 
         private const uint ProcessQueryLimitedInformation = 0x1000;
+        private const ushort VkBack = 0x08;
+        private const ushort VkTab = 0x09;
+        private const ushort VkReturn = 0x0D;
+        private const ushort VkSpace = 0x20;
+        private const ushort VkLeft = 0x25;
+        private const ushort VkC = 0x43;
+        private const ushort VkZ = 0x5A;
+        private const ushort VkControl = 0x11;
+        private const ushort VkShift = 0x10;
 
         [Flags]
         public enum InputType : uint
@@ -217,9 +227,9 @@ namespace Speakly.Services
 
             if (!IsWindow(targetContext.Handle))
             {
-                return BuildClipboardOnlyFailure(
-                    text,
-                    "target_closed",
+            return BuildClipboardOnlyFailure(
+                text,
+                "target_closed",
                     InsertionFailureReason.TargetWindowUnavailable,
                     $"Target window is no longer available ({targetContext}).");
             }
@@ -273,6 +283,56 @@ namespace Speakly.Services
             };
         }
 
+        public static InsertResult ExecuteVoiceCommand(TargetWindowContext targetContext, VoiceCommandKind command, int selectionLength = 0)
+        {
+            if (!targetContext.IsValid)
+            {
+                return BuildCommandFailure("command_target_missing", InsertionFailureReason.MissingTarget);
+            }
+
+            if (!IsWindow(targetContext.Handle))
+            {
+                return BuildCommandFailure("command_target_closed", InsertionFailureReason.TargetWindowUnavailable);
+            }
+
+            bool likelyIntegrityBlocked = IsLikelyIntegrityBlocked(targetContext.Handle);
+            if (!EnsureTargetForeground(targetContext.Handle))
+            {
+                return BuildCommandFailure(
+                    likelyIntegrityBlocked ? "uipi_blocked" : "focus_restore_failed",
+                    likelyIntegrityBlocked ? InsertionFailureReason.InputBlockedByIntegrity : InsertionFailureReason.FocusRestoreFailed);
+            }
+
+            bool success = command switch
+            {
+                VoiceCommandKind.DeleteThat or VoiceCommandKind.ScratchThat => DeletePreviousText(selectionLength),
+                VoiceCommandKind.SelectThat => SelectPreviousText(selectionLength),
+                VoiceCommandKind.UndoThat => SendKeyChord(VkZ, ctrl: true),
+                VoiceCommandKind.Backspace => SendVirtualKey(VkBack),
+                VoiceCommandKind.PressEnter => SendVirtualKey(VkReturn),
+                VoiceCommandKind.Tab => SendVirtualKey(VkTab),
+                VoiceCommandKind.InsertSpace => TrySendUnicodeString(" ", out _),
+                _ => false
+            };
+
+            if (!success)
+            {
+                var error = command is VoiceCommandKind.DeleteThat or VoiceCommandKind.ScratchThat or VoiceCommandKind.SelectThat
+                    && selectionLength <= 0
+                    ? "command_no_selection"
+                    : "command_execute_failed";
+                return BuildCommandFailure(error, InsertionFailureReason.Unknown);
+            }
+
+            return new InsertResult
+            {
+                Success = true,
+                Method = $"VoiceCommand:{command}",
+                FailureReason = InsertionFailureReason.None,
+                TargetLocked = true
+            };
+        }
+
         private static InsertResult BuildClipboardOnlyFailure(
             string text,
             string errorCode,
@@ -297,6 +357,18 @@ namespace Speakly.Services
             };
         }
 
+        private static InsertResult BuildCommandFailure(string errorCode, InsertionFailureReason reason)
+        {
+            return new InsertResult
+            {
+                Success = false,
+                Method = "VoiceCommandFailed",
+                ErrorCode = errorCode,
+                FailureReason = reason,
+                TargetLocked = true
+            };
+        }
+
         private static bool EnsureTargetForeground(IntPtr hWnd)
         {
             if (hWnd == IntPtr.Zero || !IsWindow(hWnd)) return false;
@@ -315,6 +387,87 @@ namespace Speakly.Services
             return false;
         }
 
+        private static bool DeletePreviousText(int selectionLength)
+        {
+            if (!SelectPreviousText(selectionLength))
+            {
+                return false;
+            }
+
+            return SendVirtualKey(VkBack);
+        }
+
+        private static bool SelectPreviousText(int selectionLength)
+        {
+            int steps = Math.Clamp(selectionLength, 0, 400);
+            if (steps <= 0)
+            {
+                return false;
+            }
+
+            for (int i = 0; i < steps; i++)
+            {
+                if (!SendKeyChord(VkLeft, shift: true))
+                {
+                    return false;
+                }
+            }
+
+            return true;
+        }
+
+        private static bool SendVirtualKey(ushort key)
+        {
+            return SendInputSequence(new[]
+            {
+                CreateVirtualKeyInput(key, keyUp: false),
+                CreateVirtualKeyInput(key, keyUp: true)
+            });
+        }
+
+        private static bool SendKeyChord(ushort key, bool ctrl = false, bool shift = false)
+        {
+            var inputs = new System.Collections.Generic.List<INPUT>();
+            if (ctrl) inputs.Add(CreateVirtualKeyInput(VkControl, keyUp: false));
+            if (shift) inputs.Add(CreateVirtualKeyInput(VkShift, keyUp: false));
+            inputs.Add(CreateVirtualKeyInput(key, keyUp: false));
+            inputs.Add(CreateVirtualKeyInput(key, keyUp: true));
+            if (shift) inputs.Add(CreateVirtualKeyInput(VkShift, keyUp: true));
+            if (ctrl) inputs.Add(CreateVirtualKeyInput(VkControl, keyUp: true));
+            return SendInputSequence(inputs);
+        }
+
+        private static INPUT CreateVirtualKeyInput(ushort key, bool keyUp)
+        {
+            return new INPUT
+            {
+                type = (uint)InputType.Keyboard,
+                U = new InputUnion
+                {
+                    ki = new KEYBDINPUT
+                    {
+                        wVk = key,
+                        wScan = 0,
+                        dwFlags = keyUp ? (uint)KeyEventFlags.KeyUp : (uint)KeyEventFlags.KeyDown,
+                        time = 0,
+                        dwExtraInfo = IntPtr.Zero
+                    }
+                }
+            };
+        }
+
+        private static bool SendInputSequence(IEnumerable<INPUT> inputs)
+        {
+            var payload = inputs?.ToArray() ?? Array.Empty<INPUT>();
+            if (payload.Length == 0)
+            {
+                return false;
+            }
+
+            uint sent = SendInput((uint)payload.Length, payload, Marshal.SizeOf<INPUT>());
+            return sent == payload.Length;
+        }
+
         private static void RestoreFocus(IntPtr hWnd)
         {
             try
@@ -331,6 +484,76 @@ namespace Speakly.Services
             catch (Exception ex)
             {
                 Logger.LogException("RestoreFocus", ex);
+            }
+        }
+
+        public static bool TryCaptureSelectedText(TargetWindowContext targetContext, out string selectedText, out string errorCode)
+        {
+            selectedText = string.Empty;
+            errorCode = string.Empty;
+
+            if (!targetContext.IsValid)
+            {
+                errorCode = "target_missing";
+                return false;
+            }
+
+            if (!IsWindow(targetContext.Handle))
+            {
+                errorCode = "target_closed";
+                return false;
+            }
+
+            if (!TrySnapshotClipboardText(out bool hadText, out string? originalText, out errorCode))
+            {
+                return false;
+            }
+
+            bool clipboardPrimed = false;
+            string sentinel = $"__speakly_context_probe_{Guid.NewGuid():N}__";
+            try
+            {
+                if (!TrySetClipboardText(sentinel, out errorCode))
+                {
+                    return false;
+                }
+
+                clipboardPrimed = true;
+                if (!EnsureTargetForeground(targetContext.Handle))
+                {
+                    errorCode = "focus_restore_failed";
+                    return false;
+                }
+
+                Thread.Sleep(45);
+                SendKeyCombination(VkControl, VkC);
+
+                for (int attempt = 1; attempt <= 10; attempt++)
+                {
+                    Thread.Sleep(45);
+                    if (!TryReadClipboardText(out var currentText, out var hasText, out errorCode))
+                    {
+                        continue;
+                    }
+
+                    if (!hasText || string.Equals(currentText, sentinel, StringComparison.Ordinal))
+                    {
+                        continue;
+                    }
+
+                    selectedText = currentText.Trim();
+                    return !string.IsNullOrWhiteSpace(selectedText);
+                }
+
+                errorCode = "selection_copy_timeout";
+                return false;
+            }
+            finally
+            {
+                if (clipboardPrimed && !TryRestoreClipboard(hadText, originalText, out var restoreError))
+                {
+                    Logger.Log($"Selected-text clipboard restore failed: {restoreError}");
+                }
             }
         }
 
@@ -455,6 +678,76 @@ namespace Speakly.Services
                 {
                     errorCode = ex.GetType().Name;
                     Thread.Sleep(40);
+                }
+            }
+
+            return false;
+        }
+
+        private static bool TrySnapshotClipboardText(out bool hadText, out string? originalText, out string errorCode)
+        {
+            hadText = false;
+            originalText = null;
+            errorCode = string.Empty;
+
+            for (int attempt = 1; attempt <= 6; attempt++)
+            {
+                try
+                {
+                    bool localHadText = false;
+                    string? localOriginalText = null;
+                    Application.Current.Dispatcher.Invoke(() =>
+                    {
+                        if (Clipboard.ContainsText())
+                        {
+                            localHadText = true;
+                            localOriginalText = Clipboard.GetText();
+                        }
+                    });
+
+                    hadText = localHadText;
+                    originalText = localOriginalText;
+                    return true;
+                }
+                catch (Exception ex)
+                {
+                    errorCode = ex.GetType().Name;
+                    Thread.Sleep(35);
+                }
+            }
+
+            return false;
+        }
+
+        private static bool TryReadClipboardText(out string text, out bool hasText, out string errorCode)
+        {
+            text = string.Empty;
+            hasText = false;
+            errorCode = string.Empty;
+
+            for (int attempt = 1; attempt <= 6; attempt++)
+            {
+                try
+                {
+                    string? localText = null;
+                    bool localHasText = false;
+                    Application.Current.Dispatcher.Invoke(() =>
+                    {
+                        localHasText = Clipboard.ContainsText();
+                        if (localHasText)
+                        {
+                            localText = Clipboard.GetText();
+                        }
+                    });
+
+                    hasText = localHasText;
+                    text = localText ?? string.Empty;
+                    return true;
+                }
+                catch (Exception ex)
+                {
+                    errorCode = ex.GetType().Name;
+                    Thread.Sleep(35);
                 }
             }
 

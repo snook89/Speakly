@@ -77,7 +77,13 @@ namespace Speakly.Services
                             break;
                         }
 
-                        var safeRefined = RefinementSafety.CoerceToEditOnlyOutput(text, refinedText);
+                        var safeRefined = RefinementSafety.CoerceToEditOnlyOutput(
+                            text,
+                            refinedText,
+                            aggressiveContextRewrite: string.Equals(
+                                config.ContextualRefinementMode,
+                                DictationExperienceService.ContextualRefinementModeAggressiveRewrite,
+                                StringComparison.OrdinalIgnoreCase));
                         if (!string.Equals(safeRefined, refinedText.Trim(), StringComparison.Ordinal))
                         {
                             Logger.Log("Cerebras refinement output rejected by safety guard; using original transcription.");

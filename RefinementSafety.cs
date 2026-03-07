@@ -1,4 +1,6 @@
 using System;
+using System.Collections.Generic;
+using System.Linq;
 
 namespace Speakly.Services
 {
@@ -45,6 +47,48 @@ namespace Speakly.Services
             "please"
         };
 
+        private static readonly string[] NegationMarkers =
+        {
+            "no",
+            "not",
+            "never",
+            "none",
+            "nothing",
+            "nobody",
+            "nowhere",
+            "cannot",
+            "can't",
+            "won't",
+            "don't",
+            "doesn't",
+            "didn't",
+            "isn't",
+            "aren't",
+            "wasn't",
+            "weren't",
+            "shouldn't",
+            "couldn't",
+            "wouldn't"
+        };
+
+        private static readonly string[] TimeAnchors =
+        {
+            "today",
+            "tomorrow",
+            "tonight",
+            "yesterday",
+            "monday",
+            "tuesday",
+            "wednesday",
+            "thursday",
+            "friday",
+            "saturday",
+            "sunday",
+            "morning",
+            "afternoon",
+            "evening"
+        };
+
         private const string HardGuardPrompt =
             "Mandatory constraints for this refinement task:\n" +
             "- You are an editor, not a conversational assistant.\n" +
@@ -76,7 +120,7 @@ namespace Speakly.Services
                 "Transcript:\n<<<\n" + transcript + "\n>>>";
         }
 
-        public static string CoerceToEditOnlyOutput(string originalText, string? refinedText)
+        public static string CoerceToEditOnlyOutput(string originalText, string? refinedText, bool aggressiveContextRewrite = false)
         {
             if (string.IsNullOrWhiteSpace(originalText))
             {
@@ -105,6 +149,11 @@ namespace Speakly.Services
             }
 
             if (IsLikelyLossyShortening(originalText, candidate))
+            {
+                return originalText;
+            }
+
+            if (aggressiveContextRewrite && IsLikelyAggressiveContextDrift(originalText, candidate))
             {
                 return originalText;
             }
@@ -179,9 +228,91 @@ namespace Speakly.Services
             return false;
         }
 
+        private static bool IsLikelyAggressiveContextDrift(string original, string candidate)
+        {
+            var originalTokens = TokenizeWords(original);
+            var candidateTokens = TokenizeWords(candidate);
+            if (originalTokens.Count < 3 || candidateTokens.Count == 0)
+            {
+                return false;
+            }
+
+            var originalDistinct = new HashSet<string>(originalTokens, StringComparer.OrdinalIgnoreCase);
+            var candidateDistinct = new HashSet<string>(candidateTokens, StringComparer.OrdinalIgnoreCase);
+            int overlap = originalDistinct.Count(token => candidateDistinct.Contains(token));
+            double retainedOriginal = originalDistinct.Count == 0 ? 0 : (double)overlap / originalDistinct.Count;
+            double newCandidateContent = candidateDistinct.Count == 0 ? 0 : (double)(candidateDistinct.Count - overlap) / candidateDistinct.Count;
+
+            if (candidateTokens.Count >= Math.Max(originalTokens.Count + 3, (int)Math.Ceiling(originalTokens.Count * 1.5)) &&
+                retainedOriginal < 0.45 &&
+                newCandidateContent > 0.55)
+            {
+                return true;
+            }
+
+            if (retainedOriginal < 0.34 && newCandidateContent > 0.60)
+            {
+                return true;
+            }
+
+            if (HasNegationShift(originalDistinct, candidateDistinct))
+            {
+                return true;
+            }
+
+            if (HasTimeAnchorShift(originalDistinct, candidateDistinct))
+            {
+                return true;
+            }
+
+            return false;
+        }
+
+        private static bool HasNegationShift(HashSet<string> originalDistinct, HashSet<string> candidateDistinct)
+        {
+            bool originalHasNegation = NegationMarkers.Any(originalDistinct.Contains);
+            bool candidateHasNegation = NegationMarkers.Any(candidateDistinct.Contains);
+            return originalHasNegation != candidateHasNegation;
+        }
+
+        private static bool HasTimeAnchorShift(HashSet<string> originalDistinct, HashSet<string> candidateDistinct)
+        {
+            var originalAnchors = TimeAnchors.Where(originalDistinct.Contains).ToHashSet(StringComparer.OrdinalIgnoreCase);
+            var candidateAnchors = TimeAnchors.Where(candidateDistinct.Contains).ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+            if (originalAnchors.Count == 0 || candidateAnchors.Count == 0)
+            {
+                return false;
+            }
+
+            return !originalAnchors.Overlaps(candidateAnchors);
+        }
+
         private static string NormalizeWhitespace(string value)
         {
             return string.Join(" ", value.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries));
+        }
+
+        private static List<string> TokenizeWords(string value)
+        {
+            var tokens = new List<string>();
+            if (string.IsNullOrWhiteSpace(value))
+            {
+                return tokens;
+            }
+
+            foreach (var token in value
+                         .ToLowerInvariant()
+                         .Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries))
+            {
+                var cleaned = new string(token.Where(char.IsLetterOrDigit).ToArray());
+                if (!string.IsNullOrWhiteSpace(cleaned))
+                {
+                    tokens.Add(cleaned);
+                }
+            }
+
+            return tokens;
         }
 
         private static int CountWords(string value)

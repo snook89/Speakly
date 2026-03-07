@@ -1,12 +1,14 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Text.Json;
 
 namespace Speakly.Services
 {
     public class HistoryEntry
     {
+        public string Id { get; set; } = Guid.NewGuid().ToString("N");
         public DateTime Timestamp { get; set; }
         public string OriginalText { get; set; } = string.Empty;
         public string RefinedText { get; set; } = string.Empty;
@@ -28,12 +30,118 @@ namespace Speakly.Services
         public string FailoverTo { get; set; } = string.Empty;
         public string FinalProviderUsed { get; set; } = string.Empty;
         public bool Pinned { get; set; }
+        public string DictationMode { get; set; } = DictationExperienceService.PlainDictationMode;
+        public string ContextualRefinementMode { get; set; } = DictationExperienceService.ContextualRefinementModeAggressiveRewrite;
+        public string ContextSummary { get; set; } = string.Empty;
+        public bool WasVoiceCommand { get; set; }
+        public string VoiceCommandName { get; set; } = string.Empty;
+        public string ActionSource { get; set; } = "Live";
+        public string SourceEntryId { get; set; } = string.Empty;
+        public string SourceActionSource { get; set; } = string.Empty;
+        public string SourceRefinedText { get; set; } = string.Empty;
+        public DateTime? SourceTimestamp { get; set; }
+
+        public string DisplayPrimaryLabel => WasVoiceCommand ? "VOICE COMMAND" : "REFINED TEXT";
+        public string DisplayPrimaryText => WasVoiceCommand ? VoiceCommandName : RefinedText;
+        public string DisplaySecondaryLabel => WasVoiceCommand ? "SPOKEN PHRASE" : "ORIGINAL TEXT";
+        public string DisplaySecondaryText => OriginalText;
+        public bool HasRefinedText => !string.IsNullOrWhiteSpace(RefinedText);
+        public bool HasContextSummary => !string.IsNullOrWhiteSpace(ContextSummary);
+        public bool CanReplayText => !string.IsNullOrWhiteSpace(RefinedText);
+        public bool CanReprocess => !string.IsNullOrWhiteSpace(OriginalText);
+        public string NormalizedActionSource => NormalizeActionSource(ActionSource);
+        public bool IsRecoveryAction => NormalizedActionSource is "HistoryRetry" or "HistoryReprocess";
+        public bool HasSourceComparison =>
+            IsRecoveryAction &&
+            (!string.IsNullOrWhiteSpace(SourceRefinedText) || SourceTimestamp.HasValue || !string.IsNullOrWhiteSpace(SourceEntryId));
+        public string DisplayActionLabel => NormalizedActionSource switch
+        {
+            "HistoryRetry" => "History Retry",
+            "HistoryReprocess" => "History Reprocess",
+            _ => WasVoiceCommand ? "Voice Command" : "Live"
+        };
+        public string CompareLabel => NormalizedActionSource switch
+        {
+            "HistoryRetry" => "PREVIOUS INSERTED TEXT",
+            "HistoryReprocess" => "PREVIOUS REFINED TEXT",
+            _ => "SOURCE TEXT"
+        };
+        public string CompareSourceText => string.IsNullOrWhiteSpace(SourceRefinedText) ? "(No prior refined text saved)" : SourceRefinedText;
+        public string CompareSummary
+        {
+            get
+            {
+                if (!HasSourceComparison)
+                {
+                    return string.Empty;
+                }
+
+                var actionText = NormalizedActionSource == "HistoryRetry"
+                    ? "Retried insertion"
+                    : "Reprocessed entry";
+                var timeText = SourceTimestamp.HasValue ? $" from {SourceTimestamp.Value:HH:mm:ss}" : string.Empty;
+                if (string.Equals(SourceRefinedText?.Trim(), RefinedText?.Trim(), StringComparison.Ordinal))
+                {
+                    return $"{actionText}{timeText}. Final text is unchanged.";
+                }
+
+                return $"{actionText}{timeText}. Final text changed.";
+            }
+        }
+
+        public static string NormalizeActionSource(string? actionSource)
+        {
+            var normalized = actionSource?.Trim() ?? string.Empty;
+            if (string.Equals(normalized, "HistoryRetry", StringComparison.OrdinalIgnoreCase))
+            {
+                return "HistoryRetry";
+            }
+
+            if (string.Equals(normalized, "HistoryReprocess", StringComparison.OrdinalIgnoreCase))
+            {
+                return "HistoryReprocess";
+            }
+
+            return "Live";
+        }
     }
 
     public static class HistoryManager
     {
         private static readonly string HistoryPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "history.json");
         private static List<HistoryEntry> _history = new List<HistoryEntry>();
+
+        public static void AddEntry(HistoryEntry entry)
+        {
+            if (Config.ConfigManager.Config.PrivacyMode == "no_history" || entry == null)
+            {
+                return;
+            }
+
+            if (string.IsNullOrWhiteSpace(entry.Id))
+            {
+                entry.Id = Guid.NewGuid().ToString("N");
+            }
+
+            if (entry.Timestamp == default)
+            {
+                entry.Timestamp = DateTime.Now;
+            }
+
+            entry.DictationMode = DictationExperienceService.NormalizeMode(entry.DictationMode);
+            entry.ContextualRefinementMode = DictationExperienceService.NormalizeContextualRefinementMode(entry.ContextualRefinementMode);
+            entry.ActionSource = HistoryEntry.NormalizeActionSource(entry.ActionSource);
+
+            _history.Add(entry);
+
+            if (_history.Count > 100)
+            {
+                _history.RemoveAt(0);
+            }
+
+            PurgeByRetention();
+            Save();
+        }
 
         public static void AddEntry(
             string original,
@@ -54,15 +162,20 @@ namespace Speakly.Services
             bool failoverAttempted = false,
             string failoverFrom = "",
             string failoverTo = "",
-            string finalProviderUsed = "")
+            string finalProviderUsed = "",
+            string dictationMode = "",
+            string contextualRefinementMode = "",
+            string contextSummary = "",
+            bool wasVoiceCommand = false,
+            string voiceCommandName = "",
+            string actionSource = "Live",
+            string sourceEntryId = "",
+            string sourceActionSource = "",
+            string sourceRefinedText = "",
+            DateTime? sourceTimestamp = null)
         {
-            if (Config.ConfigManager.Config.PrivacyMode == "no_history")
+            AddEntry(new HistoryEntry
             {
-                return;
-            }
-
-            _history.Add(new HistoryEntry 
-            { 
                 Timestamp = DateTime.Now, 
                 OriginalText = original, 
                 RefinedText = refined,
@@ -82,18 +195,18 @@ namespace Speakly.Services
                 FailoverAttempted = failoverAttempted,
                 FailoverFrom = failoverFrom,
                 FailoverTo = failoverTo,
-                FinalProviderUsed = finalProviderUsed
+                FinalProviderUsed = finalProviderUsed,
+                DictationMode = dictationMode,
+                ContextualRefinementMode = contextualRefinementMode,
+                ContextSummary = contextSummary,
+                WasVoiceCommand = wasVoiceCommand,
+                VoiceCommandName = voiceCommandName,
+                ActionSource = actionSource,
+                SourceEntryId = sourceEntryId,
+                SourceActionSource = sourceActionSource,
+                SourceRefinedText = sourceRefinedText,
+                SourceTimestamp = sourceTimestamp
             });
-
-            // Keep the last 100 entries
-            if (_history.Count > 100)
-            {
-                _history.RemoveAt(0);
-            }
-
-            PurgeByRetention();
-
-            Save();
         }
 
         public static IReadOnlyList<HistoryEntry> GetHistory()
@@ -113,6 +226,17 @@ namespace Speakly.Services
                 {
                     string json = File.ReadAllText(HistoryPath);
                     _history = JsonSerializer.Deserialize<List<HistoryEntry>>(json) ?? new List<HistoryEntry>();
+                    foreach (var entry in _history)
+                    {
+                        if (string.IsNullOrWhiteSpace(entry.Id))
+                        {
+                            entry.Id = Guid.NewGuid().ToString("N");
+                        }
+
+                        entry.DictationMode = DictationExperienceService.NormalizeMode(entry.DictationMode);
+                        entry.ContextualRefinementMode = DictationExperienceService.NormalizeContextualRefinementMode(entry.ContextualRefinementMode);
+                        entry.ActionSource = HistoryEntry.NormalizeActionSource(entry.ActionSource);
+                    }
                 }
             }
             catch (Exception ex)
@@ -130,8 +254,11 @@ namespace Speakly.Services
                 string json = JsonSerializer.Serialize(_history, options);
                 File.WriteAllText(HistoryPath, json);
                 
-                // Also append to a plain text log for easy reading as requested
-                string logEntry = $"[{DateTime.Now:yyyy-MM-dd HH:mm:ss}] {(_history[^1].RefinedText)}";
+                var latest = _history[^1];
+                string logPayload = latest.WasVoiceCommand
+                    ? $"[Command] {latest.VoiceCommandName}"
+                    : latest.RefinedText;
+                string logEntry = $"[{DateTime.Now:yyyy-MM-dd HH:mm:ss}] {logPayload}";
                 File.AppendAllText(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "history.log"), logEntry + Environment.NewLine);
             }
             catch (Exception ex)
@@ -145,6 +272,24 @@ namespace Speakly.Services
             int days = Math.Clamp(Config.ConfigManager.Config.HistoryRetentionDays, 1, 3650);
             var cutoff = DateTime.Now.AddDays(-days);
             _history = _history.Where(h => h.Timestamp >= cutoff || h.Pinned).ToList();
+        }
+
+        public static bool SetPinned(string id, bool pinned)
+        {
+            if (string.IsNullOrWhiteSpace(id))
+            {
+                return false;
+            }
+
+            var entry = _history.FirstOrDefault(h => string.Equals(h.Id, id, StringComparison.OrdinalIgnoreCase));
+            if (entry == null)
+            {
+                return false;
+            }
+
+            entry.Pinned = pinned;
+            Save();
+            return true;
         }
     }
 }

@@ -137,6 +137,7 @@ Speakly is for people who want voice input to feel like part of a serious deskto
 | Dictionary | Global and per-profile personal dictionary, import/export, and suggested-term confirmation queue |
 | Overlay | Always-on-top overlay with status, language badge, waveform, quick actions, and auto-hide |
 | Tray | Tray menu for settings, profile switching, overlay recovery, refinement toggle, and exit |
+| Docs | Built-in product documentation with topic-by-topic explanations, examples, and recommended defaults |
 | Reliability | Single-instance activation, STT failover, startup health checks, deferred auto-paste, debug logs |
 | Observability | History, latency statistics, provider breakdowns, top errors, and local structured telemetry with redaction |
 | Startup | Optional Windows startup registration through Task Scheduler, with minimized tray launch support |
@@ -180,6 +181,7 @@ This README reflects the newer feature set already present in the codebase:
 | General | Overlay, tray behavior, Windows startup, deferred paste, failover, logs, and telemetry controls |
 | History | Review recent transcription activity |
 | Statistics | Inspect latency, errors, provider success rates, and telemetry summaries |
+| Docs | Read built-in guidance for modes, refinement, history, and recommended setup |
 | Info | Check version, update status, releases, and GitHub links |
 
 ## Provider Support

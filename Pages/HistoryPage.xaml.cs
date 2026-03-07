@@ -1,6 +1,7 @@
 using System.Windows.Controls;
 using System.Windows.Data;
 using System.ComponentModel;
+using System.Collections.Specialized;
 using Speakly.Services;
 
 namespace Speakly.Pages
@@ -25,7 +26,11 @@ namespace Speakly.Pages
                 ProviderFilterBox.SelectedIndex = 0;
                 LoadProfileFilters();
                 ProfileFilterBox.SelectedIndex = 0;
+                ActionFilterBox.SelectedIndex = 0;
+                PinFilterBox.SelectedIndex = 0;
             };
+
+            App.ViewModel.HistoryEntries.CollectionChanged += HistoryEntries_CollectionChanged;
         }
 
         private void SearchBox_TextChanged(object sender, TextChangedEventArgs e)
@@ -49,7 +54,14 @@ namespace Speakly.Pages
                     entry.OriginalText.Contains(search, System.StringComparison.OrdinalIgnoreCase) ||
                     entry.RefinedText.Contains(search, System.StringComparison.OrdinalIgnoreCase) ||
                     entry.SttProvider.Contains(search, System.StringComparison.OrdinalIgnoreCase) ||
-                    entry.RefinementProvider.Contains(search, System.StringComparison.OrdinalIgnoreCase);
+                    entry.RefinementProvider.Contains(search, System.StringComparison.OrdinalIgnoreCase) ||
+                    entry.VoiceCommandName.Contains(search, System.StringComparison.OrdinalIgnoreCase) ||
+                    entry.ContextualRefinementMode.Contains(search, System.StringComparison.OrdinalIgnoreCase) ||
+                    entry.DictationMode.Contains(search, System.StringComparison.OrdinalIgnoreCase) ||
+                    entry.ActionSource.Contains(search, System.StringComparison.OrdinalIgnoreCase) ||
+                    entry.ContextSummary.Contains(search, System.StringComparison.OrdinalIgnoreCase) ||
+                    entry.InsertionMethod.Contains(search, System.StringComparison.OrdinalIgnoreCase) ||
+                    entry.ErrorCode.Contains(search, System.StringComparison.OrdinalIgnoreCase);
                 if (!match) return false;
             }
 
@@ -71,7 +83,31 @@ namespace Speakly.Pages
                 return false;
             }
 
+            var actionTag = (ActionFilterBox.SelectedItem as ComboBoxItem)?.Tag?.ToString() ?? "all";
+            if (!string.Equals(actionTag, "all", System.StringComparison.OrdinalIgnoreCase) &&
+                !string.Equals(actionTag, entry.NormalizedActionSource, System.StringComparison.OrdinalIgnoreCase))
+            {
+                return false;
+            }
+
+            var pinTag = (PinFilterBox.SelectedItem as ComboBoxItem)?.Tag?.ToString() ?? "all";
+            if (string.Equals(pinTag, "pinned", System.StringComparison.OrdinalIgnoreCase) && !entry.Pinned)
+            {
+                return false;
+            }
+
+            if (string.Equals(pinTag, "unpinned", System.StringComparison.OrdinalIgnoreCase) && entry.Pinned)
+            {
+                return false;
+            }
+
             return true;
+        }
+
+        private void HistoryEntries_CollectionChanged(object? sender, NotifyCollectionChangedEventArgs e)
+        {
+            LoadProfileFilters();
+            _historyView?.Refresh();
         }
 
         private void LoadProfileFilters()

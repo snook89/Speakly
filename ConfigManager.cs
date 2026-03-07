@@ -11,7 +11,7 @@ namespace Speakly.Config
 {
     public class AppConfig
     {
-        public const int CurrentConfigVersion = 7;
+        public const int CurrentConfigVersion = 12;
         public const string DefaultRefinementPrompt =
             "Role and Objective:\n" +
             "You refine speech-to-text transcripts for clarity, grammatical correctness, and formatting compliance.\n\n" +
@@ -71,6 +71,42 @@ namespace Speakly.Config
         [JsonPropertyName("refinement_prompt")]
         public string RefinementPrompt { get; set; } = DefaultRefinementPrompt;
 
+        [JsonPropertyName("dictation_mode")]
+        public string DictationMode { get; set; } = DictationExperienceService.PlainDictationMode;
+
+        [JsonPropertyName("enable_voice_commands")]
+        public bool EnableVoiceCommands { get; set; } = true;
+
+        [JsonPropertyName("voice_command_mode")]
+        public string VoiceCommandMode { get; set; } = DictationExperienceService.VoiceCommandModeMixed;
+
+        [JsonPropertyName("contextual_refinement_mode")]
+        public string ContextualRefinementMode { get; set; } = DictationExperienceService.ContextualRefinementModeAggressiveRewrite;
+
+        [JsonPropertyName("style_preset")]
+        public string StylePreset { get; set; } = DictationExperienceService.StylePresetNeutral;
+
+        [JsonPropertyName("custom_style_prompt")]
+        public string CustomStylePrompt { get; set; } = string.Empty;
+
+        [JsonPropertyName("use_app_context_for_refinement")]
+        public bool UseAppContextForRefinement { get; set; } = true;
+
+        [JsonPropertyName("use_window_title_context_for_refinement")]
+        public bool UseWindowTitleContextForRefinement { get; set; }
+
+        [JsonPropertyName("use_selected_text_context_for_refinement")]
+        public bool UseSelectedTextContextForRefinement { get; set; }
+
+        [JsonPropertyName("use_clipboard_context_for_refinement")]
+        public bool UseClipboardContextForRefinement { get; set; }
+
+        [JsonPropertyName("enable_snippets")]
+        public bool EnableSnippets { get; set; } = true;
+
+        [JsonPropertyName("learn_from_refinement_corrections")]
+        public bool LearnFromRefinementCorrections { get; set; } = true;
+
         [JsonPropertyName("theme")]
         public string Theme { get; set; } = "Dark";
 
@@ -98,7 +134,7 @@ namespace Speakly.Config
 
         // Per-Service Refinement Models
         [JsonPropertyName("openai_refinement_model")]
-        public string OpenAIRefinementModel { get; set; } = "gpt-4o-mini";
+        public string OpenAIRefinementModel { get; set; } = "gpt-4.1-mini";
 
         [JsonPropertyName("cerebras_refinement_model")]
         public string CerebrasRefinementModel { get; set; } = "llama3.1-8b";
@@ -119,7 +155,7 @@ namespace Speakly.Config
         public string CerebrasVersionPatch { get; set; } = string.Empty;
 
         [JsonPropertyName("openrouter_refinement_model")]
-        public string OpenRouterRefinementModel { get; set; } = "google/gemini-2.0-flash-001";
+        public string OpenRouterRefinementModel { get; set; } = "openai/gpt-4.1-mini";
 
         [JsonPropertyName("openrouter_favorite_models")]
         public List<string> OpenRouterFavoriteModels { get; set; } = new List<string>();
@@ -434,9 +470,21 @@ namespace Speakly.Config
                 RefinementModel = ResolveRefinementModel(config),
                 RefinementPrompt = config.RefinementPrompt,
                 PromptPresetName = ResolvePromptPresetName(config.RefinementPrompt),
+                DictationMode = DictationExperienceService.NormalizeMode(config.DictationMode),
+                StylePreset = DictationExperienceService.NormalizeStylePreset(config.StylePreset),
+                CustomStylePrompt = config.CustomStylePrompt?.Trim() ?? string.Empty,
                 Language = config.Language,
                 CopyToClipboard = config.CopyToClipboard,
                 DictionaryTerms = new List<string>(),
+                EnableVoiceCommands = config.EnableVoiceCommands,
+                VoiceCommandMode = DictationExperienceService.NormalizeVoiceCommandMode(config.VoiceCommandMode),
+                ContextualRefinementMode = DictationExperienceService.NormalizeContextualRefinementMode(config.ContextualRefinementMode),
+                UseAppContextForRefinement = config.UseAppContextForRefinement,
+                UseWindowTitleContextForRefinement = config.UseWindowTitleContextForRefinement,
+                UseSelectedTextContextForRefinement = config.UseSelectedTextContextForRefinement,
+                UseClipboardContextForRefinement = config.UseClipboardContextForRefinement,
+                EnableSnippets = config.EnableSnippets,
+                LearnFromRefinementCorrections = config.LearnFromRefinementCorrections,
                 EnableSttFailover = config.EnableSttFailover,
                 SttFailoverOrder = config.SttFailoverOrder?.ToList() ?? new List<string> { "Deepgram", "OpenAI", "OpenRouter" }
             };
@@ -471,8 +519,20 @@ namespace Speakly.Config
             config.EnableRefinement = profile.RefinementEnabled;
             config.RefinementModel = profile.RefinementProvider;
             config.RefinementPrompt = profile.RefinementPrompt;
+            config.DictationMode = DictationExperienceService.NormalizeMode(profile.DictationMode);
+            config.StylePreset = DictationExperienceService.NormalizeStylePreset(profile.StylePreset);
+            config.CustomStylePrompt = profile.CustomStylePrompt?.Trim() ?? string.Empty;
             config.Language = profile.Language;
             config.CopyToClipboard = profile.CopyToClipboard;
+            config.EnableVoiceCommands = profile.EnableVoiceCommands;
+            config.VoiceCommandMode = DictationExperienceService.NormalizeVoiceCommandMode(profile.VoiceCommandMode);
+            config.ContextualRefinementMode = DictationExperienceService.NormalizeContextualRefinementMode(profile.ContextualRefinementMode);
+            config.UseAppContextForRefinement = profile.UseAppContextForRefinement;
+            config.UseWindowTitleContextForRefinement = profile.UseWindowTitleContextForRefinement;
+            config.UseSelectedTextContextForRefinement = profile.UseSelectedTextContextForRefinement;
+            config.UseClipboardContextForRefinement = profile.UseClipboardContextForRefinement;
+            config.EnableSnippets = profile.EnableSnippets;
+            config.LearnFromRefinementCorrections = profile.LearnFromRefinementCorrections;
             config.EnableSttFailover = profile.EnableSttFailover;
             config.SttFailoverOrder = profile.SttFailoverOrder?.ToList() ?? new List<string>();
 
@@ -535,6 +595,11 @@ namespace Speakly.Config
             config.OverlayStyle = string.Equals(config.OverlayStyle, "Circle", StringComparison.OrdinalIgnoreCase)
                 ? "Circle"
                 : "Rectangular";
+            config.DictationMode = DictationExperienceService.NormalizeMode(config.DictationMode);
+            config.StylePreset = DictationExperienceService.NormalizeStylePreset(config.StylePreset);
+            config.CustomStylePrompt = config.CustomStylePrompt?.Trim() ?? string.Empty;
+            config.VoiceCommandMode = DictationExperienceService.NormalizeVoiceCommandMode(config.VoiceCommandMode);
+            config.ContextualRefinementMode = DictationExperienceService.NormalizeContextualRefinementMode(config.ContextualRefinementMode);
 
             if (config.Profiles == null)
                 config.Profiles = new List<AppProfile>();
@@ -563,7 +628,12 @@ namespace Speakly.Config
                     profile.RefinementPrompt = AppConfig.DefaultRefinementPrompt;
                 if (string.IsNullOrWhiteSpace(profile.PromptPresetName))
                     profile.PromptPresetName = ResolvePromptPresetName(profile.RefinementPrompt);
+                profile.DictationMode = DictationExperienceService.NormalizeMode(profile.DictationMode);
+                profile.StylePreset = DictationExperienceService.NormalizeStylePreset(profile.StylePreset);
+                profile.CustomStylePrompt = profile.CustomStylePrompt?.Trim() ?? string.Empty;
                 profile.DictionaryTerms = NormalizeDictionaryTerms(profile.DictionaryTerms);
+                profile.VoiceCommandMode = DictationExperienceService.NormalizeVoiceCommandMode(profile.VoiceCommandMode);
+                profile.ContextualRefinementMode = DictationExperienceService.NormalizeContextualRefinementMode(profile.ContextualRefinementMode);
             }
 
             if (string.IsNullOrWhiteSpace(config.ActiveProfileId) ||

@@ -138,6 +138,39 @@
                                 Grid.Column="2"
                                 Orientation="Horizontal"
                                 VerticalAlignment="Center">
+                        <Border x:Name="ContextBadge"
+                                Background="{DynamicResource OverlaySkin.LanguageBadgeBrush}"
+                                BorderBrush="{DynamicResource OverlaySkin.LanguageBadgeBorderBrush}"
+                                BorderThickness="1"
+                                CornerRadius="6"
+                                Padding="8,4"
+                                Margin="0,0,6,0"
+                                Visibility="Collapsed">
+                            <TextBlock x:Name="ContextText"
+                                       Text="CTX"
+                                       Foreground="{DynamicResource OverlaySkin.LanguageBadgeForegroundBrush}"
+                                       FontFamily="Segoe UI"
+                                       FontSize="11"
+                                       FontWeight="SemiBold"
+                                       TextTrimming="CharacterEllipsis" />
+                        </Border>
+
+                        <Border x:Name="ModeBadge"
+                                Background="{DynamicResource OverlaySkin.LanguageBadgeBrush}"
+                                BorderBrush="{DynamicResource OverlaySkin.LanguageBadgeBorderBrush}"
+                                BorderThickness="1"
+                                CornerRadius="6"
+                                Padding="8,4"
+                                Margin="0,0,6,0">
+                            <TextBlock x:Name="ModeText"
+                                       Text="Plain"
+                                       Foreground="{DynamicResource OverlaySkin.LanguageBadgeForegroundBrush}"
+                                       FontFamily="Segoe UI"
+                                       FontSize="11"
+                                       FontWeight="SemiBold"
+                                       TextTrimming="CharacterEllipsis" />
+                        </Border>
+
                         <Border x:Name="TimerBadge"
                                 Background="{DynamicResource OverlaySkin.TimerBackgroundBrush}"
                                 BorderBrush="{DynamicResource OverlaySkin.PillowIdleBorderBrush}"
@@ -172,7 +205,9 @@
                 </Grid>
 
                 <Grid.ContextMenu>
-                    <ContextMenu Background="{DynamicResource OverlaySkin.MenuBrush}"
+                    <ContextMenu x:Name="OverlayContextMenu"
+                                 Opened="OverlayContextMenu_Opened"
+                                 Background="{DynamicResource OverlaySkin.MenuBrush}"
                                  BorderBrush="{DynamicResource OverlaySkin.MenuBorderBrush}"
                                  BorderThickness="1"
                                  Foreground="{DynamicResource OverlaySkin.MenuForegroundBrush}">
@@ -180,6 +215,10 @@
                                   Header="Start Recording"
                                   Click="StartStopMenuItem_Click" />
                         <Separator />
+                        <MenuItem Header="Next Mode"
+                                  Click="NextModeMenuItem_Click" />
+                        <MenuItem x:Name="ModesMenuItem"
+                                  Header="Modes" />
                         <MenuItem Header="Toggle Refinement"
                                   Click="ToggleRefinementMenuItem_Click" />
                         <MenuItem Header="Next Profile"

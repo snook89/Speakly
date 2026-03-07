@@ -265,6 +265,14 @@
                             </StackPanel>
                         </Border>
                     </ListBoxItem>
+                    <ListBoxItem x:Name="NavDocs" Tag="Docs" ToolTip="Docs">
+                        <Border Style="{StaticResource SidebarNavButtonStyle}">
+                            <StackPanel Style="{StaticResource SidebarNavContentStyle}">
+                                <ui:SymbolIcon Symbol="BookInformation20" Width="16" Height="16" />
+                                <TextBlock Margin="12,0,0,0" VerticalAlignment="Center" Text="Docs" Style="{StaticResource SidebarLabelStyle}" />
+                            </StackPanel>
+                        </Border>
+                    </ListBoxItem>
                     <ListBoxItem x:Name="NavInfo" Tag="Info" ToolTip="Info">
                         <Border Style="{StaticResource SidebarNavButtonStyle}">
                             <StackPanel Style="{StaticResource SidebarNavContentStyle}">

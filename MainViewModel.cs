@@ -45,6 +45,10 @@ namespace Speakly.ViewModels
         private string _globalDictionaryTermsText = string.Empty;
         private string _profileDictionaryTermsText = string.Empty;
         private string _selectedDictionarySuggestion = string.Empty;
+        private string _selectedCorrectionSuggestionKey = string.Empty;
+        private string _newSnippetTrigger = string.Empty;
+        private string _newSnippetReplacement = string.Empty;
+        private string _lastContextUsageStatus = "Context used: none yet.";
         private static readonly string[] DeepgramMultilingualCodes =
         {
             "en", "es", "fr", "de", "hi", "ru", "pt", "ja", "it", "nl"
@@ -59,6 +63,8 @@ namespace Speakly.ViewModels
         public ICommand RunHealthCheckCommand { get; }
         public ICommand ToggleRefinementQuickCommand { get; }
         public ICommand CycleProfileCommand { get; }
+        public ICommand CycleDictationModeCommand { get; }
+        public ICommand SetDictationModeCommand { get; }
         public ICommand SetProfileByIdCommand { get; }
         public ICommand CreateProfileCommand { get; }
         public ICommand SaveProfileCommand { get; }
@@ -73,6 +79,17 @@ namespace Speakly.ViewModels
         public ICommand ClearDictionarySuggestionsCommand { get; }
         public ICommand ImportGlobalDictionaryCommand { get; }
         public ICommand ExportGlobalDictionaryCommand { get; }
+        public ICommand CopyHistoryCommand { get; }
+        public ICommand CopyOriginalHistoryCommand { get; }
+        public ICommand RetryHistoryInsertCommand { get; }
+        public ICommand ReprocessHistoryEntryCommand { get; }
+        public ICommand TogglePinnedHistoryCommand { get; }
+        public ICommand SaveSnippetCommand { get; }
+        public ICommand DeleteSelectedSnippetCommand { get; }
+        public ICommand AddCorrectionSuggestionToDictionaryCommand { get; }
+        public ICommand AddCorrectionSuggestionToSnippetCommand { get; }
+        public ICommand DismissCorrectionSuggestionCommand { get; }
+        public ICommand ClearCorrectionSuggestionsCommand { get; }
 
         public bool IsRefreshingModels
         {
@@ -195,6 +212,14 @@ namespace Speakly.ViewModels
             "Rectangular",
             "Circle"
         };
+        public ObservableCollection<string> AvailableDictationModes { get; } = new ObservableCollection<string>(
+            DictationExperienceService.GetAvailableModes());
+        public ObservableCollection<string> AvailableVoiceCommandModes { get; } = new ObservableCollection<string>(
+            DictationExperienceService.GetAvailableVoiceCommandModes());
+        public ObservableCollection<string> AvailableContextualRefinementModes { get; } = new ObservableCollection<string>(
+            DictationExperienceService.GetAvailableContextualRefinementModes());
+        public ObservableCollection<string> AvailableStylePresets { get; } = new ObservableCollection<string>(
+            DictationExperienceService.GetAvailableStylePresets());
         public ObservableCollection<string> AvailableTelemetryLevels { get; } = new ObservableCollection<string>
         {
             "minimal",
@@ -400,16 +425,208 @@ namespace Speakly.ViewModels
                 OnPropertyChanged();
                 OnPropertyChanged(nameof(IsRefinementPromptMissing));
                 OnPropertyChanged(nameof(RefinementTabHeader));
+                OnPropertyChanged(nameof(PromptStyleConflictWarning));
+                OnPropertyChanged(nameof(HasPromptStyleConflictWarning));
             }
         }
 
         public bool IsRefinementPromptMissing => string.IsNullOrWhiteSpace(RefinementPrompt);
         public string RefinementTabHeader => IsRefinementPromptMissing ? "Refinement ⚠" : "Refinement";
+        public string PromptStyleConflictWarning =>
+            DictationExperienceService.GetPromptStyleConflictWarning(RefinementPrompt, StylePreset, CustomStylePrompt);
+        public bool HasPromptStyleConflictWarning => !string.IsNullOrWhiteSpace(PromptStyleConflictWarning);
 
         public bool MinimizeToTray
         {
             get => ConfigManager.Config.MinimizeToTray;
             set { ConfigManager.Config.MinimizeToTray = value; OnPropertyChanged(); }
+        }
+
+        public string DictationMode
+        {
+            get => DictationExperienceService.NormalizeMode(ConfigManager.Config.DictationMode);
+            set
+            {
+                var normalized = DictationExperienceService.NormalizeMode(value);
+                ConfigManager.Config.DictationMode = normalized;
+                SyncActiveProfileFromLegacy();
+                OnPropertyChanged();
+                OnPropertyChanged(nameof(ActiveDictationModeTitle));
+                OnPropertyChanged(nameof(ActiveDictationModeDescription));
+                NotifySelectedProfileSummaryChanged();
+            }
+        }
+
+        public string ActiveDictationModeTitle => $"Mode: {DictationMode}";
+
+        public string ActiveDictationModeDescription => DictationExperienceService.DescribeMode(DictationMode);
+
+        public string StylePreset
+        {
+            get => DictationExperienceService.NormalizeStylePreset(ConfigManager.Config.StylePreset);
+            set
+            {
+                var normalized = DictationExperienceService.NormalizeStylePreset(value);
+                ConfigManager.Config.StylePreset = normalized;
+                SyncActiveProfileFromLegacy();
+                OnPropertyChanged();
+                OnPropertyChanged(nameof(StylePresetDescription));
+                OnPropertyChanged(nameof(IsCustomStylePreset));
+                OnPropertyChanged(nameof(PromptStyleConflictWarning));
+                OnPropertyChanged(nameof(HasPromptStyleConflictWarning));
+                NotifySelectedProfileSummaryChanged();
+            }
+        }
+
+        public string StylePresetDescription => DictationExperienceService.DescribeStylePreset(StylePreset);
+
+        public bool IsCustomStylePreset => string.Equals(
+            StylePreset,
+            DictationExperienceService.StylePresetCustom,
+            StringComparison.OrdinalIgnoreCase);
+
+        public string CustomStylePrompt
+        {
+            get => ConfigManager.Config.CustomStylePrompt;
+            set
+            {
+                ConfigManager.Config.CustomStylePrompt = value ?? string.Empty;
+                SyncActiveProfileFromLegacy();
+                OnPropertyChanged();
+                OnPropertyChanged(nameof(PromptStyleConflictWarning));
+                OnPropertyChanged(nameof(HasPromptStyleConflictWarning));
+                NotifySelectedProfileSummaryChanged();
+            }
+        }
+
+        public string ContextConfigurationSummary =>
+            !EnableRefinement
+                ? "Context: Refinement disabled"
+                : $"{DictationExperienceService.DescribeContextUsage(ConfigManager.Config)} | {DictationExperienceService.DescribeContextualRefinementMode(ConfigManager.Config.ContextualRefinementMode)}";
+
+        public string LastContextUsageStatus
+        {
+            get => _lastContextUsageStatus;
+            private set
+            {
+                if (string.Equals(_lastContextUsageStatus, value, StringComparison.Ordinal))
+                    return;
+                _lastContextUsageStatus = value;
+                OnPropertyChanged();
+            }
+        }
+
+        public bool EnableVoiceCommands
+        {
+            get => ConfigManager.Config.EnableVoiceCommands;
+            set
+            {
+                ConfigManager.Config.EnableVoiceCommands = value;
+                SyncActiveProfileFromLegacy();
+                OnPropertyChanged();
+                NotifySelectedProfileSummaryChanged();
+            }
+        }
+
+        public string VoiceCommandMode
+        {
+            get => DictationExperienceService.NormalizeVoiceCommandMode(ConfigManager.Config.VoiceCommandMode);
+            set
+            {
+                var normalized = DictationExperienceService.NormalizeVoiceCommandMode(value);
+                ConfigManager.Config.VoiceCommandMode = normalized;
+                SyncActiveProfileFromLegacy();
+                OnPropertyChanged();
+                NotifySelectedProfileSummaryChanged();
+            }
+        }
+
+        public bool UseAppContextForRefinement
+        {
+            get => ConfigManager.Config.UseAppContextForRefinement;
+            set
+            {
+                ConfigManager.Config.UseAppContextForRefinement = value;
+                SyncActiveProfileFromLegacy();
+                OnPropertyChanged();
+                OnPropertyChanged(nameof(ContextConfigurationSummary));
+                NotifySelectedProfileSummaryChanged();
+            }
+        }
+
+        public string ContextualRefinementMode
+        {
+            get => DictationExperienceService.NormalizeContextualRefinementMode(ConfigManager.Config.ContextualRefinementMode);
+            set
+            {
+                var normalized = DictationExperienceService.NormalizeContextualRefinementMode(value);
+                ConfigManager.Config.ContextualRefinementMode = normalized;
+                SyncActiveProfileFromLegacy();
+                OnPropertyChanged();
+                OnPropertyChanged(nameof(ContextConfigurationSummary));
+                NotifySelectedProfileSummaryChanged();
+            }
+        }
+
+        public bool UseWindowTitleContextForRefinement
+        {
+            get => ConfigManager.Config.UseWindowTitleContextForRefinement;
+            set
+            {
+                ConfigManager.Config.UseWindowTitleContextForRefinement = value;
+                SyncActiveProfileFromLegacy();
+                OnPropertyChanged();
+                OnPropertyChanged(nameof(ContextConfigurationSummary));
+                NotifySelectedProfileSummaryChanged();
+            }
+        }
+
+        public bool UseSelectedTextContextForRefinement
+        {
+            get => ConfigManager.Config.UseSelectedTextContextForRefinement;
+            set
+            {
+                ConfigManager.Config.UseSelectedTextContextForRefinement = value;
+                SyncActiveProfileFromLegacy();
+                OnPropertyChanged();
+                OnPropertyChanged(nameof(ContextConfigurationSummary));
+                NotifySelectedProfileSummaryChanged();
+            }
+        }
+
+        public bool UseClipboardContextForRefinement
+        {
+            get => ConfigManager.Config.UseClipboardContextForRefinement;
+            set
+            {
+                ConfigManager.Config.UseClipboardContextForRefinement = value;
+                SyncActiveProfileFromLegacy();
+                OnPropertyChanged();
+                OnPropertyChanged(nameof(ContextConfigurationSummary));
+                NotifySelectedProfileSummaryChanged();
+            }
+        }
+
+        public bool EnableSnippets
+        {
+            get => ConfigManager.Config.EnableSnippets;
+            set
+            {
+                ConfigManager.Config.EnableSnippets = value;
+                SyncActiveProfileFromLegacy();
+                OnPropertyChanged();
+            }
+        }
+
+        public bool LearnFromRefinementCorrections
+        {
+            get => ConfigManager.Config.LearnFromRefinementCorrections;
+            set
+            {
+                ConfigManager.Config.LearnFromRefinementCorrections = value;
+                SyncActiveProfileFromLegacy();
+                OnPropertyChanged();
+            }
         }
 
         public bool StartWithWindows
@@ -616,7 +833,13 @@ namespace Speakly.ViewModels
         public bool EnableRefinement
         {
             get => ConfigManager.Config.EnableRefinement;
-            set { ConfigManager.Config.EnableRefinement = value; SyncActiveProfileFromLegacy(); OnPropertyChanged(); }
+            set
+            {
+                ConfigManager.Config.EnableRefinement = value;
+                SyncActiveProfileFromLegacy();
+                OnPropertyChanged();
+                OnPropertyChanged(nameof(ContextConfigurationSummary));
+            }
         }
 
         public bool CopyToClipboard
@@ -675,6 +898,7 @@ namespace Speakly.ViewModels
         }
 
         public bool HasDictionarySuggestions => DictionarySuggestions.Count > 0;
+        public bool HasCorrectionSuggestions => CorrectionSuggestions.Count > 0;
 
         public string DeepgramLanguageGuardMessage => BuildDeepgramLanguageGuardMessage();
 
@@ -683,6 +907,70 @@ namespace Speakly.ViewModels
         public ObservableCollection<HistoryEntry> HistoryEntries { get; } = new ObservableCollection<HistoryEntry>();
         public ObservableCollection<AppProfile> Profiles { get; } = new ObservableCollection<AppProfile>();
         public ObservableCollection<string> DictionarySuggestions { get; } = new ObservableCollection<string>();
+        public ObservableCollection<SnippetEntry> SavedSnippets { get; } = new ObservableCollection<SnippetEntry>();
+        public ObservableCollection<CorrectionSuggestionEntry> CorrectionSuggestions { get; } = new ObservableCollection<CorrectionSuggestionEntry>();
+
+        private SnippetEntry? _selectedSnippetEntry;
+        public SnippetEntry? SelectedSnippetEntry
+        {
+            get => _selectedSnippetEntry;
+            set
+            {
+                if (ReferenceEquals(_selectedSnippetEntry, value))
+                    return;
+
+                _selectedSnippetEntry = value;
+                OnPropertyChanged();
+                OnPropertyChanged(nameof(CanDeleteSelectedSnippet));
+
+                if (value != null)
+                {
+                    NewSnippetTrigger = value.Trigger;
+                    NewSnippetReplacement = value.Replacement;
+                }
+
+                CommandManager.InvalidateRequerySuggested();
+            }
+        }
+
+        private CorrectionSuggestionEntry? _selectedCorrectionSuggestion;
+        public CorrectionSuggestionEntry? SelectedCorrectionSuggestion
+        {
+            get => _selectedCorrectionSuggestion;
+            set
+            {
+                _selectedCorrectionSuggestion = value;
+                _selectedCorrectionSuggestionKey = value == null
+                    ? string.Empty
+                    : BuildCorrectionSuggestionKey(value);
+                OnPropertyChanged();
+                CommandManager.InvalidateRequerySuggested();
+            }
+        }
+
+        public string NewSnippetTrigger
+        {
+            get => _newSnippetTrigger;
+            set
+            {
+                _newSnippetTrigger = value ?? string.Empty;
+                OnPropertyChanged();
+                CommandManager.InvalidateRequerySuggested();
+            }
+        }
+
+        public string NewSnippetReplacement
+        {
+            get => _newSnippetReplacement;
+            set
+            {
+                _newSnippetReplacement = value ?? string.Empty;
+                OnPropertyChanged();
+                CommandManager.InvalidateRequerySuggested();
+            }
+        }
+
+        public bool CanDeleteSelectedSnippet => _selectedSnippetEntry != null;
 
         private AppProfile? _selectedProfile;
         public AppProfile? SelectedProfile
@@ -713,6 +1001,8 @@ namespace Speakly.ViewModels
                 OnPropertyChanged(nameof(ActiveProfileName));
                 OnPropertyChanged(nameof(CanDeleteSelectedProfile));
                 OnPropertyChanged(nameof(CanCycleProfile));
+                OnPropertyChanged(nameof(ActiveDictationModeTitle));
+                OnPropertyChanged(nameof(ActiveDictationModeDescription));
                 NotifySelectedProfileSummaryChanged();
                 CommandManager.InvalidateRequerySuggested();
             }
@@ -818,6 +1108,33 @@ namespace Speakly.ViewModels
             }
         }
 
+        public string SelectedProfileModeSummary
+        {
+            get
+            {
+                var profile = SelectedProfile ?? ConfigManager.GetActiveProfile();
+                if (profile == null)
+                {
+                    return "Mode: n/a | Commands: n/a | Context: n/a";
+                }
+
+                var commands = profile.EnableVoiceCommands
+                    ? profile.VoiceCommandMode
+                    : "Off";
+                var context = DictationExperienceService.DescribeContextUsage(new AppConfig
+                {
+                    ContextualRefinementMode = profile.ContextualRefinementMode,
+                    UseAppContextForRefinement = profile.UseAppContextForRefinement,
+                    UseWindowTitleContextForRefinement = profile.UseWindowTitleContextForRefinement,
+                    UseSelectedTextContextForRefinement = profile.UseSelectedTextContextForRefinement,
+                    UseClipboardContextForRefinement = profile.UseClipboardContextForRefinement
+                });
+                var contextMode = DictationExperienceService.DescribeContextualRefinementMode(profile.ContextualRefinementMode);
+                var style = DictationExperienceService.DescribeStyleSummary(profile.StylePreset, profile.CustomStylePrompt);
+                return $"Mode: {profile.DictationMode} | {style} | Commands: {commands} | {context} | {contextMode}";
+            }
+        }
+
         public string SelectedProfileDictionarySummary
         {
             get
@@ -875,6 +1192,7 @@ namespace Speakly.ViewModels
             _selectedPromptEntry != null && !_selectedPromptEntry.IsBuiltIn;
 
         private List<PromptEntry> _promptList = new();
+        private List<SnippetEntry> _snippetList = new();
 
         private void ReloadSavedPrompts()
         {
@@ -903,6 +1221,22 @@ namespace Speakly.ViewModels
                 {
                     _isApplyingPromptPresetFromProfile = false;
                 }
+            }
+        }
+
+        private void ReloadSavedSnippets()
+        {
+            _snippetList = SnippetLibraryManager.Load();
+            SavedSnippets.Clear();
+            foreach (var snippet in _snippetList)
+            {
+                SavedSnippets.Add(snippet);
+            }
+
+            if (SelectedSnippetEntry != null)
+            {
+                SelectedSnippetEntry = SavedSnippets.FirstOrDefault(entry =>
+                    string.Equals(entry.Trigger, SelectedSnippetEntry.Trigger, StringComparison.OrdinalIgnoreCase));
             }
         }
 
@@ -1016,9 +1350,21 @@ namespace Speakly.ViewModels
             active.RefinementPrompt = ConfigManager.Config.RefinementPrompt;
             if (SelectedPromptEntry != null)
                 active.PromptPresetName = SelectedPromptEntry.Name;
+            active.DictationMode = DictationMode;
+            active.StylePreset = StylePreset;
+            active.CustomStylePrompt = CustomStylePrompt;
             active.Language = ConfigManager.Config.Language;
             active.CopyToClipboard = ConfigManager.Config.CopyToClipboard;
             active.DictionaryTerms = PersonalDictionaryService.ParseTerms(_profileDictionaryTermsText);
+            active.EnableVoiceCommands = ConfigManager.Config.EnableVoiceCommands;
+            active.VoiceCommandMode = VoiceCommandMode;
+            active.ContextualRefinementMode = ContextualRefinementMode;
+            active.UseAppContextForRefinement = ConfigManager.Config.UseAppContextForRefinement;
+            active.UseWindowTitleContextForRefinement = ConfigManager.Config.UseWindowTitleContextForRefinement;
+            active.UseSelectedTextContextForRefinement = ConfigManager.Config.UseSelectedTextContextForRefinement;
+            active.UseClipboardContextForRefinement = ConfigManager.Config.UseClipboardContextForRefinement;
+            active.EnableSnippets = ConfigManager.Config.EnableSnippets;
+            active.LearnFromRefinementCorrections = ConfigManager.Config.LearnFromRefinementCorrections;
             active.EnableSttFailover = ConfigManager.Config.EnableSttFailover;
             active.SttFailoverOrder = ConfigManager.Config.SttFailoverOrder.ToList();
             NotifySelectedProfileSummaryChanged();
@@ -1078,9 +1424,21 @@ namespace Speakly.ViewModels
                 PromptPresetName = !string.IsNullOrWhiteSpace(baseProfile.PromptPresetName)
                     ? baseProfile.PromptPresetName
                     : SelectedPromptEntry?.Name ?? string.Empty,
+                DictationMode = DictationExperienceService.NormalizeMode(baseProfile.DictationMode),
+                StylePreset = DictationExperienceService.NormalizeStylePreset(baseProfile.StylePreset),
+                CustomStylePrompt = baseProfile.CustomStylePrompt?.Trim() ?? string.Empty,
                 Language = baseProfile.Language,
                 CopyToClipboard = baseProfile.CopyToClipboard,
                 DictionaryTerms = baseProfile.DictionaryTerms.ToList(),
+                EnableVoiceCommands = baseProfile.EnableVoiceCommands,
+                VoiceCommandMode = DictationExperienceService.NormalizeVoiceCommandMode(baseProfile.VoiceCommandMode),
+                ContextualRefinementMode = DictationExperienceService.NormalizeContextualRefinementMode(baseProfile.ContextualRefinementMode),
+                UseAppContextForRefinement = baseProfile.UseAppContextForRefinement,
+                UseWindowTitleContextForRefinement = baseProfile.UseWindowTitleContextForRefinement,
+                UseSelectedTextContextForRefinement = baseProfile.UseSelectedTextContextForRefinement,
+                UseClipboardContextForRefinement = baseProfile.UseClipboardContextForRefinement,
+                EnableSnippets = baseProfile.EnableSnippets,
+                LearnFromRefinementCorrections = baseProfile.LearnFromRefinementCorrections,
                 EnableSttFailover = baseProfile.EnableSttFailover,
                 SttFailoverOrder = baseProfile.SttFailoverOrder.ToList()
             };
@@ -1187,6 +1545,21 @@ namespace Speakly.ViewModels
                 {
                     ["profile_id"] = deletedId,
                     ["profile_name"] = deletedName
+                });
+        }
+
+        private void CycleDictationMode()
+        {
+            var nextMode = DictationExperienceService.GetNextMode(DictationMode);
+            DictationMode = nextMode;
+            ProfileStatusMessage = $"Dictation mode: {nextMode}";
+            TelemetryManager.Track(
+                name: "dictation_mode_change",
+                result: "ok",
+                data: new Dictionary<string, string>
+                {
+                    ["mode"] = nextMode,
+                    ["source"] = "cycle"
                 });
         }
 
@@ -1300,7 +1673,15 @@ namespace Speakly.ViewModels
             OnPropertyChanged(nameof(SelectedProfileSttSummary));
             OnPropertyChanged(nameof(SelectedProfileRefinementSummary));
             OnPropertyChanged(nameof(SelectedProfileRuntimeSummary));
+            OnPropertyChanged(nameof(SelectedProfileModeSummary));
             OnPropertyChanged(nameof(SelectedProfileDictionarySummary));
+        }
+
+        public void SetLastContextUsageStatus(string status)
+        {
+            LastContextUsageStatus = string.IsNullOrWhiteSpace(status)
+                ? "Context used: none."
+                : status.Trim();
         }
 
         private void OpenDebugLogs()
@@ -1354,9 +1735,26 @@ namespace Speakly.ViewModels
             OnPropertyChanged(nameof(CerebrasMaxRetries));
             OnPropertyChanged(nameof(CerebrasRetryBaseDelayMs));
             OnPropertyChanged(nameof(CerebrasVersionPatch));
+            OnPropertyChanged(nameof(DictationMode));
+            OnPropertyChanged(nameof(ActiveDictationModeTitle));
+            OnPropertyChanged(nameof(ActiveDictationModeDescription));
+            OnPropertyChanged(nameof(StylePreset));
+            OnPropertyChanged(nameof(StylePresetDescription));
+            OnPropertyChanged(nameof(IsCustomStylePreset));
+            OnPropertyChanged(nameof(CustomStylePrompt));
+            OnPropertyChanged(nameof(EnableVoiceCommands));
+            OnPropertyChanged(nameof(VoiceCommandMode));
+            OnPropertyChanged(nameof(ContextualRefinementMode));
+            OnPropertyChanged(nameof(ContextConfigurationSummary));
             OnPropertyChanged(nameof(RefinementPrompt));
             OnPropertyChanged(nameof(Language));
             OnPropertyChanged(nameof(CopyToClipboard));
+            OnPropertyChanged(nameof(UseAppContextForRefinement));
+            OnPropertyChanged(nameof(UseWindowTitleContextForRefinement));
+            OnPropertyChanged(nameof(UseSelectedTextContextForRefinement));
+            OnPropertyChanged(nameof(UseClipboardContextForRefinement));
+            OnPropertyChanged(nameof(EnableSnippets));
+            OnPropertyChanged(nameof(LearnFromRefinementCorrections));
             OnPropertyChanged(nameof(EnableSttFailover));
             OnPropertyChanged(nameof(DeferredTargetPasteEnabled));
             OnPropertyChanged(nameof(StartWithWindows));
@@ -1392,10 +1790,6 @@ namespace Speakly.ViewModels
             obj => GetSttFavoriteList() != null
                    && obj is string s && !string.IsNullOrWhiteSpace(s)
         );
-
-        public ICommand CopyHistoryCommand => new RelayCommand(obj => {
-            if (obj is string text) Clipboard.SetText(text);
-        });
 
         public void SetLastInsertionStatus(string method, bool success, string errorCode)
         {
@@ -1465,12 +1859,64 @@ namespace Speakly.ViewModels
             }
         }
 
+        public void AddCorrectionSuggestions(IEnumerable<CorrectionSuggestionEntry> candidates)
+        {
+            var knownDictionary = BuildKnownDictionarySet();
+            var knownSnippets = new HashSet<string>(
+                SavedSnippets.Select(entry => BuildCorrectionSuggestionKey(entry.Trigger, entry.Replacement)),
+                StringComparer.OrdinalIgnoreCase);
+            bool changed = false;
+
+            foreach (var candidate in candidates ?? Enumerable.Empty<CorrectionSuggestionEntry>())
+            {
+                if (candidate == null || string.IsNullOrWhiteSpace(candidate.SourceText) || string.IsNullOrWhiteSpace(candidate.SuggestedText))
+                {
+                    continue;
+                }
+
+                if (candidate.CanAddToDictionary && knownDictionary.Contains(candidate.SuggestedText.Trim()))
+                {
+                    continue;
+                }
+
+                if (candidate.CanSaveAsSnippet && knownSnippets.Contains(BuildCorrectionSuggestionKey(candidate)))
+                {
+                    continue;
+                }
+
+                if (CorrectionSuggestions.Any(existing =>
+                        string.Equals(BuildCorrectionSuggestionKey(existing), BuildCorrectionSuggestionKey(candidate), StringComparison.OrdinalIgnoreCase)))
+                {
+                    continue;
+                }
+
+                CorrectionSuggestions.Add(candidate);
+                changed = true;
+            }
+
+            if (changed)
+            {
+                OnPropertyChanged(nameof(HasCorrectionSuggestions));
+                CommandManager.InvalidateRequerySuggested();
+            }
+        }
+
         private HashSet<string> BuildKnownDictionarySet()
         {
             var active = SelectedProfile ?? ConfigManager.GetActiveProfile();
             return new HashSet<string>(
                 PersonalDictionaryService.GetCombinedTerms(ConfigManager.Config, active, maxTerms: 1000),
                 StringComparer.OrdinalIgnoreCase);
+        }
+
+        private static string BuildCorrectionSuggestionKey(CorrectionSuggestionEntry suggestion)
+        {
+            return BuildCorrectionSuggestionKey(suggestion.SourceText, suggestion.SuggestedText);
+        }
+
+        private static string BuildCorrectionSuggestionKey(string source, string target)
+        {
+            return $"{source.Trim()} => {target.Trim()}";
         }
 
         private void AddSuggestionToGlobalDictionary(string term)
@@ -1532,6 +1978,41 @@ namespace Speakly.ViewModels
             RemoveSuggestionFromQueue(term);
         }
 
+        private void AddCorrectionSuggestionToDictionary(CorrectionSuggestionEntry? suggestion)
+        {
+            if (suggestion == null || !suggestion.CanAddToDictionary)
+            {
+                return;
+            }
+
+            AddSuggestionToGlobalDictionary(suggestion.SuggestedText);
+            RemoveCorrectionSuggestionFromQueue(suggestion);
+        }
+
+        private void AddCorrectionSuggestionAsSnippet(CorrectionSuggestionEntry? suggestion)
+        {
+            if (suggestion == null || !suggestion.CanSaveAsSnippet)
+            {
+                return;
+            }
+
+            _snippetList = SnippetLibraryManager.AddOrUpdate(_snippetList, suggestion.SourceText, suggestion.SuggestedText);
+            SavedSnippets.Clear();
+            foreach (var snippet in _snippetList)
+            {
+                SavedSnippets.Add(snippet);
+            }
+
+            SelectedSnippetEntry = SavedSnippets.FirstOrDefault(entry =>
+                string.Equals(entry.Trigger, suggestion.SourceText, StringComparison.OrdinalIgnoreCase));
+            RemoveCorrectionSuggestionFromQueue(suggestion);
+        }
+
+        private void DismissCorrectionSuggestion(CorrectionSuggestionEntry? suggestion)
+        {
+            RemoveCorrectionSuggestionFromQueue(suggestion);
+        }
+
         private void RemoveSuggestionFromQueue(string term)
         {
             var normalized = term?.Trim() ?? string.Empty;
@@ -1554,6 +2035,30 @@ namespace Speakly.ViewModels
             }
 
             OnPropertyChanged(nameof(HasDictionarySuggestions));
+            CommandManager.InvalidateRequerySuggested();
+        }
+
+        private void RemoveCorrectionSuggestionFromQueue(CorrectionSuggestionEntry? suggestion)
+        {
+            if (suggestion == null)
+            {
+                return;
+            }
+
+            var existing = CorrectionSuggestions.FirstOrDefault(entry =>
+                string.Equals(BuildCorrectionSuggestionKey(entry), BuildCorrectionSuggestionKey(suggestion), StringComparison.OrdinalIgnoreCase));
+            if (existing == null)
+            {
+                return;
+            }
+
+            CorrectionSuggestions.Remove(existing);
+            if (string.Equals(_selectedCorrectionSuggestionKey, BuildCorrectionSuggestionKey(existing), StringComparison.OrdinalIgnoreCase))
+            {
+                SelectedCorrectionSuggestion = null;
+            }
+
+            OnPropertyChanged(nameof(HasCorrectionSuggestions));
             CommandManager.InvalidateRequerySuggested();
         }
 
@@ -1700,6 +2205,18 @@ namespace Speakly.ViewModels
             });
 
             CycleProfileCommand = new RelayCommand(_ => CycleProfile(), _ => CanCycleProfile);
+            CycleDictationModeCommand = new RelayCommand(_ => CycleDictationMode(), _ => AvailableDictationModes.Count > 1);
+            SetDictationModeCommand = new RelayCommand(obj =>
+            {
+                var requestedMode = obj as string;
+                if (string.IsNullOrWhiteSpace(requestedMode))
+                {
+                    return;
+                }
+
+                DictationMode = requestedMode;
+                ProfileStatusMessage = $"Dictation mode: {DictationMode}";
+            });
 
             CreateProfileCommand = new RelayCommand(
                 _ => CreateProfile(),
@@ -1746,6 +2263,48 @@ namespace Speakly.ViewModels
                 _ => HasDictionarySuggestions);
             ImportGlobalDictionaryCommand = new RelayCommand(_ => ImportGlobalDictionary());
             ExportGlobalDictionaryCommand = new RelayCommand(_ => ExportGlobalDictionary());
+            CopyHistoryCommand = new RelayCommand(obj =>
+            {
+                if (obj is HistoryEntry entry && !string.IsNullOrWhiteSpace(entry.RefinedText))
+                {
+                    Clipboard.SetText(entry.RefinedText);
+                }
+            });
+            CopyOriginalHistoryCommand = new RelayCommand(obj =>
+            {
+                if (obj is HistoryEntry entry && !string.IsNullOrWhiteSpace(entry.OriginalText))
+                {
+                    Clipboard.SetText(entry.OriginalText);
+                }
+            });
+            RetryHistoryInsertCommand = new RelayCommand(
+                async obj =>
+                {
+                    if (obj is HistoryEntry entry)
+                    {
+                        await App.RetryHistoryInsertAsync(entry);
+                    }
+                },
+                obj => obj is HistoryEntry entry && entry.CanReplayText);
+            ReprocessHistoryEntryCommand = new RelayCommand(
+                async obj =>
+                {
+                    if (obj is HistoryEntry entry)
+                    {
+                        await App.ReprocessHistoryEntryAsync(entry);
+                    }
+                },
+                obj => obj is HistoryEntry entry && entry.CanReprocess);
+            TogglePinnedHistoryCommand = new RelayCommand(
+                obj =>
+                {
+                    if (obj is HistoryEntry entry)
+                    {
+                        entry.Pinned = !entry.Pinned;
+                        HistoryManager.SetPinned(entry.Id, entry.Pinned);
+                    }
+                },
+                obj => obj is HistoryEntry);
 
             SetProfileByIdCommand = new RelayCommand(obj =>
             {
@@ -1767,6 +2326,7 @@ namespace Speakly.ViewModels
                 _ => !IsRefreshingModels);
 
             ReloadSavedPrompts();
+            ReloadSavedSnippets();
 
             SaveCurrentPromptCommand = new RelayCommand(_ =>
             {
@@ -1796,6 +2356,72 @@ namespace Speakly.ViewModels
             },
             _ => CanDeleteSelectedPrompt);
 
+            SaveSnippetCommand = new RelayCommand(_ =>
+            {
+                var trigger = NewSnippetTrigger?.Trim();
+                var replacement = NewSnippetReplacement?.Trim();
+                if (string.IsNullOrWhiteSpace(trigger) || string.IsNullOrWhiteSpace(replacement))
+                {
+                    return;
+                }
+
+                _snippetList = SnippetLibraryManager.AddOrUpdate(_snippetList, trigger, replacement);
+                SavedSnippets.Clear();
+                foreach (var snippet in _snippetList)
+                {
+                    SavedSnippets.Add(snippet);
+                }
+
+                SelectedSnippetEntry = SavedSnippets.FirstOrDefault(entry =>
+                    string.Equals(entry.Trigger, trigger, StringComparison.OrdinalIgnoreCase));
+                NewSnippetTrigger = string.Empty;
+                NewSnippetReplacement = string.Empty;
+            },
+            _ => !string.IsNullOrWhiteSpace(NewSnippetTrigger) && !string.IsNullOrWhiteSpace(NewSnippetReplacement));
+
+            DeleteSelectedSnippetCommand = new RelayCommand(_ =>
+            {
+                if (_selectedSnippetEntry == null)
+                {
+                    return;
+                }
+
+                var trigger = _selectedSnippetEntry.Trigger;
+                _snippetList = SnippetLibraryManager.Delete(_snippetList, trigger);
+                SavedSnippets.Clear();
+                foreach (var snippet in _snippetList)
+                {
+                    SavedSnippets.Add(snippet);
+                }
+
+                SelectedSnippetEntry = SavedSnippets.FirstOrDefault();
+                if (_selectedSnippetEntry == null)
+                {
+                    NewSnippetTrigger = string.Empty;
+                    NewSnippetReplacement = string.Empty;
+                }
+            },
+            _ => CanDeleteSelectedSnippet);
+
+            AddCorrectionSuggestionToDictionaryCommand = new RelayCommand(
+                obj => AddCorrectionSuggestionToDictionary(obj as CorrectionSuggestionEntry ?? SelectedCorrectionSuggestion),
+                obj => (obj as CorrectionSuggestionEntry ?? SelectedCorrectionSuggestion)?.CanAddToDictionary == true);
+            AddCorrectionSuggestionToSnippetCommand = new RelayCommand(
+                obj => AddCorrectionSuggestionAsSnippet(obj as CorrectionSuggestionEntry ?? SelectedCorrectionSuggestion),
+                obj => (obj as CorrectionSuggestionEntry ?? SelectedCorrectionSuggestion)?.CanSaveAsSnippet == true);
+            DismissCorrectionSuggestionCommand = new RelayCommand(
+                obj => DismissCorrectionSuggestion(obj as CorrectionSuggestionEntry ?? SelectedCorrectionSuggestion),
+                obj => (obj as CorrectionSuggestionEntry ?? SelectedCorrectionSuggestion) != null);
+            ClearCorrectionSuggestionsCommand = new RelayCommand(
+                _ =>
+                {
+                    CorrectionSuggestions.Clear();
+                    SelectedCorrectionSuggestion = null;
+                    OnPropertyChanged(nameof(HasCorrectionSuggestions));
+                    CommandManager.InvalidateRequerySuggested();
+                },
+                _ => HasCorrectionSuggestions);
+
             RunHealthChecks();
             RefreshDictionaryTextFromConfig();
             RefreshTargetProfileMatch();
@@ -1813,6 +2439,12 @@ namespace Speakly.ViewModels
                     or nameof(HasDeepgramLanguageGuard)
                     or nameof(SelectedDictionarySuggestion)
                     or nameof(HasDictionarySuggestions)
+                    or nameof(SelectedCorrectionSuggestion)
+                    or nameof(HasCorrectionSuggestions)
+                    or nameof(SelectedSnippetEntry)
+                    or nameof(CanDeleteSelectedSnippet)
+                    or nameof(NewSnippetTrigger)
+                    or nameof(NewSnippetReplacement)
                     or nameof(NewProfileName)
                     or nameof(ProfileDraftName)
                     or nameof(ProfileProcessNamesInput)
@@ -1822,8 +2454,15 @@ namespace Speakly.ViewModels
                     or nameof(SelectedProfileSttSummary)
                     or nameof(SelectedProfileRefinementSummary)
                     or nameof(SelectedProfileRuntimeSummary)
+                    or nameof(SelectedProfileModeSummary)
                     or nameof(SelectedProfileDictionarySummary)
-                    or nameof(CanDeleteSelectedProfile))
+                    or nameof(CanDeleteSelectedProfile)
+                    or nameof(ActiveDictationModeTitle)
+                    or nameof(ActiveDictationModeDescription)
+                    or nameof(StylePresetDescription)
+                    or nameof(IsCustomStylePreset)
+                    or nameof(ContextConfigurationSummary)
+                    or nameof(LastContextUsageStatus))
                     return;
 
                 ConfigManager.SaveDebounced();
@@ -1905,6 +2544,7 @@ namespace Speakly.ViewModels
 
             if (RefinementModel == "OpenAI")
             {
+                AvailableRefinementModels.Add("gpt-4.1-mini");
                 AvailableRefinementModels.Add("gpt-4o-mini");
                 AvailableRefinementModels.Add("gpt-4o");
                 AvailableRefinementModels.Add("gpt-4-turbo");
@@ -1921,11 +2561,14 @@ namespace Speakly.ViewModels
             }
             else if (RefinementModel == "OpenRouter")
             {
-                AvailableRefinementModels.Add("google/gemini-2.0-flash-001");
-                AvailableRefinementModels.Add("google/gemini-2.0-pro-exp-02-05:free");
-                AvailableRefinementModels.Add("google/gemini-flash-1.5");
-                AvailableRefinementModels.Add("anthropic/claude-3-haiku");
+                AvailableRefinementModels.Add("openai/gpt-4.1-mini");
+                AvailableRefinementModels.Add("google/gemini-2.5-flash");
+                AvailableRefinementModels.Add("openai/gpt-4o-mini");
+                AvailableRefinementModels.Add("qwen/qwen3-235b-a22b-2507");
+                AvailableRefinementModels.Add("google/gemini-3.1-flash-lite-preview");
+                AvailableRefinementModels.Add("google/gemini-2.5-flash-lite");
                 AvailableRefinementModels.Add("anthropic/claude-3.5-sonnet");
+                AvailableRefinementModels.Add("anthropic/claude-3-haiku");
                 AvailableRefinementModels.Add("meta-llama/llama-3.1-8b-instruct:free");
                 AvailableRefinementModels.Add("meta-llama/llama-3.1-70b-instruct");
                 AvailableRefinementModels.Add("x-ai/grok-2");

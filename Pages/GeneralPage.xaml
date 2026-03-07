@@ -74,6 +74,21 @@
                                        Style="{StaticResource HintText}"
                                        Margin="0,0,0,10" />
 
+                            <TextBlock Text="DICTATION COMMANDS" Style="{StaticResource PageFeatureLabel}" Margin="0,8,0,8" />
+                            <ui:ToggleSwitch Content="Enable voice edit commands"
+                                             IsChecked="{Binding EnableVoiceCommands}"
+                                             Style="{StaticResource AccentToggleSwitch}" />
+                            <TextBlock Text="Command Mode" Style="{StaticResource FieldLabel}" />
+                            <ComboBox ItemsSource="{Binding AvailableVoiceCommandModes}"
+                                      SelectedItem="{Binding VoiceCommandMode}"
+                                      Style="{StaticResource DropdownDefault}"
+                                      Margin="0,0,0,10"
+                                      MaxWidth="240"
+                                      HorizontalAlignment="Left" />
+                            <TextBlock Text="Mixed mode lets phrases like “delete that” or “press enter” execute editing actions instead of being inserted as text."
+                                       Style="{StaticResource HintText}"
+                                       Margin="0,0,0,10" />
+
                             <ui:ToggleSwitch Content="Enable STT failover on transient errors"
                                              IsChecked="{Binding EnableSttFailover}"
                                              Style="{StaticResource AccentToggleSwitch}" />

@@ -10,8 +10,8 @@
     <RuntimeIdentifiers>win-x64</RuntimeIdentifiers>
     <DefaultItemExcludes>$(DefaultItemExcludes);obj_build\**;obj_build/**;obj_ci_tmp\**;obj_ci_tmp/**;Speakly.Tests.Unit\**;Speakly.Tests.Unit/**</DefaultItemExcludes>
     <ApplicationIcon>Resources\Speakly_new_logo.ico</ApplicationIcon>
-    <Version>2.0.3</Version>
-    <AssemblyVersion>2.0.3.0</AssemblyVersion>
+    <Version>2.0.4</Version>
+    <AssemblyVersion>2.0.4.0</AssemblyVersion>
   </PropertyGroup>
 
   <ItemGroup>

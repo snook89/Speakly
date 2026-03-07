@@ -19,6 +19,7 @@ namespace Speakly.Services
         private Window _mainWindow;
         private ContextMenu _contextMenu;
         private MenuItem _profilesMenu = null!;
+        private MenuItem _modesMenu = null!;
 
         public TrayIconService(Window mainWindow)
         {
@@ -55,10 +56,20 @@ namespace Speakly.Services
             {
                 App.ViewModel.CycleProfileCommand.Execute(null);
                 RefreshProfileChecks(_profilesMenu);
+                RefreshModeChecks(_modesMenu);
+            };
+
+            MenuItem nextMode = new MenuItem { Header = "Next Mode" };
+            nextMode.Click += (_, _) =>
+            {
+                App.ViewModel.CycleDictationModeCommand.Execute(null);
+                RefreshModeChecks(_modesMenu);
             };
 
             _profilesMenu = new MenuItem { Header = "Profiles" };
             RebuildProfilesMenu();
+            _modesMenu = new MenuItem { Header = "Modes" };
+            RebuildModesMenu();
             
             MenuItem exitItem = new MenuItem { Header = "Exit" };
             exitItem.Click += OnExitClick;
@@ -67,7 +78,9 @@ namespace Speakly.Services
             _contextMenu.Items.Add(showOverlayItem);
             _contextMenu.Items.Add(toggleRefinement);
             _contextMenu.Items.Add(nextProfile);
+            _contextMenu.Items.Add(nextMode);
             _contextMenu.Items.Add(_profilesMenu);
+            _contextMenu.Items.Add(_modesMenu);
             _contextMenu.Items.Add(new Separator());
             _contextMenu.Items.Add(exitItem);
 
@@ -89,6 +102,7 @@ namespace Speakly.Services
             var hwnd = new WindowInteropHelper(_mainWindow).Handle;
             SetForegroundWindow(hwnd);
             RebuildProfilesMenu();
+            RebuildModesMenu();
             _contextMenu.IsOpen = true;
         }
         
@@ -166,6 +180,7 @@ namespace Speakly.Services
                 {
                     App.ViewModel.SetProfileByIdCommand.Execute(item.Tag?.ToString());
                     RefreshProfileChecks(_profilesMenu);
+                    RefreshModeChecks(_modesMenu);
                 };
                 _profilesMenu.Items.Add(item);
             }
@@ -180,6 +195,36 @@ namespace Speakly.Services
                 if (entry is not MenuItem profileItem) continue;
                 var id = profileItem.Tag?.ToString() ?? string.Empty;
                 profileItem.IsChecked = string.Equals(id, App.ViewModel.SelectedProfile?.Id, StringComparison.OrdinalIgnoreCase);
+            }
+        }
+
+        private void RebuildModesMenu()
+        {
+            _modesMenu.Items.Clear();
+            foreach (var mode in App.ViewModel.AvailableDictationModes)
+            {
+                var item = new MenuItem { Header = mode, Tag = mode, IsCheckable = true };
+                item.Click += (_, _) =>
+                {
+                    App.ViewModel.SetDictationModeCommand.Execute(item.Tag?.ToString());
+                    RefreshModeChecks(_modesMenu);
+                };
+                _modesMenu.Items.Add(item);
+            }
+
+            RefreshModeChecks(_modesMenu);
+        }
+
+        private static void RefreshModeChecks(MenuItem modesMenu)
+        {
+            foreach (var entry in modesMenu.Items)
+            {
+                if (entry is not MenuItem modeItem) continue;
+                var mode = modeItem.Tag?.ToString() ?? string.Empty;
+                modeItem.IsChecked = string.Equals(
+                    mode,
+                    App.ViewModel.DictationMode,
+                    StringComparison.OrdinalIgnoreCase);
             }
         }
     }

@@ -109,6 +109,34 @@
                     </StackPanel>
                 </Border>
 
+                <Border Style="{StaticResource PageFeatureCard}"
+                        Margin="0,0,0,16"
+                        Visibility="{Binding HasSelectedTopicLinks, Converter={StaticResource BooleanToVisibilityConverter}}">
+                    <StackPanel>
+                        <TextBlock Text="PROVIDER LINKS" Style="{StaticResource PageFeatureLabel}" />
+                        <TextBlock Text="Open signup and API key pages" Style="{StaticResource SectionTitle}" />
+                        <ItemsControl ItemsSource="{Binding SelectedTopicLinks}" Margin="0,10,0,0">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate DataType="{x:Type docs:DocsLink}">
+                                    <Border Style="{StaticResource PageFeatureSurface}" Margin="0,0,0,12">
+                                        <StackPanel>
+                                            <ui:Button Content="{Binding Label}"
+                                                       Style="{StaticResource SecondaryButton}"
+                                                       HorizontalAlignment="Left"
+                                                       Tag="{Binding Url}"
+                                                       Click="OpenDocsLinkButton_Click" />
+                                            <TextBlock Text="{Binding Description}"
+                                                       Style="{StaticResource HintText}"
+                                                       TextWrapping="Wrap"
+                                                       Margin="0,10,0,0" />
+                                        </StackPanel>
+                                    </Border>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </StackPanel>
+                </Border>
+
                 <ItemsControl ItemsSource="{Binding SelectedTopic.Sections}">
                     <ItemsControl.ItemTemplate>
                         <DataTemplate DataType="{x:Type docs:DocsSection}">

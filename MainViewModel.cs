@@ -40,6 +40,9 @@ namespace Speakly.ViewModels
         private string _profileStatusMessage = "Tip: create additional profiles and map them to process names (for example: code, notepad).";
         private string _currentTargetProcessStatus = "Current app: (not detected)";
         private string _matchedProfileForTargetStatus = "Matched profile: (none)";
+        private string _runtimeActiveProfileName = string.Empty;
+        private string _runtimeHealthSummary = string.Empty;
+        private string _runtimeHealthDetails = string.Empty;
         private bool _isCaptureProfileProcessInProgress;
         private bool _isApplyingPromptPresetFromProfile;
         private string _globalDictionaryTermsText = string.Empty;
@@ -56,6 +59,8 @@ namespace Speakly.ViewModels
 
         public event Action<string, string, string, string>? ApiTestCompleted;
         public event Action<bool>? RefreshModelsCompleted;
+
+        public List<string> AvailablePrivacyModes { get; } = new() { "normal", "no_history" };
 
         public ICommand RefreshModelsCommand { get; }
         public ICommand SaveCurrentPromptCommand { get; }
@@ -999,6 +1004,7 @@ namespace Speakly.ViewModels
                 }
                 OnPropertyChanged();
                 OnPropertyChanged(nameof(ActiveProfileName));
+                OnPropertyChanged(nameof(RuntimeProfileStatus));
                 OnPropertyChanged(nameof(CanDeleteSelectedProfile));
                 OnPropertyChanged(nameof(CanCycleProfile));
                 OnPropertyChanged(nameof(ActiveDictationModeTitle));
@@ -1008,7 +1014,29 @@ namespace Speakly.ViewModels
             }
         }
 
-        public string ActiveProfileName => SelectedProfile?.Name ?? "Default";
+        public string ActiveProfileName =>
+            !string.IsNullOrWhiteSpace(_runtimeActiveProfileName)
+                ? _runtimeActiveProfileName
+                : SelectedProfile?.Name ?? ConfigManager.GetActiveProfile().Name;
+
+        public string RuntimeProfileStatus
+        {
+            get
+            {
+                var editingProfile = SelectedProfile?.Name ?? ConfigManager.GetActiveProfile().Name;
+                if (string.IsNullOrWhiteSpace(_runtimeActiveProfileName))
+                {
+                    return $"Editing profile: {editingProfile}";
+                }
+
+                if (string.Equals(editingProfile, _runtimeActiveProfileName, StringComparison.OrdinalIgnoreCase))
+                {
+                    return $"Session profile: {_runtimeActiveProfileName}";
+                }
+
+                return $"Session profile: {_runtimeActiveProfileName} | Editing profile: {editingProfile}";
+            }
+        }
 
         public string NewProfileName
         {
@@ -1684,6 +1712,20 @@ namespace Speakly.ViewModels
                 : status.Trim();
         }
 
+        public void SetRuntimeActiveProfile(AppProfile? profile)
+        {
+            _runtimeActiveProfileName = profile?.Name?.Trim() ?? string.Empty;
+            OnPropertyChanged(nameof(ActiveProfileName));
+            OnPropertyChanged(nameof(RuntimeProfileStatus));
+        }
+
+        public void SetRuntimeHealthIssue(string summary, string details)
+        {
+            _runtimeHealthSummary = summary?.Trim() ?? string.Empty;
+            _runtimeHealthDetails = details?.Trim() ?? string.Empty;
+            RunHealthChecks();
+        }
+
         private void OpenDebugLogs()
         {
             var logPath = Logger.LogFilePath;
@@ -1795,7 +1837,9 @@ namespace Speakly.ViewModels
         {
             LastInsertionMethod = string.IsNullOrWhiteSpace(method) ? "Unknown" : method;
             LastInsertionStatus = success
-                ? $"OK ({LastInsertionMethod})"
+                ? string.IsNullOrWhiteSpace(errorCode)
+                    ? $"OK ({LastInsertionMethod})"
+                    : $"OK ({LastInsertionMethod}) | Warning: {errorCode}"
                 : $"Failed ({LastInsertionMethod}){(string.IsNullOrWhiteSpace(errorCode) ? string.Empty : $": {errorCode}")}";
         }
 
@@ -2130,14 +2174,34 @@ namespace Speakly.ViewModels
             set { ConfigManager.Config.EnableDebugLogs = value; OnPropertyChanged(); }
         }
 
+        public string PrivacyMode
+        {
+            get => NormalizePrivacyMode(ConfigManager.Config.PrivacyMode);
+            set
+            {
+                ConfigManager.Config.PrivacyMode = NormalizePrivacyMode(value);
+                OnPropertyChanged();
+            }
+        }
+
+        public int HistoryRetentionDays
+        {
+            get => Math.Clamp(ConfigManager.Config.HistoryRetentionDays, 1, 3650);
+            set
+            {
+                ConfigManager.Config.HistoryRetentionDays = Math.Clamp(value, 1, 3650);
+                OnPropertyChanged();
+            }
+        }
+
         public string Theme
         {
-            get => ConfigManager.Config.Theme;
+            get => App.NormalizeThemeName(ConfigManager.Config.Theme);
             set 
             { 
-                const string darkTheme = "Dark";
-                ConfigManager.Config.Theme = darkTheme;
-                App.SetTheme(darkTheme);
+                var normalizedTheme = App.NormalizeThemeName(value);
+                ConfigManager.Config.Theme = normalizedTheme;
+                App.SetTheme(normalizedTheme);
                 OnPropertyChanged(); 
             }
         }
@@ -3358,13 +3422,28 @@ namespace Speakly.ViewModels
         public void RunHealthChecks()
         {
             var result = HealthCheckService.Run(ConfigManager.Config);
-            HealthSummary = result.Summary;
-            HealthDetails = result.Details;
+            HealthSummary = string.IsNullOrWhiteSpace(_runtimeHealthSummary)
+                ? result.Summary
+                : string.IsNullOrWhiteSpace(result.Summary)
+                    ? _runtimeHealthSummary
+                    : $"{result.Summary} | {_runtimeHealthSummary}";
+            HealthDetails = string.IsNullOrWhiteSpace(_runtimeHealthDetails)
+                ? result.Details
+                : string.IsNullOrWhiteSpace(result.Details)
+                    ? _runtimeHealthDetails
+                    : $"{result.Details}{Environment.NewLine}{_runtimeHealthDetails}";
             TelemetryManager.Track(
                 name: "healthcheck_run",
                 level: result.HasIssues ? "warning" : "info",
                 success: !result.HasIssues,
                 result: result.HasIssues ? "issues_detected" : "healthy");
+        }
+
+        private static string NormalizePrivacyMode(string? value)
+        {
+            return string.Equals(value?.Trim(), "no_history", StringComparison.OrdinalIgnoreCase)
+                ? "no_history"
+                : "normal";
         }
 
         protected void OnPropertyChanged([CallerMemberName] string? name = null)

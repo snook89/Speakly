@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using System.ComponentModel;
+using System.Diagnostics;
 using System.Runtime.CompilerServices;
 using System.Windows;
 using System.Windows.Controls;
@@ -39,6 +40,8 @@ namespace Speakly.Pages
                 OnPropertyChanged(nameof(HasSelectedTopicTargetPage));
                 OnPropertyChanged(nameof(OpenTargetPageButtonText));
                 OnPropertyChanged(nameof(SelectedTopicSummaryLine));
+                OnPropertyChanged(nameof(SelectedTopicLinks));
+                OnPropertyChanged(nameof(HasSelectedTopicLinks));
                 TopicScrollViewer?.ScrollToHome();
             }
         }
@@ -55,6 +58,10 @@ namespace Speakly.Pages
                 ? $"Read the docs here, then jump straight into the {SelectedTopic.TargetPageTag} page to apply the recommended setup."
                 : "This topic is informational only and does not map to a dedicated settings page.";
 
+        public IReadOnlyList<DocsLink> SelectedTopicLinks => SelectedTopic.Links ?? System.Array.Empty<DocsLink>();
+
+        public bool HasSelectedTopicLinks => SelectedTopicLinks.Count > 0;
+
         private void OpenTargetPageButton_Click(object sender, RoutedEventArgs e)
         {
             if (!SelectedTopic.HasTargetPage)
@@ -65,6 +72,27 @@ namespace Speakly.Pages
             if (Application.Current.MainWindow is MainWindow mainWindow)
             {
                 mainWindow.NavigateToSection(SelectedTopic.TargetPageTag!);
+            }
+        }
+
+        private void OpenDocsLinkButton_Click(object sender, RoutedEventArgs e)
+        {
+            if (sender is not Button button || button.Tag is not string url || string.IsNullOrWhiteSpace(url))
+            {
+                return;
+            }
+
+            try
+            {
+                Process.Start(new ProcessStartInfo(url) { UseShellExecute = true });
+            }
+            catch (System.Exception ex)
+            {
+                MessageBox.Show(
+                    $"Could not open link.\n\n{url}\n\n{ex.Message}",
+                    "Open Link Failed",
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Warning);
             }
         }
 

@@ -11,7 +11,7 @@
                 <TextBlock Text="Info" Style="{StaticResource PageTitle}" Margin="0" />
             </StackPanel>
 
-            <TextBlock Text="Speech-to-text capture with optional AI refinement, built for fast keyboard-first workflows."
+            <TextBlock Text="Speech-to-text capture, profile-aware refinement, command handling, history recovery, and built-in docs for fast keyboard-first workflows."
                        Style="{StaticResource HintText}"
                        Margin="0,0,0,18" />
 
@@ -73,9 +73,30 @@
                     <TextBlock Text="OVERVIEW" Style="{StaticResource PageFeatureLabel}" />
                     <TextBlock Text="Overview" Style="{StaticResource SectionTitle}" />
                     <TextBlock Style="{StaticResource BodyText}">
-                        Speakly is a lightweight Windows utility for real-time speech-to-text transcription with optional AI text refinement.
-                        Press a configurable hotkey to record your voice, and the transcribed text is inserted where your cursor is.
+                        Speakly is a Windows dictation app for people who want system-wide voice typing to behave like part of a serious desktop workflow.
+                        It supports per-app profiles, spoken edit commands, context-aware refinement, snippets and dictionary personalization, actionable history, and a built-in Docs section that explains how each part works.
                     </TextBlock>
+                </StackPanel>
+            </Border>
+
+            <Border Style="{StaticResource PageFeatureCard}">
+                <StackPanel>
+                    <TextBlock Text="CURRENT PRODUCT" Style="{StaticResource PageFeatureLabel}" />
+                    <TextBlock Text="What Speakly Includes" Style="{StaticResource SectionTitle}" />
+                    <TextBlock Text="1. Process-aware profiles that auto-switch settings at dictation start."
+                               Style="{StaticResource HintText}"
+                               Margin="0,0,0,6" />
+                    <TextBlock Text="2. Voice edit commands such as delete that, scratch that, undo that, and press enter."
+                               Style="{StaticResource HintText}"
+                               Margin="0,0,0,6" />
+                    <TextBlock Text="3. Context-aware refinement with modes, style presets, and conservative or aggressive rewrite behavior."
+                               Style="{StaticResource HintText}"
+                               Margin="0,0,0,6" />
+                    <TextBlock Text="4. History retry, reprocess, compare, and pin flows for recovery without re-recording."
+                               Style="{StaticResource HintText}"
+                               Margin="0,0,0,6" />
+                    <TextBlock Text="5. Built-in Docs, local telemetry, health checks, and GitHub-backed updates."
+                               Style="{StaticResource HintText}" />
                 </StackPanel>
             </Border>
 

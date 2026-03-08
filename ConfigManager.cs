@@ -552,13 +552,13 @@ namespace Speakly.Config
             switch (profile.RefinementProvider)
             {
                 case "OpenRouter":
-                    config.OpenRouterRefinementModel = profile.RefinementModel;
+                    config.OpenRouterRefinementModel = ResolveRefinementModel(profile.RefinementProvider, profile.RefinementModel);
                     break;
                 case "Cerebras":
-                    config.CerebrasRefinementModel = profile.RefinementModel;
+                    config.CerebrasRefinementModel = ResolveRefinementModel(profile.RefinementProvider, profile.RefinementModel);
                     break;
                 default:
-                    config.OpenAIRefinementModel = profile.RefinementModel;
+                    config.OpenAIRefinementModel = ResolveRefinementModel(profile.RefinementProvider, profile.RefinementModel);
                     break;
             }
         }
@@ -600,6 +600,9 @@ namespace Speakly.Config
             config.CustomStylePrompt = config.CustomStylePrompt?.Trim() ?? string.Empty;
             config.VoiceCommandMode = DictationExperienceService.NormalizeVoiceCommandMode(config.VoiceCommandMode);
             config.ContextualRefinementMode = DictationExperienceService.NormalizeContextualRefinementMode(config.ContextualRefinementMode);
+            config.OpenAIRefinementModel = ResolveRefinementModel("OpenAI", config.OpenAIRefinementModel);
+            config.OpenRouterRefinementModel = ResolveRefinementModel("OpenRouter", config.OpenRouterRefinementModel);
+            config.CerebrasRefinementModel = ResolveRefinementModel("Cerebras", config.CerebrasRefinementModel);
 
             if (config.Profiles == null)
                 config.Profiles = new List<AppProfile>();
@@ -626,6 +629,9 @@ namespace Speakly.Config
                     profile.SttFailoverOrder = new List<string> { "Deepgram", "OpenAI", "OpenRouter" };
                 if (string.IsNullOrWhiteSpace(profile.RefinementPrompt))
                     profile.RefinementPrompt = AppConfig.DefaultRefinementPrompt;
+                if (string.IsNullOrWhiteSpace(profile.RefinementProvider))
+                    profile.RefinementProvider = config.RefinementModel;
+                profile.RefinementModel = ResolveRefinementModel(profile.RefinementProvider, profile.RefinementModel);
                 if (string.IsNullOrWhiteSpace(profile.PromptPresetName))
                     profile.PromptPresetName = ResolvePromptPresetName(profile.RefinementPrompt);
                 profile.DictationMode = DictationExperienceService.NormalizeMode(profile.DictationMode);
@@ -655,11 +661,29 @@ namespace Speakly.Config
 
         private static string ResolveRefinementModel(AppConfig config)
         {
-            return config.RefinementModel switch
+            return ResolveRefinementModel(
+                config.RefinementModel,
+                config.RefinementModel switch
+                {
+                    "OpenRouter" => config.OpenRouterRefinementModel,
+                    "Cerebras" => config.CerebrasRefinementModel,
+                    _ => config.OpenAIRefinementModel
+                });
+        }
+
+        public static string ResolveRefinementModel(string? provider, string? configuredModel = null)
+        {
+            var normalizedModel = configuredModel?.Trim();
+            if (!string.IsNullOrWhiteSpace(normalizedModel))
             {
-                "OpenRouter" => config.OpenRouterRefinementModel,
-                "Cerebras" => config.CerebrasRefinementModel,
-                _ => config.OpenAIRefinementModel
+                return normalizedModel;
+            }
+
+            return provider?.Trim() switch
+            {
+                "OpenRouter" => "openai/gpt-4.1-mini",
+                "Cerebras" => "llama3.1-8b",
+                _ => "gpt-4.1-mini"
             };
         }
 

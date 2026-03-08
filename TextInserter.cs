@@ -57,6 +57,18 @@ namespace Speakly.Services
 
     public static class TextInserter
     {
+        private readonly struct ClipboardSnapshot
+        {
+            public ClipboardSnapshot(bool hasData, IDataObject? dataObject)
+            {
+                HasData = hasData;
+                DataObject = dataObject;
+            }
+
+            public bool HasData { get; }
+            public IDataObject? DataObject { get; }
+        }
+
         [DllImport("user32.dll", SetLastError = true)]
         private static extern uint SendInput(uint nInputs, [MarshalAs(UnmanagedType.LPArray), In] INPUT[] pInputs, int cbSize);
 
@@ -251,7 +263,7 @@ namespace Speakly.Services
                     $"Could not restore focus to target window ({targetContext}).");
             }
 
-            if (!TryClipboardPaste(text, out string clipboardPasteError))
+            if (!TryClipboardPaste(text, out string clipboardPasteError, out string clipboardWarningCode))
             {
                 Logger.Log($"Clipboard paste failed ({clipboardPasteError}); trying SendInput fallback.");
                 if (GetForegroundWindow() == targetContext.Handle
@@ -277,6 +289,7 @@ namespace Speakly.Services
             {
                 Success = true,
                 Method = "ClipboardPaste",
+                ErrorCode = clipboardWarningCode,
                 FailureReason = InsertionFailureReason.None,
                 TargetLocked = true,
                 ClipboardUpdated = true
@@ -504,7 +517,7 @@ namespace Speakly.Services
                 return false;
             }
 
-            if (!TrySnapshotClipboardText(out bool hadText, out string? originalText, out errorCode))
+            if (!TrySnapshotClipboard(out var originalClipboard, out errorCode))
             {
                 return false;
             }
@@ -550,9 +563,11 @@ namespace Speakly.Services
             }
             finally
             {
-                if (clipboardPrimed && !TryRestoreClipboard(hadText, originalText, out var restoreError))
+                if (clipboardPrimed && !TryRestoreClipboard(originalClipboard, out var restoreError))
                 {
                     Logger.Log($"Selected-text clipboard restore failed: {restoreError}");
+                    errorCode = restoreError;
+                    selectedText = string.Empty;
                 }
             }
         }
@@ -606,16 +621,16 @@ namespace Speakly.Services
             };
         }
 
-        private static bool TryClipboardPaste(string text, out string errorCode)
+        private static bool TryClipboardPaste(string text, out string errorCode, out string warningCode)
         {
             errorCode = string.Empty;
+            warningCode = string.Empty;
             bool restoreClipboard = Config.ConfigManager.Config.RestoreClipboard;
-            bool hadText = false;
-            string? originalText = null;
+            ClipboardSnapshot originalClipboard = default;
 
             try
             {
-                if (!TrySetClipboardTextWithSnapshot(text, restoreClipboard, out hadText, out originalText, out errorCode))
+                if (!TrySetClipboardTextWithSnapshot(text, restoreClipboard, out originalClipboard, out errorCode))
                 {
                     return false;
                 }
@@ -625,9 +640,10 @@ namespace Speakly.Services
                 if (restoreClipboard)
                 {
                     Thread.Sleep(60);
-                    if (!TryRestoreClipboard(hadText, originalText, out var restoreError))
+                    if (!TryRestoreClipboard(originalClipboard, out var restoreError))
                     {
                         Logger.Log($"Clipboard restore failed: {restoreError}");
+                        warningCode = restoreError;
                     }
                 }
 
@@ -644,34 +660,32 @@ namespace Speakly.Services
         private static bool TrySetClipboardTextWithSnapshot(
             string text,
             bool snapshotOriginal,
-            out bool hadText,
-            out string? originalText,
+            out ClipboardSnapshot snapshot,
             out string errorCode)
         {
-            hadText = false;
-            originalText = null;
+            snapshot = default;
             errorCode = string.Empty;
 
             for (int attempt = 1; attempt <= 6; attempt++)
             {
                 try
                 {
-                    bool localHadText = false;
-                    string? localOriginalText = null;
+                    ClipboardSnapshot localSnapshot = default;
 
                     Application.Current.Dispatcher.Invoke(() =>
                     {
-                        if (snapshotOriginal && Clipboard.ContainsText())
+                        if (snapshotOriginal)
                         {
-                            localHadText = true;
-                            localOriginalText = Clipboard.GetText();
+                            var currentData = Clipboard.GetDataObject();
+                            localSnapshot = new ClipboardSnapshot(
+                                currentData != null,
+                                currentData != null ? new DataObject(currentData) : null);
                         }
 
                         Clipboard.SetText(text);
                     });
 
-                    hadText = localHadText;
-                    originalText = localOriginalText;
+                    snapshot = localSnapshot;
                     return true;
                 }
                 catch (Exception ex)
@@ -684,29 +698,25 @@ namespace Speakly.Services
             return false;
         }
 
-        private static bool TrySnapshotClipboardText(out bool hadText, out string? originalText, out string errorCode)
+        private static bool TrySnapshotClipboard(out ClipboardSnapshot snapshot, out string errorCode)
         {
-            hadText = false;
-            originalText = null;
+            snapshot = default;
             errorCode = string.Empty;
 
             for (int attempt = 1; attempt <= 6; attempt++)
             {
                 try
                 {
-                    bool localHadText = false;
-                    string? localOriginalText = null;
+                    ClipboardSnapshot localSnapshot = default;
                     Application.Current.Dispatcher.Invoke(() =>
                     {
-                        if (Clipboard.ContainsText())
-                        {
-                            localHadText = true;
-                            localOriginalText = Clipboard.GetText();
-                        }
+                        var currentData = Clipboard.GetDataObject();
+                        localSnapshot = new ClipboardSnapshot(
+                            currentData != null,
+                            currentData != null ? new DataObject(currentData) : null);
                     });
 
-                    hadText = localHadText;
-                    originalText = localOriginalText;
+                    snapshot = localSnapshot;
                     return true;
                 }
                 catch (Exception ex)
@@ -780,7 +790,7 @@ namespace Speakly.Services
             return false;
         }
 
-        private static bool TryRestoreClipboard(bool hadText, string? originalText, out string errorCode)
+        private static bool TryRestoreClipboard(ClipboardSnapshot snapshot, out string errorCode)
         {
             errorCode = string.Empty;
 
@@ -790,27 +800,20 @@ namespace Speakly.Services
                 {
                     Application.Current.Dispatcher.Invoke(() =>
                     {
-                        if (!hadText)
+                        if (!snapshot.HasData || snapshot.DataObject == null)
                         {
                             Clipboard.Clear();
                             return;
                         }
 
-                        if (originalText != null)
-                        {
-                            Clipboard.SetText(originalText);
-                        }
-                        else
-                        {
-                            Clipboard.Clear();
-                        }
+                        Clipboard.SetDataObject(snapshot.DataObject, true);
                     });
 
                     return true;
                 }
                 catch (Exception ex)
                 {
-                    errorCode = ex.GetType().Name;
+                    errorCode = $"clipboard_restore_failed:{ex.GetType().Name}";
                     Thread.Sleep(30);
                 }
             }

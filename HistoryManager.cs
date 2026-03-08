@@ -109,7 +109,9 @@ namespace Speakly.Services
     public static class HistoryManager
     {
         private static readonly string HistoryPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "history.json");
+        private static readonly object SyncLock = new();
         private static List<HistoryEntry> _history = new List<HistoryEntry>();
+        private static bool _isLoaded;
 
         public static void AddEntry(HistoryEntry entry)
         {
@@ -118,29 +120,34 @@ namespace Speakly.Services
                 return;
             }
 
-            if (string.IsNullOrWhiteSpace(entry.Id))
+            lock (SyncLock)
             {
-                entry.Id = Guid.NewGuid().ToString("N");
+                EnsureLoaded();
+
+                if (string.IsNullOrWhiteSpace(entry.Id))
+                {
+                    entry.Id = Guid.NewGuid().ToString("N");
+                }
+
+                if (entry.Timestamp == default)
+                {
+                    entry.Timestamp = DateTime.Now;
+                }
+
+                entry.DictationMode = DictationExperienceService.NormalizeMode(entry.DictationMode);
+                entry.ContextualRefinementMode = DictationExperienceService.NormalizeContextualRefinementMode(entry.ContextualRefinementMode);
+                entry.ActionSource = HistoryEntry.NormalizeActionSource(entry.ActionSource);
+
+                _history.Add(entry);
+
+                if (_history.Count > 100)
+                {
+                    _history.RemoveAt(0);
+                }
+
+                PurgeByRetention();
+                Save();
             }
-
-            if (entry.Timestamp == default)
-            {
-                entry.Timestamp = DateTime.Now;
-            }
-
-            entry.DictationMode = DictationExperienceService.NormalizeMode(entry.DictationMode);
-            entry.ContextualRefinementMode = DictationExperienceService.NormalizeContextualRefinementMode(entry.ContextualRefinementMode);
-            entry.ActionSource = HistoryEntry.NormalizeActionSource(entry.ActionSource);
-
-            _history.Add(entry);
-
-            if (_history.Count > 100)
-            {
-                _history.RemoveAt(0);
-            }
-
-            PurgeByRetention();
-            Save();
         }
 
         public static void AddEntry(
@@ -211,15 +218,27 @@ namespace Speakly.Services
 
         public static IReadOnlyList<HistoryEntry> GetHistory()
         {
-            if (_history.Count == 0)
+            lock (SyncLock)
             {
-                Load();
+                EnsureLoaded();
+                return _history.AsReadOnly();
             }
-            return _history.AsReadOnly();
+        }
+
+        private static void EnsureLoaded()
+        {
+            if (_isLoaded)
+            {
+                return;
+            }
+
+            Load();
+            _isLoaded = true;
         }
 
         private static void Load()
         {
+            _history = new List<HistoryEntry>();
             try
             {
                 if (File.Exists(HistoryPath))
@@ -253,13 +272,16 @@ namespace Speakly.Services
                 var options = new JsonSerializerOptions { WriteIndented = true };
                 string json = JsonSerializer.Serialize(_history, options);
                 File.WriteAllText(HistoryPath, json);
-                
-                var latest = _history[^1];
-                string logPayload = latest.WasVoiceCommand
-                    ? $"[Command] {latest.VoiceCommandName}"
-                    : latest.RefinedText;
-                string logEntry = $"[{DateTime.Now:yyyy-MM-dd HH:mm:ss}] {logPayload}";
-                File.AppendAllText(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "history.log"), logEntry + Environment.NewLine);
+
+                if (_history.Count > 0)
+                {
+                    var latest = _history[^1];
+                    string logPayload = latest.WasVoiceCommand
+                        ? $"[Command] {latest.VoiceCommandName}"
+                        : latest.RefinedText;
+                    string logEntry = $"[{DateTime.Now:yyyy-MM-dd HH:mm:ss}] {logPayload}";
+                    File.AppendAllText(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "history.log"), logEntry + Environment.NewLine);
+                }
             }
             catch (Exception ex)
             {
@@ -281,15 +303,20 @@ namespace Speakly.Services
                 return false;
             }
 
-            var entry = _history.FirstOrDefault(h => string.Equals(h.Id, id, StringComparison.OrdinalIgnoreCase));
-            if (entry == null)
+            lock (SyncLock)
             {
-                return false;
-            }
+                EnsureLoaded();
 
-            entry.Pinned = pinned;
-            Save();
-            return true;
+                var entry = _history.FirstOrDefault(h => string.Equals(h.Id, id, StringComparison.OrdinalIgnoreCase));
+                if (entry == null)
+                {
+                    return false;
+                }
+
+                entry.Pinned = pinned;
+                Save();
+                return true;
+            }
         }
     }
 }

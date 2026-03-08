@@ -133,8 +133,9 @@ Speakly is for people who want voice input to feel like part of a serious deskto
 | Insertion | Inserts text into the focused app with `SendInput`, with clipboard-based fallback for reliability |
 | Providers | STT: Deepgram, OpenAI, OpenRouter. Refinement: OpenAI, OpenRouter, Cerebras |
 | Profiles | Create profiles for apps like Chrome, VS Code, Notepad, or Slack and switch automatically by process name |
-| Refinement | Optional post-processing with custom prompts, built-in presets, saved prompt library, and model favorites |
-| Dictionary | Global and per-profile personal dictionary, import/export, and suggested-term confirmation queue |
+| Refinement | Optional post-processing with prompt presets, dictation modes, style presets, context-aware rewrite, and model favorites |
+| Commands | Spoken edit commands like `delete that`, `scratch that`, `undo that`, `select that`, `backspace`, `press enter`, `tab`, and `insert space` |
+| Personalization | Global and per-profile personal dictionary, prompt presets, snippets, and suggested-term confirmation queue |
 | Overlay | Always-on-top overlay with status, language badge, waveform, quick actions, and auto-hide |
 | Tray | Tray menu for settings, profile switching, overlay recovery, refinement toggle, and exit |
 | Docs | Built-in product documentation with topic-by-topic explanations, examples, and recommended defaults |
@@ -150,6 +151,9 @@ This README reflects the newer feature set already present in the codebase:
 - Redesigned Home screen with profile summaries and quick actions.
 - Process-aware profiles with profile cycling, process capture, and match status.
 - Prompt presets with save/delete flow for refinement prompts.
+- Dictation modes and style presets with explicit prompt-precedence handling.
+- Context-aware refinement with conservative or aggressive rewrite behavior.
+- Voice edit commands with mixed, dictation-only, and commands-only behavior.
 - Dynamic model refresh from provider APIs, plus favorite model pinning.
 - Personal dictionary suggestions that can be confirmed globally or per profile.
 - Managed audio processing with auto mic gain, normalization, and optional noise gate.
@@ -162,11 +166,37 @@ This README reflects the newer feature set already present in the codebase:
 ## Workflow
 
 1. Press and hold the push-to-talk hotkey, or use the toggle-record hotkey.
-2. Speakly captures microphone audio from the selected input device.
-3. Audio is sent to the active speech-to-text provider.
-4. If refinement is enabled, the transcript is sent to the configured AI provider.
-5. The final text is inserted into the active app.
-6. If direct insertion fails or the target app loses focus, Speakly can fall back to clipboard and deferred paste behavior.
+2. Speakly resolves the foreground app and auto-selects the matching profile by process name when one exists.
+3. Speakly captures microphone audio from the selected input device.
+4. Audio is sent to the active speech-to-text provider.
+5. Speakly checks whether the result is a spoken edit command before normal insertion.
+6. If refinement is enabled, the transcript is sent to the configured AI provider using the active prompt, mode, style, and optional context.
+7. The final text is inserted into the active app.
+8. If direct insertion fails or the target app loses focus, Speakly can fall back to clipboard and deferred paste behavior.
+
+## Profiles, Modes, And Prompt Layering
+
+- Profiles auto-switch at dictation start based on the focused app's process name, not the profile display name.
+- If no profile matches the focused process, Speakly falls back to the currently selected profile.
+- The selected profile you are editing in Home can differ from the runtime session profile. Home shows the resolved session profile separately when dictation starts in a mapped app.
+- Refinement prompt construction is layered: base prompt preset, then dictation mode, then style preset, then optional context instructions.
+- If the base prompt and selected style preset conflict on tone, the style preset wins for tone and the UI warns about the mismatch.
+- The safest setup is a neutral base prompt, explicit mode selection for task shape, and style presets for tone.
+
+## Voice Edit Commands
+
+Speakly can interpret certain spoken phrases as edit actions instead of literal text. The current command layer includes:
+
+- `delete that`
+- `scratch that`
+- `undo that`
+- `select that`
+- `backspace`
+- `press enter`
+- `tab`
+- `insert space`
+
+Commands run after STT and before final insertion. In Mixed mode, normal dictation and commands can coexist. The overlay shows when a phrase was treated as a command, and History logs command actions separately from transcript entries.
 
 ## App Pages
 
@@ -177,11 +207,11 @@ This README reflects the newer feature set already present in the codebase:
 | Audio | Select input device and tune audio capture and processing |
 | Transcription | Choose STT provider, language, model, dictionary, and advanced provider settings |
 | Refinement | Enable or disable refinement, choose provider/model, manage prompts, and tune Cerebras requests |
-| API Keys | Store and test API keys for Deepgram, OpenAI, OpenRouter, and Cerebras |
+| API Keys | Store and test API keys for Deepgram, OpenAI, OpenRouter, and Cerebras, with built-in Docs guidance for provider signup and key generation |
 | General | Overlay, tray behavior, Windows startup, deferred paste, failover, logs, and telemetry controls |
 | History | Review recent transcription activity |
 | Statistics | Inspect latency, errors, provider success rates, and telemetry summaries |
-| Docs | Read built-in guidance for modes, refinement, history, and recommended setup |
+| Docs | Read built-in guidance for profiles, prompt layering, context, commands, history, privacy, and recommended setup |
 | Info | Check version, update status, releases, and GitHub links |
 
 ## Provider Support
@@ -197,6 +227,9 @@ Notes:
 - Favorite models can be pinned for both STT and refinement pickers.
 - OpenRouter includes an optional experimental mode to show all models, including some that are not ideal for STT.
 - Deepgram multilingual mode is guarded in the UI to prevent unsupported model and language combinations.
+- Deepgram signup: [console.deepgram.com/signup](https://console.deepgram.com/signup)
+- Cerebras signup or login: [cloud.cerebras.ai](https://cloud.cerebras.ai/?utm_source=homepage)
+- For Deepgram or Cerebras, sign in to the provider dashboard, open the `API Keys` section, and generate a new key before pasting it into Speakly.
 
 ## Requirements
 
@@ -264,7 +297,12 @@ Speakly stores local state in a few places:
 - Local telemetry is configurable from the UI and stored locally only.
 - Telemetry supports `minimal`, `normal`, and `verbose` levels.
 - Redaction modes include `strict`, `hash`, and `off`.
+- Privacy mode can disable saved dictation history through `no_history`.
+- History retention is configurable in the General page, and pinned entries are preserved when older unpinned entries are pruned.
 - Legacy plaintext key fields exist only for migration compatibility.
+- Context features are opt-in. App name, window title, selected text, and clipboard are only sent when the relevant toggles are enabled.
+- History and metrics are local, but they can still contain transcript-derived text unless privacy settings reduce or disable that storage.
+- If the global keyboard hook fails to install, Speakly now reports that through health status instead of silently appearing ready.
 
 ## Build
 
@@ -282,10 +320,11 @@ dotnet publish Speakly.csproj -c Release -r win-x64
 
 GitHub releases are tag-driven.
 
-1. Bump the app version in `Speakly.csproj`.
-2. Commit the version change.
-3. Push a semantic version tag like `v2.0.2`.
-4. `.github/workflows/release.yml` builds, packages, and publishes the release artifacts.
+1. Update `README.md` and the in-app Docs content whenever product behavior, defaults, or UI explanations changed.
+2. Bump the app version in `Speakly.csproj`.
+3. Commit the version change and documentation updates together when they belong to the same release.
+4. Push a semantic version tag like `v2.0.2`.
+5. `.github/workflows/release.yml` builds, packages, and publishes the release artifacts.
 
 ## Project Structure
 

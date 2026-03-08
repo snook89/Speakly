@@ -17,26 +17,26 @@ namespace Speakly.Services
     {
         private static readonly HttpClient _httpClient = new HttpClient { Timeout = Timeout.InfiniteTimeSpan };
 
-        public async Task<string> RefineTextAsync(string text, string prompt)
+        public async Task<string> RefineTextAsync(RefinementRequest request)
         {
             var config = ConfigManager.Config;
             var apiKey = config.CerebrasApiKey;
             if (string.IsNullOrWhiteSpace(apiKey))
             {
-                return text;
+                return request.Text;
             }
 
             var maxRetries = Math.Clamp(config.CerebrasMaxRetries, 0, 6);
             var maxAttempts = 1 + maxRetries;
             var timeoutSeconds = Math.Clamp(config.CerebrasTimeoutSeconds, 10, 300);
             var baseDelayMs = Math.Clamp(config.CerebrasRetryBaseDelayMs, 100, 5000);
-            var maxTokens = ResolveCompletionBudget(text, config.CerebrasMaxCompletionTokens);
+            var maxTokens = ResolveCompletionBudget(request.Text, config.CerebrasMaxCompletionTokens);
 
-            var safePrompt = RefinementSafety.BuildSafeSystemPrompt(prompt);
-            var userMessage = RefinementSafety.BuildRefinementUserMessage(text);
+            var safePrompt = RefinementSafety.BuildSafeSystemPrompt(request.Prompt);
+            var userMessage = RefinementSafety.BuildRefinementUserMessage(request.Text);
             var requestBody = new
             {
-                model = config.CerebrasRefinementModel,
+                model = string.IsNullOrWhiteSpace(request.Model) ? config.CerebrasRefinementModel : request.Model,
                 messages = new[]
                 {
                     new { role = "system", content = safePrompt },
@@ -51,20 +51,20 @@ namespace Speakly.Services
 
             for (int attempt = 1; attempt <= maxAttempts; attempt++)
             {
-                using var request = new HttpRequestMessage(HttpMethod.Post, "https://api.cerebras.ai/v1/chat/completions")
+                using var httpRequest = new HttpRequestMessage(HttpMethod.Post, "https://api.cerebras.ai/v1/chat/completions")
                 {
                     Content = new StringContent(JsonSerializer.Serialize(requestBody), Encoding.UTF8, "application/json")
                 };
-                request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", apiKey);
+                httpRequest.Headers.Authorization = new AuthenticationHeaderValue("Bearer", apiKey);
                 if (!string.IsNullOrWhiteSpace(config.CerebrasVersionPatch))
                 {
-                    request.Headers.TryAddWithoutValidation("X-Cerebras-Version-Patch", config.CerebrasVersionPatch.Trim());
+                    httpRequest.Headers.TryAddWithoutValidation("X-Cerebras-Version-Patch", config.CerebrasVersionPatch.Trim());
                 }
 
                 using var timeoutCts = new CancellationTokenSource(TimeSpan.FromSeconds(timeoutSeconds));
                 try
                 {
-                    var response = await _httpClient.SendAsync(request, timeoutCts.Token);
+                    var response = await _httpClient.SendAsync(httpRequest, timeoutCts.Token);
                     var responseBody = await response.Content.ReadAsStringAsync();
 
                     if (response.IsSuccessStatusCode)
@@ -78,12 +78,9 @@ namespace Speakly.Services
                         }
 
                         var safeRefined = RefinementSafety.CoerceToEditOnlyOutput(
-                            text,
+                            request.Text,
                             refinedText,
-                            aggressiveContextRewrite: string.Equals(
-                                config.ContextualRefinementMode,
-                                DictationExperienceService.ContextualRefinementModeAggressiveRewrite,
-                                StringComparison.OrdinalIgnoreCase));
+                            aggressiveContextRewrite: request.AggressiveContextRewrite);
                         if (!string.Equals(safeRefined, refinedText.Trim(), StringComparison.Ordinal))
                         {
                             Logger.Log("Cerebras refinement output rejected by safety guard; using original transcription.");
@@ -150,7 +147,7 @@ namespace Speakly.Services
                 Logger.Log($"Cerebras refinement fallback reason: {lastErrorSummary}");
             }
 
-            return text;
+            return request.Text;
         }
 
         private static string? ExtractRefinedText(string responseBody)

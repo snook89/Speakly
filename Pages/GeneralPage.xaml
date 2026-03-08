@@ -89,6 +89,27 @@
                                        Style="{StaticResource HintText}"
                                        Margin="0,0,0,10" />
 
+                            <TextBlock Text="PRIVACY &amp; HISTORY" Style="{StaticResource PageFeatureLabel}" Margin="0,8,0,8" />
+                            <TextBlock Text="Privacy Mode" Style="{StaticResource FieldLabel}" />
+                            <ComboBox ItemsSource="{Binding AvailablePrivacyModes}"
+                                      SelectedItem="{Binding PrivacyMode}"
+                                      Style="{StaticResource DropdownDefault}"
+                                      Margin="0,0,0,10"
+                                      MaxWidth="240"
+                                      HorizontalAlignment="Left" />
+                            <TextBlock Text="Normal keeps local history and telemetry. No history skips saved dictation history while still allowing live use."
+                                       Style="{StaticResource HintText}"
+                                       Margin="0,0,0,10" />
+                            <TextBlock Text="History retention (days)" Style="{StaticResource FieldLabel}" />
+                            <TextBox Text="{Binding HistoryRetentionDays, UpdateSourceTrigger=LostFocus}"
+                                     Style="{StaticResource InputDefault}"
+                                     Margin="0,0,0,10"
+                                     MaxWidth="160"
+                                     HorizontalAlignment="Left" />
+                            <TextBlock Text="Pinned entries are preserved when old history is pruned."
+                                       Style="{StaticResource HintText}"
+                                       Margin="0,0,0,10" />
+
                             <ui:ToggleSwitch Content="Enable STT failover on transient errors"
                                              IsChecked="{Binding EnableSttFailover}"
                                              Style="{StaticResource AccentToggleSwitch}" />

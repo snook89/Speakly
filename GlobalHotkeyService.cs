@@ -31,13 +31,32 @@ namespace Speakly.Services
         private readonly object _pressedKeysLock = new();
         private readonly HashSet<Key> _pressedKeys = new();
 
+        public bool IsHookInstalled => _hookID != IntPtr.Zero;
+        public int HookInitializationErrorCode { get; private set; }
+        public string HookInitializationError { get; private set; } = string.Empty;
+
         public event EventHandler<HotkeyEventArgs>? KeyDown;
         public event EventHandler<HotkeyEventArgs>? KeyUp;
 
         public GlobalHotkeyService()
         {
-            _proc = HookCallback;
-            _hookID = SetHook(_proc);
+            try
+            {
+                _proc = HookCallback;
+                _hookID = SetHook(_proc);
+                if (_hookID == IntPtr.Zero)
+                {
+                    HookInitializationErrorCode = Marshal.GetLastWin32Error();
+                    HookInitializationError = HookInitializationErrorCode == 0
+                        ? "keyboard_hook_install_failed"
+                        : $"keyboard_hook_install_failed:{HookInitializationErrorCode}";
+                }
+            }
+            catch (Exception ex)
+            {
+                HookInitializationError = ex.GetType().Name;
+                HookInitializationErrorCode = Marshal.GetLastWin32Error();
+            }
         }
 
         private IntPtr SetHook(LowLevelKeyboardProc proc)
@@ -98,7 +117,11 @@ namespace Speakly.Services
                 _pressedKeys.Clear();
             }
 
-            UnhookWindowsHookEx(_hookID);
+            if (_hookID != IntPtr.Zero)
+            {
+                UnhookWindowsHookEx(_hookID);
+            }
+
             GC.SuppressFinalize(this);
         }
 

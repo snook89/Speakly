@@ -8,6 +8,7 @@ using System.Diagnostics;
 using System.ComponentModel;
 using System.Windows;
 using System.Windows.Input;
+using System.Windows.Interop;
 using System.Windows.Media;
 using System.Windows.Threading;
 using Velopack;
@@ -110,6 +111,11 @@ namespace Speakly
         private static readonly TimeSpan ElevationPromptCooldown = TimeSpan.FromSeconds(60);
         private bool _launchedFromWindowsStartup;
         private string _latestContextSummary = string.Empty;
+        private const int DwmUseImmersiveDarkMode = 20;
+        private const int DwmUseImmersiveDarkModeLegacy = 19;
+
+        [DllImport("dwmapi.dll", PreserveSig = true)]
+        private static extern int DwmSetWindowAttribute(IntPtr hwnd, int dwAttribute, ref int pvAttribute, int cbAttribute);
 
         public App()
         {
@@ -152,8 +158,6 @@ namespace Speakly
 
             // Initialize Services
             _hotkeyService = new GlobalHotkeyService();
-            _hotkeyService.KeyDown += OnPTTPressed;
-            _hotkeyService.KeyUp += OnPTTReleased;
 
             _recorder = new NAudioRecorder();
             _recorder.AudioDataAvailable += OnAudioDataAvailable;
@@ -164,6 +168,15 @@ namespace Speakly
             ViewModel.RunHealthChecks();
             ViewModel.PropertyChanged += ViewModel_PropertyChanged;
             ViewModel.SetLastContextUsageStatus(BuildContextUsageStatus(_latestContextSummary));
+            if (_hotkeyService.IsHookInstalled)
+            {
+                _hotkeyService.KeyDown += OnPTTPressed;
+                _hotkeyService.KeyUp += OnPTTReleased;
+            }
+            else
+            {
+                ReportHotkeyHookInitializationFailure();
+            }
 
             if (!ConfigManager.Config.FirstRunCompleted)
             {
@@ -314,7 +327,7 @@ namespace Speakly
                 InsertMs = (int)swInsert.ElapsedMilliseconds,
                 Succeeded = insertResult.Success,
                 InsertionMethod = $"HistoryRetry:{insertResult.Method}",
-                ErrorCode = insertResult.Success ? string.Empty : insertResult.ErrorCode,
+                ErrorCode = insertResult.ErrorCode,
                 ProfileId = entry.ProfileId,
                 ProfileName = entry.ProfileName,
                 DictationMode = DictationExperienceService.NormalizeMode(entry.DictationMode),
@@ -337,29 +350,35 @@ namespace Speakly
             }
 
             var targetContext = TextInserter.CaptureForegroundWindowContext();
+            var activeProfile = ConfigManager.GetActiveProfile();
             var dictionaryTerms = PersonalDictionaryService.GetCombinedTerms(
                 ConfigManager.Config,
-                ConfigManager.GetActiveProfile(),
+                activeProfile,
                 maxTerms: 80);
             string correctedTranscript = PersonalDictionaryService.ApplyCorrections(
                 entry.OriginalText,
                 dictionaryTerms,
                 out _);
 
-            string activeMode = DictationExperienceService.NormalizeMode(ConfigManager.Config.DictationMode);
+            string activeMode = DictationExperienceService.NormalizeMode(activeProfile.DictationMode);
             string contextSummary;
             string textToInsert = correctedTranscript;
             string learnedCandidateText = correctedTranscript;
             int refineMs = 0;
             var refinementContext = CaptureSupplementalRefinementContext(targetContext);
+            var refinementProvider = activeProfile.RefinementEnabled ? activeProfile.RefinementProvider : "Disabled";
+            var refinementModel = activeProfile.RefinementEnabled
+                ? ConfigManager.ResolveRefinementModel(activeProfile.RefinementProvider, activeProfile.RefinementModel)
+                : string.Empty;
+            var contextualMode = DictationExperienceService.NormalizeContextualRefinementMode(activeProfile.ContextualRefinementMode);
             _overlay?.SetStatus("REPROCESS", Brushes.Yellow);
 
-            if (ConfigManager.Config.EnableRefinement)
+            if (activeProfile.RefinementEnabled)
             {
-                var refiner = TextRefinerFactory.CreateRefiner(ConfigManager.Config.RefinementModel);
+                var refiner = TextRefinerFactory.CreateRefiner(activeProfile.RefinementProvider);
                 var prompt = DictationExperienceService.BuildEffectivePrompt(
                     ConfigManager.Config,
-                    ConfigManager.GetActiveProfile(),
+                    activeProfile,
                     targetContext,
                     refinementContext,
                     out contextSummary);
@@ -367,7 +386,12 @@ namespace Speakly
                 try
                 {
                     var swRefine = Stopwatch.StartNew();
-                    textToInsert = await refiner.RefineTextAsync(correctedTranscript, prompt);
+                    textToInsert = await refiner.RefineTextAsync(
+                        RefinementRequest.Create(
+                            correctedTranscript,
+                            prompt,
+                            refinementModel,
+                            contextualMode));
                     swRefine.Stop();
                     refineMs = (int)swRefine.ElapsedMilliseconds;
                     learnedCandidateText = textToInsert;
@@ -405,19 +429,19 @@ namespace Speakly
                 RefinedText = textToInsert,
                 SttProvider = entry.SttProvider,
                 SttModel = entry.SttModel,
-                RefinementProvider = ConfigManager.Config.EnableRefinement ? ConfigManager.Config.RefinementModel : "Disabled",
-                RefinementModel = ConfigManager.Config.EnableRefinement ? ResolveActiveRefinementModel() : string.Empty,
+                RefinementProvider = refinementProvider,
+                RefinementModel = refinementModel,
                 RecordMs = 0,
                 TranscribeMs = 0,
                 RefineMs = refineMs,
                 InsertMs = (int)swInsert.ElapsedMilliseconds,
                 Succeeded = insertResult.Success,
                 InsertionMethod = $"HistoryReprocess:{insertResult.Method}",
-                ErrorCode = insertResult.Success ? string.Empty : insertResult.ErrorCode,
-                ProfileId = ConfigManager.GetActiveProfile().Id,
-                ProfileName = ConfigManager.GetActiveProfile().Name,
+                ErrorCode = insertResult.ErrorCode,
+                ProfileId = activeProfile.Id,
+                ProfileName = activeProfile.Name,
                 DictationMode = activeMode,
-                ContextualRefinementMode = DictationExperienceService.NormalizeContextualRefinementMode(ConfigManager.Config.ContextualRefinementMode),
+                ContextualRefinementMode = contextualMode,
                 ContextSummary = contextSummary,
                 ActionSource = "HistoryReprocess",
                 SourceEntryId = entry.Id,
@@ -1650,12 +1674,18 @@ namespace Speakly
             }
 
             string activeMode = DictationExperienceService.NormalizeMode(_activeSessionProfile?.DictationMode ?? ConfigManager.Config.DictationMode);
+            var sessionVoiceCommandsEnabled = _activeSessionProfile?.EnableVoiceCommands ?? ConfigManager.Config.EnableVoiceCommands;
+            var sessionVoiceCommandMode = _activeSessionProfile?.VoiceCommandMode ?? ConfigManager.Config.VoiceCommandMode;
+            var sessionRefinementEnabled = _activeSessionProfile?.RefinementEnabled ?? ConfigManager.Config.EnableRefinement;
+            var sessionRefinementProvider = sessionRefinementEnabled ? ResolveSessionRefinementProvider() : "Disabled";
+            var sessionRefinementModel = sessionRefinementEnabled ? ResolveSessionRefinementModel() : string.Empty;
+            var sessionContextualMode = ResolveSessionContextualRefinementMode();
             var refinementContext = CaptureSupplementalRefinementContext(_targetWindowContext);
             string contextSummary = DictationExperienceService.BuildContextSummary(ConfigManager.Config, _targetWindowContext, refinementContext);
             var voiceCommand = DictationExperienceService.MatchVoiceCommand(
                 correctedTranscript,
-                ConfigManager.Config.EnableVoiceCommands,
-                ConfigManager.Config.VoiceCommandMode);
+                sessionVoiceCommandsEnabled,
+                sessionVoiceCommandMode);
 
             if (voiceCommand.IsMatch)
             {
@@ -1683,24 +1713,23 @@ namespace Speakly
                 refinementContext,
                 out contextSummary);
 
-            UpdateOverlayContextIndicator(ConfigManager.Config.EnableRefinement ? contextSummary : string.Empty);
+            UpdateOverlayContextIndicator(sessionRefinementEnabled ? contextSummary : string.Empty);
 
-            if (_refiner != null && ConfigManager.Config.EnableRefinement)
+            if (_refiner != null && sessionRefinementEnabled)
             {
                 SetSessionState(SessionState.Refining);
                 TrackSessionEvent("refiner_start");
-                string activeRefinementModel = ConfigManager.Config.RefinementModel switch
-                {
-                    "Cerebras" => ConfigManager.Config.CerebrasRefinementModel,
-                    "OpenRouter" => ConfigManager.Config.OpenRouterRefinementModel,
-                    _ => ConfigManager.Config.OpenAIRefinementModel
-                };
-                Logger.Log($"Refining text using {ConfigManager.Config.RefinementModel} (model={activeRefinementModel})");
+                Logger.Log($"Refining text using {sessionRefinementProvider} (model={sessionRefinementModel})");
                 _overlay?.SetStatus("REFINING", Brushes.Cyan);
                 var swRefine = Stopwatch.StartNew();
                 try
                 {
-                    textToInsert = await _refiner.RefineTextAsync(correctedTranscript, effectivePrompt);
+                    textToInsert = await _refiner.RefineTextAsync(
+                        RefinementRequest.Create(
+                            correctedTranscript,
+                            effectivePrompt,
+                            sessionRefinementModel,
+                            sessionContextualMode));
                     learnedCandidateText = textToInsert;
                 }
                 catch (Exception ex)
@@ -1710,7 +1739,7 @@ namespace Speakly
                     textToInsert = correctedTranscript;
                     learnedCandidateText = correctedTranscript;
                     Logger.LogException("HandleFinalTranscriptionAsync.Refinement", ex);
-                    Logger.Log($"Refinement fallback engaged ({ConfigManager.Config.RefinementModel}, code={refinementFallbackCode}).");
+                    Logger.Log($"Refinement fallback engaged ({sessionRefinementProvider}, code={refinementFallbackCode}).");
                 }
                 swRefine.Stop();
                 _refineMs = (int)swRefine.ElapsedMilliseconds;
@@ -1869,15 +1898,15 @@ namespace Speakly
                 RefinedText = textToInsert,
                 SttProvider = sttProvider,
                 SttModel = sttModel,
-                RefinementProvider = ConfigManager.Config.EnableRefinement ? ConfigManager.Config.RefinementModel : "Disabled",
-                RefinementModel = ConfigManager.Config.EnableRefinement ? ResolveActiveRefinementModel() : string.Empty,
+                RefinementProvider = sessionRefinementProvider,
+                RefinementModel = sessionRefinementModel,
                 RecordMs = _recordMs,
                 TranscribeMs = _transcribeMs,
                 RefineMs = _refineMs,
                 InsertMs = _insertMs,
                 Succeeded = insertResult.Success,
                 InsertionMethod = insertResult.Method,
-                ErrorCode = insertResult.Success ? string.Empty : insertResult.ErrorCode,
+                ErrorCode = insertResult.ErrorCode,
                 ProfileId = _activeSessionProfile?.Id ?? string.Empty,
                 ProfileName = _activeSessionProfile?.Name ?? "Default",
                 FailoverAttempted = _sttFailoverAttempted,
@@ -1885,7 +1914,7 @@ namespace Speakly
                 FailoverTo = _failoverToProvider,
                 FinalProviderUsed = sttProvider,
                 DictationMode = activeMode,
-                ContextualRefinementMode = DictationExperienceService.NormalizeContextualRefinementMode(ConfigManager.Config.ContextualRefinementMode),
+                ContextualRefinementMode = sessionContextualMode,
                 ContextSummary = contextSummary,
                 ActionSource = "Live"
             };
@@ -1896,8 +1925,8 @@ namespace Speakly
                 Timestamp = DateTime.Now,
                 SttProvider = sttProvider,
                 SttModel = sttModel,
-                RefinementProvider = ConfigManager.Config.EnableRefinement ? ConfigManager.Config.RefinementModel : "Disabled",
-                RefinementModel = ConfigManager.Config.EnableRefinement ? ResolveActiveRefinementModel() : string.Empty,
+                RefinementProvider = sessionRefinementProvider,
+                RefinementModel = sessionRefinementModel,
                 RecordMs = _recordMs,
                 TranscribeMs = _transcribeMs,
                 RefineMs = _refineMs,
@@ -1922,8 +1951,8 @@ namespace Speakly
                 {
                     ["stt_provider"] = sttProvider,
                     ["stt_model"] = sttModel,
-                    ["refinement_provider"] = ConfigManager.Config.EnableRefinement ? ConfigManager.Config.RefinementModel : "Disabled",
-                    ["refinement_model"] = ConfigManager.Config.EnableRefinement ? ResolveActiveRefinementModel() : string.Empty,
+                    ["refinement_provider"] = sessionRefinementProvider,
+                    ["refinement_model"] = sessionRefinementModel,
                     ["insertion_method"] = insertResult.Method,
                     ["final_segment_count"] = SnapshotFinalSegmentCount().ToString()
                 });
@@ -1977,7 +2006,7 @@ namespace Speakly
                 InsertMs = _insertMs,
                 Succeeded = insertResult.Success,
                 InsertionMethod = insertResult.Method,
-                ErrorCode = insertResult.Success ? string.Empty : insertResult.ErrorCode,
+                ErrorCode = insertResult.ErrorCode,
                 ProfileId = _activeSessionProfile?.Id ?? string.Empty,
                 ProfileName = _activeSessionProfile?.Name ?? "Default",
                 DictationMode = activeMode,
@@ -2204,8 +2233,8 @@ namespace Speakly
                 refined: string.Empty,
                 sttProvider: ConfigManager.Config.SttModel,
                 sttModel: ResolveActiveSttModel(),
-                refinementProvider: ConfigManager.Config.EnableRefinement ? ConfigManager.Config.RefinementModel : "Disabled",
-                refinementModel: ConfigManager.Config.EnableRefinement ? ResolveActiveRefinementModel() : string.Empty,
+                refinementProvider: (_activeSessionProfile?.RefinementEnabled ?? ConfigManager.Config.EnableRefinement) ? ResolveSessionRefinementProvider() : "Disabled",
+                refinementModel: (_activeSessionProfile?.RefinementEnabled ?? ConfigManager.Config.EnableRefinement) ? ResolveSessionRefinementModel() : string.Empty,
                 recordMs: _recordMs,
                 transcribeMs: _transcribeMs,
                 refineMs: _refineMs,
@@ -2225,8 +2254,8 @@ namespace Speakly
                 Timestamp = DateTime.Now,
                 SttProvider = ConfigManager.Config.SttModel,
                 SttModel = ResolveActiveSttModel(),
-                RefinementProvider = ConfigManager.Config.EnableRefinement ? ConfigManager.Config.RefinementModel : "Disabled",
-                RefinementModel = ConfigManager.Config.EnableRefinement ? ResolveActiveRefinementModel() : string.Empty,
+                RefinementProvider = (_activeSessionProfile?.RefinementEnabled ?? ConfigManager.Config.EnableRefinement) ? ResolveSessionRefinementProvider() : "Disabled",
+                RefinementModel = (_activeSessionProfile?.RefinementEnabled ?? ConfigManager.Config.EnableRefinement) ? ResolveSessionRefinementModel() : string.Empty,
                 RecordMs = _recordMs,
                 TranscribeMs = _transcribeMs,
                 RefineMs = _refineMs,
@@ -2370,15 +2399,29 @@ namespace Speakly
         }
 
         public static string AppVersion { get; } =
-            System.Reflection.Assembly.GetExecutingAssembly().GetName().Version?.ToString(3) ?? "2.0.3";
+            System.Reflection.Assembly.GetExecutingAssembly().GetName().Version?.ToString(3) ?? "2.0.4";
+
+        public static string NormalizeThemeName(string? themeName)
+        {
+            return string.Equals(themeName?.Trim(), "Light", StringComparison.OrdinalIgnoreCase)
+                ? "Light"
+                : "Dark";
+        }
 
         public static void SetTheme(string themeName)
         {
-            var appTheme = ApplicationTheme.Dark;
-            if (!string.Equals(ConfigManager.Config.Theme, "Dark", StringComparison.OrdinalIgnoreCase))
+            var normalizedTheme = NormalizeThemeName(themeName);
+            var appTheme = string.Equals(normalizedTheme, "Light", StringComparison.OrdinalIgnoreCase)
+                ? ApplicationTheme.Light
+                : ApplicationTheme.Dark;
+            var persistedTheme = ConfigManager.Config.Theme;
+            if (!string.Equals(persistedTheme, normalizedTheme, StringComparison.OrdinalIgnoreCase))
             {
-                ConfigManager.Config.Theme = "Dark";
-                ConfigManager.Save();
+                ConfigManager.Config.Theme = normalizedTheme;
+                if (!string.Equals(NormalizeThemeName(persistedTheme), normalizedTheme, StringComparison.OrdinalIgnoreCase))
+                {
+                    ConfigManager.Save();
+                }
             }
             var merged = Application.Current.Resources.MergedDictionaries;
 
@@ -2410,11 +2453,11 @@ namespace Speakly
             var mainWindow = Application.Current.MainWindow;
             if (mainWindow != null)
             {
-                WindowBackgroundManager.ApplyDarkThemeToWindow(mainWindow);
+                ApplyImmersiveThemeToWindow(mainWindow, appTheme == ApplicationTheme.Dark);
             }
 
             // Swap the custom overlay/capture brush file (Dark vs Light colours)
-            string fileName = "DarkTheme.xaml";
+            string fileName = appTheme == ApplicationTheme.Light ? "LightTheme.xaml" : "DarkTheme.xaml";
             string dictUri = $"pack://application:,,,/Themes/{fileName}";
             try
             {
@@ -2560,6 +2603,29 @@ namespace Speakly
                 uri => source.Contains(uri, StringComparison.OrdinalIgnoreCase));
         }
 
+        private static void ApplyImmersiveThemeToWindow(Window window, bool useDarkMode)
+        {
+            try
+            {
+                var handle = new WindowInteropHelper(window).Handle;
+                if (handle == IntPtr.Zero)
+                {
+                    return;
+                }
+
+                var attributeValue = useDarkMode ? 1 : 0;
+                var result = DwmSetWindowAttribute(handle, DwmUseImmersiveDarkMode, ref attributeValue, sizeof(int));
+                if (result != 0)
+                {
+                    DwmSetWindowAttribute(handle, DwmUseImmersiveDarkModeLegacy, ref attributeValue, sizeof(int));
+                }
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"Immersive theme apply failed: {ex.Message}");
+            }
+        }
+
         private static string NormalizeOverlaySkinName(string? skinName)
         {
             if (string.IsNullOrWhiteSpace(skinName)) return "Lavender";
@@ -2646,11 +2712,9 @@ namespace Speakly
 
                 Dispatcher.Invoke(() =>
                 {
-                    var match = ViewModel?.Profiles.FirstOrDefault(p =>
-                        string.Equals(p.Id, _activeSessionProfile.Id, StringComparison.OrdinalIgnoreCase));
-                    if (match != null && ViewModel != null)
+                    if (ViewModel != null)
                     {
-                        ViewModel.SelectedProfile = match;
+                        ViewModel.SetRuntimeActiveProfile(_activeSessionProfile);
                     }
                 });
             }
@@ -2658,6 +2722,7 @@ namespace Speakly
             {
                 Logger.LogException("PrepareSessionContext", ex);
                 _activeSessionProfile = ConfigManager.GetActiveProfile();
+                Dispatcher.Invoke(() => ViewModel?.SetRuntimeActiveProfile(_activeSessionProfile));
             }
         }
 
@@ -2699,13 +2764,59 @@ namespace Speakly
 
         private static string ResolveActiveRefinementModel()
         {
-            return ConfigManager.Config.RefinementModel switch
+            return ConfigManager.ResolveRefinementModel(
+                ConfigManager.Config.RefinementModel,
+                ConfigManager.Config.RefinementModel switch
+                {
+                    "OpenRouter" => ConfigManager.Config.OpenRouterRefinementModel,
+                    "Cerebras" => ConfigManager.Config.CerebrasRefinementModel,
+                    _ => ConfigManager.Config.OpenAIRefinementModel
+                 });
+        }
+
+        private string ResolveSessionRefinementProvider()
+        {
+            return _activeSessionProfile?.RefinementProvider ?? ConfigManager.Config.RefinementModel;
+        }
+
+        private string ResolveSessionRefinementModel()
+        {
+            return _activeSessionProfile != null
+                ? ConfigManager.ResolveRefinementModel(_activeSessionProfile.RefinementProvider, _activeSessionProfile.RefinementModel)
+                : ResolveActiveRefinementModel();
+        }
+
+        private string ResolveSessionContextualRefinementMode()
+        {
+            return !string.IsNullOrWhiteSpace(_activeSessionProfile?.ContextualRefinementMode)
+                ? DictationExperienceService.NormalizeContextualRefinementMode(_activeSessionProfile.ContextualRefinementMode)
+                : DictationExperienceService.NormalizeContextualRefinementMode(ConfigManager.Config.ContextualRefinementMode);
+        }
+
+        private void ReportHotkeyHookInitializationFailure()
+        {
+            var errorCode = _hotkeyService?.HookInitializationErrorCode ?? 0;
+            var errorToken = _hotkeyService?.HookInitializationError;
+            var summary = "Hotkey hook failed to initialize. Push-to-talk is unavailable until Speakly is restarted or reconfigured.";
+            var details = string.IsNullOrWhiteSpace(errorToken)
+                ? "Keyboard hook registration returned no additional error token."
+                : $"Keyboard hook error: {errorToken}";
+            if (errorCode != 0)
             {
-                "OpenRouter" => ConfigManager.Config.OpenRouterRefinementModel,
-                "Cerebras" => ConfigManager.Config.CerebrasRefinementModel,
-                "OpenAI" => ConfigManager.Config.OpenAIRefinementModel,
-                _ => string.Empty
-            };
+                details += $" (Win32: {errorCode})";
+            }
+
+            Logger.Log($"Hotkey hook initialization failed. {details}");
+            ViewModel?.SetRuntimeHealthIssue(summary, details);
+            TelemetryManager.Track(
+                name: "keyboard_hook_init_failed",
+                level: "error",
+                result: "failed",
+                errorCode: string.IsNullOrWhiteSpace(errorToken) ? "keyboard_hook_install_failed" : errorToken,
+                data: new Dictionary<string, string>
+                {
+                    ["win32_error"] = errorCode.ToString()
+                });
         }
 
         private static int CountWords(string? value)
@@ -2750,6 +2861,11 @@ namespace Speakly
             lock (_sessionLock)
             {
                 _sessionState = state;
+            }
+            if (state == SessionState.Idle)
+            {
+                _activeSessionProfile = null;
+                Dispatcher.Invoke(() => ViewModel?.SetRuntimeActiveProfile(null));
             }
             TrackSessionEvent("session_state", data: new Dictionary<string, string>
             {

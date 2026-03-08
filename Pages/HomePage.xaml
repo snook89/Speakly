@@ -88,6 +88,7 @@
                     <StackPanel Grid.Column="0">
                         <TextBlock Text="ACTIVE SESSION" Style="{StaticResource PageFeatureLabel}" />
                         <TextBlock Text="{Binding ActiveProfileName}" Style="{StaticResource SectionTitle}" Margin="0,0,0,4" />
+                        <TextBlock Text="{Binding RuntimeProfileStatus}" Style="{StaticResource HintText}" Margin="0,0,0,2" />
                         <TextBlock Text="{Binding LastInsertionStatus}" Style="{StaticResource HintText}" Margin="0,0,0,2" />
                         <TextBlock Text="{Binding LastInsertionMethod, StringFormat=Insertion method: {0}}" Style="{StaticResource HintText}" />
                         <TextBlock Text="{Binding ActiveDictationModeTitle}" Style="{StaticResource HintText}" Margin="0,4,0,0" />
@@ -131,11 +132,6 @@
                                    Command="{Binding ToggleRefinementQuickCommand}"
                                    Style="{StaticResource SecondaryButton}"
                                    Margin="0,0,8,0" />
-                        <ui:Button Content="Next profile"
-                                   Command="{Binding CycleProfileCommand}"
-                                   IsEnabled="{Binding CanCycleProfile}"
-                                   Style="{StaticResource SecondaryButton}"
-                                   Margin="0" />
                     </WrapPanel>
                 </StackPanel>
             </Border>

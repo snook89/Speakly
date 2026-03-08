@@ -12,6 +12,7 @@ namespace Speakly.Tests.Unit
 
             Assert.Equal(DocsCatalog.RequiredTopicKeys, keys);
             Assert.Equal("overview", keys[0]);
+            Assert.DoesNotContain("docs", keys);
         }
 
         [Fact]
@@ -49,6 +50,34 @@ namespace Speakly.Tests.Unit
             {
                 Assert.Contains(topic.TargetPageTag!, registeredSections);
             }
+        }
+
+        [Fact]
+        public void Docs_ExplicitlyDescribeCriticalBehavior()
+        {
+            var combinedText = string.Join(
+                "\n",
+                DocsCatalog.Topics.SelectMany(topic => new[]
+                {
+                    topic.Title,
+                    topic.Summary,
+                    string.Join("\n", topic.Sections.Select(section => $"{section.Title} {section.Body}")),
+                    string.Join("\n", topic.RecommendedDefaults),
+                    string.Join("\n", topic.Examples.Select(example => $"{example.Scenario} {example.SpokenInput} {example.Result} {example.WhyItHelps}")),
+                    string.Join("\n", topic.Gotchas),
+                    string.Join("\n", (topic.Links ?? []).Select(link => $"{link.Label} {link.Url} {link.Description}"))
+                }));
+
+            Assert.Contains("process name", combinedText, StringComparison.OrdinalIgnoreCase);
+            Assert.Contains("delete that", combinedText, StringComparison.OrdinalIgnoreCase);
+            Assert.Contains("style preset wins", combinedText, StringComparison.OrdinalIgnoreCase);
+            Assert.Contains("Aggressive", combinedText, StringComparison.OrdinalIgnoreCase);
+            Assert.Contains("No history", combinedText, StringComparison.OrdinalIgnoreCase);
+            Assert.Contains("keyboard hook", combinedText, StringComparison.OrdinalIgnoreCase);
+            Assert.Contains("session profile", combinedText, StringComparison.OrdinalIgnoreCase);
+            Assert.Contains("cloud.cerebras.ai", combinedText, StringComparison.OrdinalIgnoreCase);
+            Assert.Contains("console.deepgram.com/signup", combinedText, StringComparison.OrdinalIgnoreCase);
+            Assert.Contains("API Keys section", combinedText, StringComparison.OrdinalIgnoreCase);
         }
     }
 }

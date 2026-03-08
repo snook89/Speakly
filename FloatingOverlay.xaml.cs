@@ -269,6 +269,7 @@ namespace Speakly
 
         private void OverlayContextMenu_Opened(object sender, RoutedEventArgs e)
         {
+            SyncOverlayMenuColors();
             RebuildModesMenu();
         }
 
@@ -1180,6 +1181,8 @@ namespace Speakly
         private void RebuildModesMenu()
         {
             ModesMenuItem.Items.Clear();
+            var overlayMenuItemStyle = (Style)FindResource("OverlayMenuItemStyle");
+            ModesMenuItem.ItemContainerStyle = overlayMenuItemStyle;
 
             foreach (var mode in App.ViewModel.AvailableDictationModes)
             {
@@ -1188,7 +1191,11 @@ namespace Speakly
                     Header = mode,
                     Tag = mode,
                     IsCheckable = true,
-                    IsChecked = string.Equals(mode, App.ViewModel.DictationMode, StringComparison.OrdinalIgnoreCase)
+                    IsChecked = string.Equals(mode, App.ViewModel.DictationMode, StringComparison.OrdinalIgnoreCase),
+                    Foreground = OverlayContextMenu.Foreground,
+                    Background = OverlayContextMenu.Background,
+                    BorderBrush = OverlayContextMenu.BorderBrush,
+                    Style = overlayMenuItemStyle
                 };
 
                 item.Click += (_, _) =>
@@ -1200,6 +1207,27 @@ namespace Speakly
                 };
 
                 ModesMenuItem.Items.Add(item);
+            }
+        }
+
+        private void SyncOverlayMenuColors()
+        {
+            var menuBackground = Container.Background
+                ?? GetSkinBrush("OverlaySkin.PillowIdleBrush", "OverlayContainerBrush", Color.FromArgb(0xE6, 0x11, 0x12, 0x14));
+            var menuBorder = Container.BorderBrush
+                ?? GetSkinBrush("OverlaySkin.PillowIdleBorderBrush", "BrushBorderDefault", Color.FromRgb(0x2A, 0x31, 0x3C));
+            var menuForeground = StatusText.Foreground
+                ?? GetSkinBrush("OverlaySkin.StatusForegroundBrush", "BrushTextPrimary", Color.FromRgb(0xE7, 0xE9, 0xEC));
+
+            OverlayContextMenu.Background = menuBackground;
+            OverlayContextMenu.BorderBrush = menuBorder;
+            OverlayContextMenu.Foreground = menuForeground;
+
+            foreach (var menuItem in OverlayContextMenu.Items.OfType<MenuItem>())
+            {
+                menuItem.Background = menuBackground;
+                menuItem.BorderBrush = Brushes.Transparent;
+                menuItem.Foreground = menuForeground;
             }
         }
 

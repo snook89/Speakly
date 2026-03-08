@@ -4,6 +4,6 @@ namespace Speakly.Services
 {
     public interface ITextRefiner
     {
-        Task<string> RefineTextAsync(string text, string prompt);
+        Task<string> RefineTextAsync(RefinementRequest request);
     }
 }

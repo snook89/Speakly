@@ -12,21 +12,21 @@ namespace Speakly.Services
     {
         private static readonly HttpClient _httpClient = new HttpClient { Timeout = TimeSpan.FromSeconds(30) };
 
-        public async Task<string> RefineTextAsync(string text, string prompt)
+        public async Task<string> RefineTextAsync(RefinementRequest request)
         {
             var apiKey = ConfigManager.Config.OpenRouterApiKey;
             if (string.IsNullOrWhiteSpace(apiKey))
             {
-                return text;
+                return request.Text;
             }
 
             try
             {
-                var safePrompt = RefinementSafety.BuildSafeSystemPrompt(prompt);
-                var userMessage = RefinementSafety.BuildRefinementUserMessage(text);
+                var safePrompt = RefinementSafety.BuildSafeSystemPrompt(request.Prompt);
+                var userMessage = RefinementSafety.BuildRefinementUserMessage(request.Text);
                 var requestBody = new
                 {
-                    model = ConfigManager.Config.OpenRouterRefinementModel,
+                    model = string.IsNullOrWhiteSpace(request.Model) ? ConfigManager.Config.OpenRouterRefinementModel : request.Model,
                     messages = new[]
                     {
                         new { role = "system", content = safePrompt },
@@ -38,15 +38,15 @@ namespace Speakly.Services
                 var json = JsonSerializer.Serialize(requestBody);
                 var content = new StringContent(json, Encoding.UTF8, "application/json");
 
-                using var request = new HttpRequestMessage(HttpMethod.Post, "https://openrouter.ai/api/v1/chat/completions")
+                using var httpRequest = new HttpRequestMessage(HttpMethod.Post, "https://openrouter.ai/api/v1/chat/completions")
                 {
                     Content = content
                 };
-                request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", apiKey);
-                request.Headers.Add("HTTP-Referer", "https://github.com/speakly"); // Optional for OpenRouter
-                request.Headers.Add("X-Title", "Speakly App");
+                httpRequest.Headers.Authorization = new AuthenticationHeaderValue("Bearer", apiKey);
+                httpRequest.Headers.Add("HTTP-Referer", "https://github.com/speakly"); // Optional for OpenRouter
+                httpRequest.Headers.Add("X-Title", "Speakly App");
 
-                var response = await _httpClient.SendAsync(request);
+                var response = await _httpClient.SendAsync(httpRequest);
                 var responseString = await response.Content.ReadAsStringAsync();
 
                 if (response.IsSuccessStatusCode)
@@ -59,12 +59,9 @@ namespace Speakly.Services
                         .GetString();
 
                     var safeRefined = RefinementSafety.CoerceToEditOnlyOutput(
-                        text,
+                        request.Text,
                         refinedText,
-                        aggressiveContextRewrite: string.Equals(
-                            ConfigManager.Config.ContextualRefinementMode,
-                            DictationExperienceService.ContextualRefinementModeAggressiveRewrite,
-                            StringComparison.OrdinalIgnoreCase));
+                        aggressiveContextRewrite: request.AggressiveContextRewrite);
                     if (!string.Equals(safeRefined, refinedText?.Trim(), StringComparison.Ordinal))
                     {
                         Logger.Log("OpenRouter refinement output rejected by safety guard; using original transcription.");
@@ -78,7 +75,7 @@ namespace Speakly.Services
                 Console.WriteLine($"OpenRouter Refinement Error: {ex.Message}");
             }
 
-            return text;
+            return request.Text;
         }
     }
 }

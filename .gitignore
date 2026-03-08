@@ -45,3 +45,11 @@ publish/
 
 # Internal Codex planning files
 CODEX_*.md
+
+# Non-essential design/source assets
+Resources/Speakly_HQ.png
+Resources/Speakly_new_logo.png
+Resources/Speakly_Waves_Bars_HQ.png
+Resources/Speakly_Waves_HQ.png
+Resources/speakly.png
+Resources/SVG/

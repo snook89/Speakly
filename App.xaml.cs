@@ -63,6 +63,11 @@ namespace Speakly
         private static readonly TimeSpan OverlayIdleHideAfter = TimeSpan.FromSeconds(90);
         private static readonly TimeSpan PostStopFinalResultGrace = TimeSpan.FromMilliseconds(350);
         private const string NoFinalResultErrorCode = "stt_no_final_result";
+        private const string NoMicSignalErrorCode = "mic_no_signal";
+        private const int NoMicSignalWarningThresholdMs = 900;
+        private const int MeaningfulMicSignalThresholdMs = 180;
+        private const float MicSignalRmsThreshold = 0.0035f;
+        private const float MicSignalPeakThreshold = 0.0125f;
         private SingleInstanceManager? _singleInstanceManager;
         private readonly PendingTransferManager _pendingTransferManager = new();
         private readonly ManagedAudioProcessor _managedAudioProcessor = new();
@@ -92,6 +97,9 @@ namespace Speakly
         private readonly List<string> _finalTranscriptSegments = new();
         private readonly object _interimTranscriptLock = new();
         private string _latestInterimTranscript = string.Empty;
+        private int _sessionMeaningfulSignalMs;
+        private int _sessionSilenceMs;
+        private bool _noMicSignalWarningShown;
         private bool _finalTranscriptionProcessed;
         private bool _stopRequested;
         private bool _sttFailoverAttempted;
@@ -1345,11 +1353,37 @@ namespace Speakly
                 {
                     ["reason"] = reason
                 });
-            _overlay?.SetStatus("TRANSCRIBING", Brushes.Yellow);
             _recorder.StopRecording();
             _stopSound?.Play();
             _recordMs = (int)Math.Max(0, (DateTime.UtcNow - _recordingStartedUtc).TotalMilliseconds);
             _transcribingStartedUtc = DateTime.UtcNow;
+
+            if (!SessionHasMeaningfulMicSignal())
+            {
+                Logger.Log("No meaningful microphone signal detected during recording; skipping transcription.");
+                _latestTranscriberErrorCode = NoMicSignalErrorCode;
+                _latestTranscriberErrorMessage = "No microphone signal detected.";
+                _overlay?.SetStatus("NO_MIC_SIGNAL", Brushes.OrangeRed);
+
+                try
+                {
+                    if (_transcriber != null)
+                    {
+                        await _transcriber.DisconnectAsync();
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Logger.LogException("StopRecordingAsync_DisconnectAfterNoMicSignal", ex);
+                }
+
+                HandleSessionFailure(
+                    "No microphone signal detected. Check mic mute, input device, or volume.",
+                    NoMicSignalErrorCode);
+                return;
+            }
+
+            _overlay?.SetStatus("TRANSCRIBING", Brushes.Yellow);
 
             try
             {
@@ -1399,9 +1433,16 @@ namespace Speakly
             var interimFallback = SnapshotLatestInterimTranscript();
             if (!string.IsNullOrWhiteSpace(interimFallback))
             {
-                Logger.Log("No final segments received; using latest interim transcript as fallback.");
-                await HandleFinalTranscriptionAsync(interimFallback, ResolveSessionSttProvider(), ResolveSessionSttModel());
-                return;
+                if (LooksLikeHintOnlyTranscript(interimFallback))
+                {
+                    Logger.Log($"Ignoring interim fallback because it matches a configured hint term only: '{interimFallback}'.");
+                }
+                else
+                {
+                    Logger.Log("No final segments received; using latest interim transcript as fallback.");
+                    await HandleFinalTranscriptionAsync(interimFallback, ResolveSessionSttProvider(), ResolveSessionSttModel());
+                    return;
+                }
             }
 
             await RecoverIfNoFinalResultAsync();
@@ -1458,6 +1499,8 @@ namespace Speakly
                 vm?.SetLastInsertionStatus("N/A", false, NoFinalResultErrorCode);
             });
 
+            PublishHistoryEntry(BuildFailedSessionHistoryEntry(NoFinalResultErrorCode));
+
             _overlay?.SetStatus("READY", Brushes.Aqua);
             MarkOverlayActivity(showOverlayIfNeeded: false);
             SetSessionState(SessionState.Idle);
@@ -1492,6 +1535,7 @@ namespace Speakly
         {
             var processed = _managedAudioProcessor.Process(data, out var processingStats);
             _overlay?.UpdateAudioLevel(Math.Min(processingStats.ProcessedRms * 12f, 1f));
+            UpdateMicSignalState(processed.Length, processingStats);
 
             if (_transcriber != null)
             {
@@ -1504,6 +1548,73 @@ namespace Speakly
             {
                 _audioBuffer.Write(processed, 0, processed.Length);
             }
+        }
+
+        private void UpdateMicSignalState(int processedBytesLength, AudioProcessingStats processingStats)
+        {
+            int chunkDurationMs = EstimateAudioChunkDurationMs(
+                processedBytesLength,
+                ConfigManager.Config.SampleRate,
+                ConfigManager.Config.Channels);
+
+            if (chunkDurationMs <= 0)
+            {
+                return;
+            }
+
+            if (HasMeaningfulMicSignal(processingStats))
+            {
+                _sessionMeaningfulSignalMs += chunkDurationMs;
+                _sessionSilenceMs = 0;
+
+                if (_noMicSignalWarningShown)
+                {
+                    _noMicSignalWarningShown = false;
+                    _overlay?.SetStatus(GetActiveRecordingOverlayStatus(), _isToggleRecording ? Brushes.Red : Brushes.LimeGreen);
+                }
+
+                return;
+            }
+
+            _sessionSilenceMs += chunkDurationMs;
+            if (_sessionMeaningfulSignalMs == 0 &&
+                !_noMicSignalWarningShown &&
+                _sessionSilenceMs >= NoMicSignalWarningThresholdMs)
+            {
+                _noMicSignalWarningShown = true;
+                _overlay?.SetStatus("NO_MIC_SIGNAL", Brushes.OrangeRed);
+            }
+        }
+
+        private bool SessionHasMeaningfulMicSignal()
+        {
+            return _sessionMeaningfulSignalMs >= MeaningfulMicSignalThresholdMs;
+        }
+
+        private string GetActiveRecordingOverlayStatus()
+        {
+            return _isToggleRecording ? "RECORDING" : "PTT_RECORDING";
+        }
+
+        public static bool HasMeaningfulMicSignal(AudioProcessingStats stats)
+        {
+            return stats.ProcessedRms >= MicSignalRmsThreshold || stats.RawPeak >= MicSignalPeakThreshold;
+        }
+
+        public static int EstimateAudioChunkDurationMs(int bytesLength, int sampleRate, int channels)
+        {
+            if (bytesLength <= 0 || sampleRate <= 0 || channels <= 0)
+            {
+                return 0;
+            }
+
+            double bytesPerSecond = sampleRate * channels * 2.0;
+            if (bytesPerSecond <= 0)
+            {
+                return 0;
+            }
+
+            return (int)Math.Max(0, Math.Round(bytesLength * 1000.0 / bytesPerSecond));
         }
 
         private void OnTranscriptionReceived(object? sender, TranscriptionEventArgs e)
@@ -1540,6 +1651,22 @@ namespace Speakly
             {
                 return _latestInterimTranscript;
             }
+        }
+
+        private bool LooksLikeHintOnlyTranscript(string text)
+        {
+            var normalized = text?.Trim();
+            if (string.IsNullOrWhiteSpace(normalized))
+            {
+                return false;
+            }
+
+            var configuredTerms = PersonalDictionaryService.GetCombinedTerms(
+                ConfigManager.Config,
+                _activeSessionProfile,
+                maxTerms: 80);
+
+            return PersonalDictionaryService.ContainsExactTerm(configuredTerms, normalized);
         }
 
         private void CaptureSessionAudio(byte[] data)
@@ -2088,6 +2215,43 @@ namespace Speakly
             });
         }
 
+        private HistoryEntry BuildFailedSessionHistoryEntry(string errorCode, string insertionMethod = "N/A")
+        {
+            var sessionRefinementEnabled = _activeSessionProfile?.RefinementEnabled ?? ConfigManager.Config.EnableRefinement;
+            var sessionContextSummary = DictationExperienceService.BuildContextSummary(
+                ConfigManager.Config,
+                _targetWindowContext,
+                RefinementContextSnapshot.Empty);
+
+            return new HistoryEntry
+            {
+                Timestamp = DateTime.Now,
+                OriginalText = string.Empty,
+                RefinedText = string.Empty,
+                SttProvider = ConfigManager.Config.SttModel,
+                SttModel = ResolveActiveSttModel(),
+                RefinementProvider = sessionRefinementEnabled ? ResolveSessionRefinementProvider() : "Disabled",
+                RefinementModel = sessionRefinementEnabled ? ResolveSessionRefinementModel() : string.Empty,
+                RecordMs = _recordMs,
+                TranscribeMs = _transcribeMs,
+                RefineMs = _refineMs,
+                InsertMs = _insertMs,
+                Succeeded = false,
+                ErrorCode = errorCode,
+                InsertionMethod = insertionMethod,
+                ProfileId = _activeSessionProfile?.Id ?? string.Empty,
+                ProfileName = _activeSessionProfile?.Name ?? "Default",
+                FailoverAttempted = _sttFailoverAttempted,
+                FailoverFrom = _failoverFromProvider,
+                FailoverTo = _failoverToProvider,
+                FinalProviderUsed = string.Empty,
+                DictationMode = DictationExperienceService.NormalizeMode(_activeSessionProfile?.DictationMode ?? ConfigManager.Config.DictationMode),
+                ContextualRefinementMode = ResolveSessionContextualRefinementMode(),
+                ContextSummary = sessionContextSummary,
+                ActionSource = "Live"
+            };
+        }
+
         private static bool TrySetClipboardTextSafe(string text, out string errorCode)
         {
             errorCode = string.Empty;
@@ -2225,29 +2389,17 @@ namespace Speakly
         private void HandleSessionFailure(string error, string errorCode)
         {
             SetSessionState(SessionState.Error);
-            _overlay?.SetStatus("ERROR", Brushes.OrangeRed);
+            if (string.Equals(errorCode, NoMicSignalErrorCode, StringComparison.OrdinalIgnoreCase))
+            {
+                _overlay?.SetStatus("NO_MIC_SIGNAL", Brushes.OrangeRed);
+            }
+            else
+            {
+                _overlay?.SetStatus("ERROR", Brushes.OrangeRed);
+            }
             MarkOverlayActivity(showOverlayIfNeeded: false);
 
-            HistoryManager.AddEntry(
-                original: string.Empty,
-                refined: string.Empty,
-                sttProvider: ConfigManager.Config.SttModel,
-                sttModel: ResolveActiveSttModel(),
-                refinementProvider: (_activeSessionProfile?.RefinementEnabled ?? ConfigManager.Config.EnableRefinement) ? ResolveSessionRefinementProvider() : "Disabled",
-                refinementModel: (_activeSessionProfile?.RefinementEnabled ?? ConfigManager.Config.EnableRefinement) ? ResolveSessionRefinementModel() : string.Empty,
-                recordMs: _recordMs,
-                transcribeMs: _transcribeMs,
-                refineMs: _refineMs,
-                insertMs: _insertMs,
-                succeeded: false,
-                errorCode: errorCode,
-                insertionMethod: "None",
-                profileId: _activeSessionProfile?.Id ?? string.Empty,
-                profileName: _activeSessionProfile?.Name ?? "Default",
-                failoverAttempted: _sttFailoverAttempted,
-                failoverFrom: _failoverFromProvider,
-                failoverTo: _failoverToProvider,
-                finalProviderUsed: string.Empty);
+            PublishHistoryEntry(BuildFailedSessionHistoryEntry(errorCode));
 
             StatisticsManager.RecordSession(new SessionMetricEntry
             {
@@ -2273,6 +2425,11 @@ namespace Speakly
             {
                 var vm = MainWindow.DataContext as MainViewModel;
                 vm?.SetLastInsertionStatus("N/A", false, errorCode);
+                if (string.Equals(errorCode, NoMicSignalErrorCode, StringComparison.OrdinalIgnoreCase))
+                {
+                    return;
+                }
+
                 MessageBox.Show($"Transcription Error: {error}", "Speakly Error", MessageBoxButton.OK, MessageBoxImage.Error);
             });
 
@@ -2679,6 +2836,9 @@ namespace Speakly
             {
                 _latestInterimTranscript = string.Empty;
             }
+            _sessionMeaningfulSignalMs = 0;
+            _sessionSilenceMs = 0;
+            _noMicSignalWarningShown = false;
             TrackSessionEvent("session_start", data: new Dictionary<string, string>
             {
                 ["trigger_provider"] = ConfigManager.Config.SttModel,

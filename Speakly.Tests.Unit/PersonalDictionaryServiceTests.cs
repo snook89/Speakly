@@ -38,5 +38,25 @@ namespace Speakly.Tests.Unit
             Assert.Contains("JonSnow", candidates);
             Assert.Contains("GPT4", candidates);
         }
+
+        [Fact]
+        public void ContainsExactTerm_MatchesCandidateIgnoringCase()
+        {
+            var result = PersonalDictionaryService.ContainsExactTerm(
+                new[] { "Speakly", "OpenRouter" },
+                "speakly");
+
+            Assert.True(result);
+        }
+
+        [Fact]
+        public void ContainsExactTerm_DoesNotMatchPartialCandidate()
+        {
+            var result = PersonalDictionaryService.ContainsExactTerm(
+                new[] { "Speakly", "OpenRouter" },
+                "Speak");
+
+            Assert.False(result);
+        }
     }
 }

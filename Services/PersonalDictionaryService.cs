@@ -68,6 +68,19 @@ namespace Speakly.Services
                 .ToList();
         }
 
+        public static bool ContainsExactTerm(IEnumerable<string>? terms, string? candidate)
+        {
+            var normalizedCandidate = NormalizeTerm(candidate);
+            if (string.IsNullOrWhiteSpace(normalizedCandidate) || terms == null)
+            {
+                return false;
+            }
+
+            return terms
+                .Select(NormalizeTerm)
+                .Any(term => string.Equals(term, normalizedCandidate, StringComparison.OrdinalIgnoreCase));
+        }
+
         public static string BuildSttHintPrompt(AppConfig config, AppProfile? profile = null, int maxTerms = 40)
         {
             var terms = GetCombinedTerms(config, profile ?? ConfigManager.GetActiveProfile(), maxTerms);

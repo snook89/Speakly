@@ -15,7 +15,10 @@ namespace Speakly.Services
     /// </summary>
     public class OpenRouterTranscriber : ITranscriber
     {
-        private static readonly HttpClient _httpClient = new HttpClient();
+        private static readonly HttpClient _httpClient = new HttpClient
+        {
+            Timeout = TimeSpan.FromSeconds(60)
+        };
         private MemoryStream? _audioBuffer;
 
         public event EventHandler<TranscriptionEventArgs>? TranscriptionReceived;
@@ -25,7 +28,6 @@ namespace Speakly.Services
 
         public OpenRouterTranscriber()
         {
-            _httpClient.Timeout = TimeSpan.FromSeconds(60);
         }
 
         public Task ConnectAsync()
@@ -130,7 +132,16 @@ namespace Speakly.Services
                 {
                     var text = ExtractTextFromChatCompletion(responseString);
                     if (!string.IsNullOrWhiteSpace(text))
-                        TranscriptionReceived?.Invoke(this, new TranscriptionEventArgs(text, true));
+                    {
+                        if (LooksLikeAssistantReplyInsteadOfTranscript(text))
+                        {
+                            ErrorReceived?.Invoke(this, $"OpenRouter Transcription Failed: model returned a non-transcription reply: {text}");
+                        }
+                        else
+                        {
+                            TranscriptionReceived?.Invoke(this, new TranscriptionEventArgs(text, true));
+                        }
+                    }
                     else
                         ErrorReceived?.Invoke(this, "OpenRouter Transcription Failed: empty response text.");
                 }
@@ -207,6 +218,44 @@ namespace Speakly.Services
             }
 
             return string.Empty;
+        }
+
+        private static bool LooksLikeAssistantReplyInsteadOfTranscript(string text)
+        {
+            if (string.IsNullOrWhiteSpace(text))
+            {
+                return true;
+            }
+
+            var normalized = text.Trim().ToLowerInvariant();
+            string[] suspiciousPhrases =
+            {
+                "please provide the audio",
+                "please upload the audio",
+                "please attach the audio",
+                "send the audio file",
+                "provide the audio file",
+                "attach the audio file",
+                "upload the audio file",
+                "i will transcribe it for you",
+                "i can transcribe it for you",
+                "i can't transcribe",
+                "i cannot transcribe",
+                "i can’t transcribe",
+                "unable to transcribe",
+                "need the audio file",
+                "need an audio file"
+            };
+
+            foreach (var phrase in suspiciousPhrases)
+            {
+                if (normalized.Contains(phrase, StringComparison.Ordinal))
+                {
+                    return true;
+                }
+            }
+
+            return false;
         }
 
         private byte[] CreateWavHeader(byte[] rawPcmData, int sampleRate, int channels)

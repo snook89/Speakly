@@ -10,7 +10,10 @@ namespace Speakly.Services
 {
     public class OpenAITranscriber : ITranscriber
     {
-        private static readonly HttpClient _httpClient = new HttpClient();
+        private static readonly HttpClient _httpClient = new HttpClient
+        {
+            Timeout = TimeSpan.FromSeconds(30)
+        };
         private MemoryStream? _audioBuffer;
 
         public event EventHandler<TranscriptionEventArgs>? TranscriptionReceived;
@@ -20,7 +23,6 @@ namespace Speakly.Services
 
         public OpenAITranscriber()
         {
-            _httpClient.Timeout = TimeSpan.FromSeconds(30);
         }
 
         public Task ConnectAsync()

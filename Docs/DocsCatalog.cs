@@ -195,7 +195,7 @@ namespace Speakly.Docs
                         "Audio settings decide the source quality going into the pipeline. Good transcription starts with clean input from the correct microphone."),
                     new DocsSection(
                         "How it works",
-                        "Speakly records from the selected Windows input device and streams or sends that audio to the active STT provider. Managed audio options can normalize volume, smooth gain, and reduce noise before the provider sees the signal."),
+                        "Speakly records from the selected Windows input device and streams or sends that audio to the active STT provider. Managed audio options can normalize volume, smooth gain, and reduce noise before the provider sees the signal. If Speakly never detects meaningful mic signal during a recording, it warns you and stops before wasting time on STT or failover."),
                     new DocsSection(
                         "Best use scenarios",
                         "Audio tuning matters most in noisy environments, with inconsistent microphones, or when you want lower-latency streaming behavior without clipped syllables."),
@@ -207,7 +207,8 @@ namespace Speakly.Docs
                 {
                     "Use the microphone physically closest to you and keep its gain stable.",
                     "Start with managed audio defaults before pushing extreme normalization values.",
-                    "Only change STT or refinement models after the raw audio sounds clean."
+                    "Only change STT or refinement models after the raw audio sounds clean.",
+                    "If you see No mic signal, check mute state, input device selection, and Windows input volume before touching model settings."
                 },
                 new[]
                 {
@@ -216,6 +217,11 @@ namespace Speakly.Docs
                         "You speak into your headset, but the laptop microphone is selected.",
                         "Transcription quality drops and room noise appears in the result.",
                         "Model changes will not fix the wrong input source."),
+                    new DocsExample(
+                        "Muted mic or dead signal",
+                        "Hold PTT while the mic is muted or the wrong dead input is selected.",
+                        "Speakly shows No mic signal and ends the session cleanly instead of hanging through STT.",
+                        "This makes hardware or routing mistakes obvious before they look like provider failures."),
                     new DocsExample(
                         "Clean baseline",
                         "Select the correct headset mic and test a short dictation in a quiet room.",
@@ -245,7 +251,7 @@ namespace Speakly.Docs
                         "Speakly supports Deepgram, OpenAI, and OpenRouter for STT. You can refresh model lists from provider APIs and pin favorites so your preferred models stay easy to reach."),
                     new DocsSection(
                         "Failover behavior",
-                        "If transient STT errors occur and failover is enabled, Speakly can retry with another provider in the configured failover order. History and telemetry record when failover was attempted and which provider finally succeeded.")
+                        "If transient STT errors occur and failover is enabled, Speakly can retry with another provider in the configured failover order. History and telemetry record when failover was attempted and which provider finally succeeded. No-mic-signal sessions stop before this stage because there is nothing useful to transcribe.")
                 },
                 new[]
                 {
@@ -499,7 +505,7 @@ namespace Speakly.Docs
                         "History keeps completed entries with original text, refined text, timings, context summary, provider information, command runs, and actions like Copy Refined, Copy Original, Retry Insert, Reprocess, and Pin."),
                     new DocsSection(
                         "How it works",
-                        "Every finished dictation is written to history after the pipeline completes. Recovery actions reuse the stored text path, not the original microphone recording, so they are fast and privacy-friendly."),
+                        "Every finished dictation is written to history after the pipeline completes. Failed sessions such as no-mic-signal or no-final-result are also recorded so troubleshooting does not disappear. Recovery actions reuse the stored text path, not the original microphone recording, so they are fast and privacy-friendly."),
                     new DocsSection(
                         "Compare and filters",
                         "History can filter by provider, action, and pin state. Recovery entries preserve links back to their source entries so you can compare before and after results when reprocessing or retrying."),

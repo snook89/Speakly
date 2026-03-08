@@ -29,7 +29,8 @@ namespace Speakly.Services
         private int _hasSentAudio;
         private int _isFinishing;
         private const string Version = "1.7.0-Reliability";
-        private static readonly TimeSpan FinalResultWaitTimeout = TimeSpan.FromSeconds(12);
+        private static readonly TimeSpan FinalizeFlushWaitTimeout = TimeSpan.FromMilliseconds(1200);
+        private static readonly TimeSpan CloseStreamFlushWaitTimeout = TimeSpan.FromMilliseconds(1500);
 
         // Accumulates is_final=true segments until speech_final=true signals a natural
         // utterance boundary, or until the stream closes (Metadata flush).
@@ -122,26 +123,6 @@ namespace Speakly.Services
                 "utterance_end_ms=1000"
             };
 
-            var preferredTerms = PersonalDictionaryService.GetCombinedTermsForActiveProfile(config, maxTerms: 30);
-            if (preferredTerms.Count > 0)
-            {
-                // Deepgram Nova-3/Flux reject legacy "keywords" and require "keyterm".
-                // Keep backward compatibility for older models.
-                if (SupportsKeytermHints(selectedModel))
-                {
-                    foreach (var term in preferredTerms)
-                    {
-                        var normalized = term?.Trim();
-                        if (string.IsNullOrWhiteSpace(normalized)) continue;
-                        query.Add($"keyterm={Uri.EscapeDataString(normalized)}");
-                    }
-                }
-                else
-                {
-                    query.Add($"keywords={Uri.EscapeDataString(string.Join(",", preferredTerms))}");
-                }
-            }
-
             var resolvedLanguage = ResolveLanguageForStreaming(config.Language, selectedModel);
             if (!string.IsNullOrWhiteSpace(resolvedLanguage))
             {
@@ -180,13 +161,6 @@ namespace Speakly.Services
             if (string.IsNullOrWhiteSpace(model)) return false;
             var normalizedModel = model.Trim().ToLowerInvariant();
             return normalizedModel.StartsWith("nova-3") || normalizedModel.StartsWith("nova-2");
-        }
-
-        private static bool SupportsKeytermHints(string? model)
-        {
-            if (string.IsNullOrWhiteSpace(model)) return false;
-            var normalizedModel = model.Trim().ToLowerInvariant();
-            return normalizedModel.StartsWith("nova-3") || normalizedModel.StartsWith("flux");
         }
 
         private string GetHandshakeFailureDetails()
@@ -331,10 +305,10 @@ namespace Speakly.Services
 
             try
             {
-                // Ask Deepgram to flush trailing audio and then close stream.
+                // Ask Deepgram to flush trailing audio and keep the socket open long enough
+                // for final Results / UtteranceEnd / Metadata events to arrive.
                 await SendControlMessageAsync(FinalizeMessage, "Finalize", _cts.Token, reportErrors: false);
-                Logger.Log("Sending CloseStream to Deepgram.");
-                await SendControlMessageAsync(CloseStreamMessage, "CloseStream", _cts.Token, reportErrors: true);
+                Logger.Log("Finalize sent to Deepgram; awaiting final result flush.");
             }
             catch (Exception ex)
             {
@@ -345,16 +319,45 @@ namespace Speakly.Services
 
         public async Task WaitForFinalResultAsync()
         {
-            if (_finalResultTcs != null)
+            if (_finalResultTcs == null)
             {
-                // Allow additional time for final segment flush on long utterances.
-                var timeoutTask = Task.Delay(FinalResultWaitTimeout);
-                var completedTask = await Task.WhenAny(_finalResultTcs.Task, timeoutTask);
-                if (completedTask == timeoutTask)
-                {
-                    Logger.Log($"WARNING: WaitForFinalResultAsync timed out after {FinalResultWaitTimeout.TotalSeconds:0}s.");
-                }
+                return;
             }
+
+            if (await WaitForFinalSignalAsync(FinalizeFlushWaitTimeout))
+            {
+                return;
+            }
+
+            if (IsConnected && _cts != null)
+            {
+                Logger.Log("Deepgram final flush did not arrive after Finalize; sending CloseStream.");
+                await SendControlMessageAsync(CloseStreamMessage, "CloseStream", _cts.Token, reportErrors: false);
+            }
+
+            if (!await WaitForFinalSignalAsync(CloseStreamFlushWaitTimeout))
+            {
+                Logger.Log(
+                    $"WARNING: WaitForFinalResultAsync timed out after {FinalizeFlushWaitTimeout.TotalMilliseconds:0}ms finalize grace + " +
+                    $"{CloseStreamFlushWaitTimeout.TotalMilliseconds:0}ms close-stream grace.");
+            }
+        }
+
+        private async Task<bool> WaitForFinalSignalAsync(TimeSpan timeout)
+        {
+            if (_finalResultTcs == null)
+            {
+                return true;
+            }
+
+            var timeoutTask = Task.Delay(timeout);
+            var completedTask = await Task.WhenAny(_finalResultTcs.Task, timeoutTask);
+            if (completedTask == timeoutTask)
+            {
+                return false;
+            }
+
+            return true;
         }
 
         private async Task KeepAliveLoopAsync(CancellationToken cancellationToken)

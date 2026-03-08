@@ -1,8 +1,6 @@
 # Speakly
 
 <div align="center">
-  <img src="Resources/Speakly_new_logo.png" alt="Speakly logo" width="96" />
-
   <h3>Fast Windows voice typing with optional AI refinement</h3>
 
   <p>
@@ -108,6 +106,7 @@ Speakly is for people who want voice input to feel like part of a serious deskto
 - Per-app profiles that auto-switch by foreground process name.
 - Floating overlay plus tray controls for fast recovery and status.
 - Managed audio processing for cleaner captures.
+- No-mic-signal detection that fails fast on muted or dead microphone input.
 - Local telemetry, history, and statistics for troubleshooting.
 - Auto-update flow backed by GitHub Releases.
 - Standard user runtime with on-demand elevation only when needed.
@@ -157,6 +156,7 @@ This README reflects the newer feature set already present in the codebase:
 - Dynamic model refresh from provider APIs, plus favorite model pinning.
 - Personal dictionary suggestions that can be confirmed globally or per profile.
 - Managed audio processing with auto mic gain, normalization, and optional noise gate.
+- No-mic-signal detection so silent sessions stop cleanly instead of stalling through STT or failover.
 - Deferred target auto-paste when focus returns to the target app.
 - Local telemetry controls for level, retention, file size, and redaction mode.
 - Statistics page with latency, provider breakdown, error summary, and telemetry rollups.
@@ -168,11 +168,12 @@ This README reflects the newer feature set already present in the codebase:
 1. Press and hold the push-to-talk hotkey, or use the toggle-record hotkey.
 2. Speakly resolves the foreground app and auto-selects the matching profile by process name when one exists.
 3. Speakly captures microphone audio from the selected input device.
-4. Audio is sent to the active speech-to-text provider.
-5. Speakly checks whether the result is a spoken edit command before normal insertion.
-6. If refinement is enabled, the transcript is sent to the configured AI provider using the active prompt, mode, style, and optional context.
-7. The final text is inserted into the active app.
-8. If direct insertion fails or the target app loses focus, Speakly can fall back to clipboard and deferred paste behavior.
+4. If no meaningful microphone signal is detected, Speakly warns immediately and ends the session with a clean `mic_no_signal` result instead of wasting time on STT.
+5. Audio is sent to the active speech-to-text provider.
+6. Speakly checks whether the result is a spoken edit command before normal insertion.
+7. If refinement is enabled, the transcript is sent to the configured AI provider using the active prompt, mode, style, and optional context.
+8. The final text is inserted into the active app.
+9. If direct insertion fails or the target app loses focus, Speakly can fall back to clipboard and deferred paste behavior.
 
 ## Profiles, Modes, And Prompt Layering
 
@@ -197,6 +198,8 @@ Speakly can interpret certain spoken phrases as edit actions instead of literal 
 - `insert space`
 
 Commands run after STT and before final insertion. In Mixed mode, normal dictation and commands can coexist. The overlay shows when a phrase was treated as a command, and History logs command actions separately from transcript entries.
+
+If Speakly never detects meaningful mic signal during a recording, it now exits early with a `mic_no_signal` session result instead of waiting through STT and inserting junk fallback text.
 
 ## App Pages
 

@@ -127,6 +127,8 @@ namespace Speakly
         {
             if (IsCircleStyle)
             {
+                ToastBorder.Visibility = Visibility.Collapsed;
+                _toastTimer.Stop();
                 StatusStack.Visibility = Visibility.Collapsed;
                 BadgeStack.Visibility = Visibility.Collapsed;
                 WaveCanvas.Visibility = Visibility.Collapsed;
@@ -494,7 +496,9 @@ namespace Speakly
                     ? "READY"
                     : status.Trim().ToUpperInvariant();
                 bool isPttRecording = normalized.Equals("PTT_RECORDING", StringComparison.OrdinalIgnoreCase);
-                bool isRecording = isPttRecording || normalized.Equals("RECORDING", StringComparison.OrdinalIgnoreCase);
+                bool isRecording = isPttRecording
+                    || normalized.Equals("RECORDING", StringComparison.OrdinalIgnoreCase)
+                    || normalized.Equals("NO_MIC_SIGNAL", StringComparison.OrdinalIgnoreCase);
 
                 _currentStatus = normalized;
 
@@ -516,6 +520,12 @@ namespace Speakly
                     LanguageBadge.Visibility = Visibility.Collapsed;
                     _isProcessing = normalized.Equals("TRANSCRIBING", StringComparison.OrdinalIgnoreCase) ||
                                     normalized.Equals("REFINING", StringComparison.OrdinalIgnoreCase);
+                }
+
+                if (!normalized.Equals("ERROR", StringComparison.OrdinalIgnoreCase))
+                {
+                    _toastTimer.Stop();
+                    ToastBorder.Visibility = Visibility.Collapsed;
                 }
 
                 if (normalized.Equals("ERROR", StringComparison.OrdinalIgnoreCase))
@@ -610,7 +620,9 @@ namespace Speakly
         private void ApplyVisualState(string status)
         {
             bool isPttRecording = status.Equals("PTT_RECORDING", StringComparison.OrdinalIgnoreCase);
-            bool isRecording = isPttRecording || status.Equals("RECORDING", StringComparison.OrdinalIgnoreCase);
+            bool isRecording = isPttRecording
+                || status.Equals("RECORDING", StringComparison.OrdinalIgnoreCase)
+                || status.Equals("NO_MIC_SIGNAL", StringComparison.OrdinalIgnoreCase);
             bool isProcessing = status.Equals("TRANSCRIBING", StringComparison.OrdinalIgnoreCase)
                 || status.Equals("REFINING", StringComparison.OrdinalIgnoreCase);
             bool isError = status.Equals("ERROR", StringComparison.OrdinalIgnoreCase);
@@ -622,8 +634,16 @@ namespace Speakly
             }
             else if (isRecording)
             {
-                StatusText.Text = "Listening...";
-                SubStatusText.Text = BuildSubStatus("Release to transcribe");
+                if (status.Equals("NO_MIC_SIGNAL", StringComparison.OrdinalIgnoreCase))
+                {
+                    StatusText.Text = "No mic signal";
+                    SubStatusText.Text = BuildSubStatus("Check mute or input device");
+                }
+                else
+                {
+                    StatusText.Text = "Listening...";
+                    SubStatusText.Text = BuildSubStatus("Release to transcribe");
+                }
             }
             else if (isProcessing)
             {
@@ -654,9 +674,11 @@ namespace Speakly
             {
                 if (IsCircleStyle)
                 {
-                    var activeColor = isPttRecording
-                        ? Color.FromRgb(0x22, 0xC5, 0x5E)
-                        : Color.FromRgb(0xEF, 0x44, 0x44);
+                    var activeColor = status.Equals("NO_MIC_SIGNAL", StringComparison.OrdinalIgnoreCase)
+                        ? Color.FromRgb(0xF5, 0x9E, 0x0B)
+                        : isPttRecording
+                            ? Color.FromRgb(0x22, 0xC5, 0x5E)
+                            : Color.FromRgb(0xEF, 0x44, 0x44);
 
                     Container.Background = GetSkinBrush(
                         "OverlaySkin.PillowIdleBrush",
@@ -1072,6 +1094,13 @@ namespace Speakly
 
         private void ShowToast(string message)
         {
+            if (IsCircleStyle)
+            {
+                _toastTimer.Stop();
+                ToastBorder.Visibility = Visibility.Collapsed;
+                return;
+            }
+
             ToastText.Text = message;
             ToastBorder.Visibility = Visibility.Visible;
             _toastTimer.Stop();

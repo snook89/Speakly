@@ -11,7 +11,7 @@ namespace Speakly.Config
 {
     public class AppConfig
     {
-        public const int CurrentConfigVersion = 12;
+        public const int CurrentConfigVersion = 13;
         public const string DefaultRefinementPrompt =
             "Role and Objective:\n" +
             "You refine speech-to-text transcripts for clarity, grammatical correctness, and formatting compliance.\n\n" +
@@ -129,6 +129,9 @@ namespace Speakly.Config
         [JsonPropertyName("openrouter_stt_model")]
         public string OpenRouterSttModel { get; set; } = "openai/gpt-audio-mini";
 
+        [JsonPropertyName("elevenlabs_stt_model")]
+        public string ElevenLabsSttModel { get; set; } = "scribe_v2_realtime";
+
         [JsonPropertyName("openrouter_stt_show_all_models")]
         public bool OpenRouterSttShowAllModels { get; set; } = false;
 
@@ -174,6 +177,9 @@ namespace Speakly.Config
 
         [JsonPropertyName("openrouter_stt_favorite_models")]
         public List<string> OpenRouterSttFavoriteModels { get; set; } = new List<string>();
+
+        [JsonPropertyName("elevenlabs_stt_favorite_models")]
+        public List<string> ElevenLabsSttFavoriteModels { get; set; } = new List<string>();
 
         [JsonPropertyName("enable_debug_logs")]
         public bool EnableDebugLogs { get; set; } = false;
@@ -268,6 +274,9 @@ namespace Speakly.Config
         [JsonIgnore]
         public string OpenRouterApiKey { get; set; } = "";
 
+        [JsonIgnore]
+        public string ElevenLabsApiKey { get; set; } = "";
+
         // Backward-compat plaintext load fields (read-only for migration).
         [JsonPropertyName("openai_api_key")]
         public string? LegacyOpenAIApiKey
@@ -313,6 +322,17 @@ namespace Speakly.Config
             }
         }
 
+        [JsonPropertyName("elevenlabs_api_key")]
+        public string? LegacyElevenLabsApiKey
+        {
+            get => null;
+            set
+            {
+                if (string.IsNullOrWhiteSpace(ElevenLabsApiKey) && !string.IsNullOrWhiteSpace(value))
+                    ElevenLabsApiKey = value;
+            }
+        }
+
         [JsonPropertyName("openai_api_key_enc")]
         public string OpenAIApiKeyEnc { get; set; } = "";
 
@@ -324,6 +344,9 @@ namespace Speakly.Config
 
         [JsonPropertyName("openrouter_api_key_enc")]
         public string OpenRouterApiKeyEnc { get; set; } = "";
+
+        [JsonPropertyName("elevenlabs_api_key_enc")]
+        public string ElevenLabsApiKeyEnc { get; set; } = "";
 
         // Window state logic
         [JsonPropertyName("main_window_left")]
@@ -539,13 +562,16 @@ namespace Speakly.Config
             switch (profile.SttProvider)
             {
                 case "OpenAI":
-                    config.OpenAISttModel = profile.SttModel;
+                    config.OpenAISttModel = ResolveSttModel(profile.SttProvider, profile.SttModel);
                     break;
                 case "OpenRouter":
-                    config.OpenRouterSttModel = profile.SttModel;
+                    config.OpenRouterSttModel = ResolveSttModel(profile.SttProvider, profile.SttModel);
+                    break;
+                case "ElevenLabs":
+                    config.ElevenLabsSttModel = ResolveSttModel(profile.SttProvider, profile.SttModel);
                     break;
                 default:
-                    config.DeepgramModel = profile.SttModel;
+                    config.DeepgramModel = ResolveSttModel(profile.SttProvider, profile.SttModel);
                     break;
             }
 
@@ -603,6 +629,10 @@ namespace Speakly.Config
             config.OpenAIRefinementModel = ResolveRefinementModel("OpenAI", config.OpenAIRefinementModel);
             config.OpenRouterRefinementModel = ResolveRefinementModel("OpenRouter", config.OpenRouterRefinementModel);
             config.CerebrasRefinementModel = ResolveRefinementModel("Cerebras", config.CerebrasRefinementModel);
+            config.OpenAISttModel = ResolveSttModel("OpenAI", config.OpenAISttModel);
+            config.OpenRouterSttModel = ResolveSttModel("OpenRouter", config.OpenRouterSttModel);
+            config.ElevenLabsSttModel = ResolveSttModel("ElevenLabs", config.ElevenLabsSttModel);
+            config.DeepgramModel = ResolveSttModel("Deepgram", config.DeepgramModel);
 
             if (config.Profiles == null)
                 config.Profiles = new List<AppProfile>();
@@ -627,6 +657,9 @@ namespace Speakly.Config
                     .ToList();
                 if (profile.SttFailoverOrder == null || profile.SttFailoverOrder.Count == 0)
                     profile.SttFailoverOrder = new List<string> { "Deepgram", "OpenAI", "OpenRouter" };
+                if (string.IsNullOrWhiteSpace(profile.SttProvider))
+                    profile.SttProvider = config.SttModel;
+                profile.SttModel = ResolveSttModel(profile.SttProvider, profile.SttModel);
                 if (string.IsNullOrWhiteSpace(profile.RefinementPrompt))
                     profile.RefinementPrompt = AppConfig.DefaultRefinementPrompt;
                 if (string.IsNullOrWhiteSpace(profile.RefinementProvider))
@@ -651,11 +684,31 @@ namespace Speakly.Config
 
         private static string ResolveSttModel(AppConfig config)
         {
-            return config.SttModel switch
+            return ResolveSttModel(
+                config.SttModel,
+                config.SttModel switch
+                {
+                    "OpenAI" => config.OpenAISttModel,
+                    "OpenRouter" => config.OpenRouterSttModel,
+                    "ElevenLabs" => config.ElevenLabsSttModel,
+                    _ => config.DeepgramModel
+                });
+        }
+
+        public static string ResolveSttModel(string? provider, string? configuredModel = null)
+        {
+            var normalizedModel = configuredModel?.Trim();
+            if (!string.IsNullOrWhiteSpace(normalizedModel))
             {
-                "OpenAI" => config.OpenAISttModel,
-                "OpenRouter" => config.OpenRouterSttModel,
-                _ => config.DeepgramModel
+                return normalizedModel;
+            }
+
+            return provider?.Trim() switch
+            {
+                "OpenAI" => "whisper-1",
+                "OpenRouter" => "openai/gpt-audio-mini",
+                "ElevenLabs" => "scribe_v2_realtime",
+                _ => "nova-2"
             };
         }
 
@@ -722,6 +775,9 @@ namespace Speakly.Config
 
             var openRouter = SecretStore.Unprotect(config.OpenRouterApiKeyEnc);
             if (!string.IsNullOrWhiteSpace(openRouter)) config.OpenRouterApiKey = openRouter;
+
+            var elevenLabs = SecretStore.Unprotect(config.ElevenLabsApiKeyEnc);
+            if (!string.IsNullOrWhiteSpace(elevenLabs)) config.ElevenLabsApiKey = elevenLabs;
         }
 
         private static void PrepareSecrets(AppConfig config)
@@ -730,6 +786,7 @@ namespace Speakly.Config
             config.DeepgramApiKeyEnc = SecretStore.Protect(config.DeepgramApiKey);
             config.CerebrasApiKeyEnc = SecretStore.Protect(config.CerebrasApiKey);
             config.OpenRouterApiKeyEnc = SecretStore.Protect(config.OpenRouterApiKey);
+            config.ElevenLabsApiKeyEnc = SecretStore.Protect(config.ElevenLabsApiKey);
         }
     }
 }

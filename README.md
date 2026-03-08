@@ -115,7 +115,7 @@ Speakly is for people who want voice input to feel like part of a serious deskto
 
 | Keyboard-first | Provider-flexible | Reliability-focused |
 |---|---|---|
-| Use global hotkeys from anywhere in Windows and keep your hands near the keyboard. | Mix and match Deepgram, OpenAI, OpenRouter, and Cerebras depending on cost, speed, or quality. | Single-instance behavior, provider failover, debug logs, health checks, telemetry, and update support are built in. |
+| Use global hotkeys from anywhere in Windows and keep your hands near the keyboard. | Mix and match Deepgram, ElevenLabs, OpenAI, OpenRouter, and Cerebras depending on cost, speed, or quality. | Single-instance behavior, provider failover, debug logs, health checks, telemetry, and update support are built in. |
 
 ## Built For
 
@@ -130,7 +130,7 @@ Speakly is for people who want voice input to feel like part of a serious deskto
 |------|-------------------|
 | Capture | Global hold-to-talk and toggle recording, microphone selection, sample rate and channel controls |
 | Insertion | Inserts text into the focused app with `SendInput`, with clipboard-based fallback for reliability |
-| Providers | STT: Deepgram, OpenAI, OpenRouter. Refinement: OpenAI, OpenRouter, Cerebras |
+| Providers | STT: Deepgram, ElevenLabs, OpenAI, OpenRouter. Refinement: OpenAI, OpenRouter, Cerebras |
 | Profiles | Create profiles for apps like Chrome, VS Code, Notepad, or Slack and switch automatically by process name |
 | Refinement | Optional post-processing with prompt presets, dictation modes, style presets, context-aware rewrite, and model favorites |
 | Commands | Spoken edit commands like `delete that`, `scratch that`, `undo that`, `select that`, `backspace`, `press enter`, `tab`, and `insert space` |
@@ -210,7 +210,7 @@ If Speakly never detects meaningful mic signal during a recording, it now exits 
 | Audio | Select input device and tune audio capture and processing |
 | Transcription | Choose STT provider, language, model, dictionary, and advanced provider settings |
 | Refinement | Enable or disable refinement, choose provider/model, manage prompts, and tune Cerebras requests |
-| API Keys | Store and test API keys for Deepgram, OpenAI, OpenRouter, and Cerebras, with built-in Docs guidance for provider signup and key generation |
+| API Keys | Store and test API keys for Deepgram, ElevenLabs, OpenAI, OpenRouter, and Cerebras, with built-in Docs guidance for provider signup and key generation |
 | General | Overlay, tray behavior, Windows startup, deferred paste, failover, logs, and telemetry controls |
 | History | Review recent transcription activity |
 | Statistics | Inspect latency, errors, provider success rates, and telemetry summaries |
@@ -221,7 +221,7 @@ If Speakly never detects meaningful mic signal during a recording, it now exits 
 
 | Capability | Providers |
 |-----------|-----------|
-| Speech-to-text | Deepgram, OpenAI, OpenRouter |
+| Speech-to-text | Deepgram, ElevenLabs, OpenAI, OpenRouter |
 | AI refinement | OpenAI, OpenRouter, Cerebras |
 
 Notes:
@@ -230,9 +230,11 @@ Notes:
 - Favorite models can be pinned for both STT and refinement pickers.
 - OpenRouter includes an optional experimental mode to show all models, including some that are not ideal for STT.
 - Deepgram multilingual mode is guarded in the UI to prevent unsupported model and language combinations.
+- ElevenLabs is available as an experimental direct realtime STT provider and uses a curated supported realtime model list in v1.
 - Deepgram signup: [console.deepgram.com/signup](https://console.deepgram.com/signup)
+- ElevenLabs signup or login: [elevenlabs.io/app/sign-up](https://elevenlabs.io/app/sign-up)
 - Cerebras signup or login: [cloud.cerebras.ai](https://cloud.cerebras.ai/?utm_source=homepage)
-- For Deepgram or Cerebras, sign in to the provider dashboard, open the `API Keys` section, and generate a new key before pasting it into Speakly.
+- For Deepgram, ElevenLabs, or Cerebras, sign in to the provider dashboard, open the `API Keys` section, and generate a new key before pasting it into Speakly.
 
 ## Requirements
 
@@ -341,6 +343,7 @@ Speakly/
 |-- ConfigManager.cs                 # Config load/save, migration, secrets, defaults
 |-- Profiles.cs                      # Profile model and process matching helpers
 |-- DeepgramTranscriber.cs
+|-- ElevenLabsTranscriber.cs
 |-- OpenAITranscriber.cs
 |-- OpenRouterTranscriber.cs
 |-- OpenAIRefiner.cs

@@ -38,6 +38,7 @@ namespace Speakly.Pages
                 App.ViewModel.ApiTestCompleted -= OnApiTestCompleted;
 
                 DeepgramPwdBox.PasswordChanged   -= DeepgramPwdBox_PasswordChanged;
+                ElevenLabsPwdBox.PasswordChanged -= ElevenLabsPwdBox_PasswordChanged;
                 OpenAIPwdBox.PasswordChanged     -= OpenAIPwdBox_PasswordChanged;
                 OpenRouterPwdBox.PasswordChanged -= OpenRouterPwdBox_PasswordChanged;
                 CerebrasPwdBox.PasswordChanged   -= CerebrasPwdBox_PasswordChanged;
@@ -59,43 +60,51 @@ namespace Speakly.Pages
             // Suppress PasswordChanged during programmatic fill so we don't
             // redundantly write back to config while reading from it.
             DeepgramPwdBox.PasswordChanged   -= DeepgramPwdBox_PasswordChanged;
+            ElevenLabsPwdBox.PasswordChanged -= ElevenLabsPwdBox_PasswordChanged;
             OpenAIPwdBox.PasswordChanged     -= OpenAIPwdBox_PasswordChanged;
             OpenRouterPwdBox.PasswordChanged -= OpenRouterPwdBox_PasswordChanged;
             CerebrasPwdBox.PasswordChanged   -= CerebrasPwdBox_PasswordChanged;
 
             DeepgramPwdBox.Password   = ConfigManager.Config.DeepgramApiKey;
+            ElevenLabsPwdBox.Password = ConfigManager.Config.ElevenLabsApiKey;
             OpenAIPwdBox.Password     = ConfigManager.Config.OpenAIApiKey;
             OpenRouterPwdBox.Password = ConfigManager.Config.OpenRouterApiKey;
             CerebrasPwdBox.Password   = ConfigManager.Config.CerebrasApiKey;
 
-            TraceDebug($"Populate from config lengths: DG={DeepgramPwdBox.Password.Length}, OA={OpenAIPwdBox.Password.Length}, OR={OpenRouterPwdBox.Password.Length}, CR={CerebrasPwdBox.Password.Length}");
+            TraceDebug($"Populate from config lengths: DG={DeepgramPwdBox.Password.Length}, EL={ElevenLabsPwdBox.Password.Length}, OA={OpenAIPwdBox.Password.Length}, OR={OpenRouterPwdBox.Password.Length}, CR={CerebrasPwdBox.Password.Length}");
 
             DeepgramTxtBox.Text   = ConfigManager.Config.DeepgramApiKey;
+            ElevenLabsTxtBox.Text = ConfigManager.Config.ElevenLabsApiKey;
             OpenAITxtBox.Text     = ConfigManager.Config.OpenAIApiKey;
             OpenRouterTxtBox.Text = ConfigManager.Config.OpenRouterApiKey;
             CerebrasTxtBox.Text   = ConfigManager.Config.CerebrasApiKey;
 
             DeepgramTxtBox.Visibility   = Visibility.Collapsed;
+            ElevenLabsTxtBox.Visibility = Visibility.Collapsed;
             OpenAITxtBox.Visibility     = Visibility.Collapsed;
             OpenRouterTxtBox.Visibility = Visibility.Collapsed;
             CerebrasTxtBox.Visibility   = Visibility.Collapsed;
 
             DeepgramPwdBox.Visibility   = Visibility.Visible;
+            ElevenLabsPwdBox.Visibility = Visibility.Visible;
             OpenAIPwdBox.Visibility     = Visibility.Visible;
             OpenRouterPwdBox.Visibility = Visibility.Visible;
             CerebrasPwdBox.Visibility   = Visibility.Visible;
 
             DeepgramReveal.Content   = "Show";
+            ElevenLabsReveal.Content = "Show";
             OpenAIReveal.Content     = "Show";
             OpenRouterReveal.Content = "Show";
             CerebrasReveal.Content   = "Show";
 
             DeepgramReveal.Icon   = new Wpf.Ui.Controls.SymbolIcon(Wpf.Ui.Controls.SymbolRegular.Eye24);
+            ElevenLabsReveal.Icon = new Wpf.Ui.Controls.SymbolIcon(Wpf.Ui.Controls.SymbolRegular.Eye24);
             OpenAIReveal.Icon     = new Wpf.Ui.Controls.SymbolIcon(Wpf.Ui.Controls.SymbolRegular.Eye24);
             OpenRouterReveal.Icon = new Wpf.Ui.Controls.SymbolIcon(Wpf.Ui.Controls.SymbolRegular.Eye24);
             CerebrasReveal.Icon   = new Wpf.Ui.Controls.SymbolIcon(Wpf.Ui.Controls.SymbolRegular.Eye24);
 
             DeepgramPwdBox.PasswordChanged   += DeepgramPwdBox_PasswordChanged;
+            ElevenLabsPwdBox.PasswordChanged += ElevenLabsPwdBox_PasswordChanged;
             OpenAIPwdBox.PasswordChanged     += OpenAIPwdBox_PasswordChanged;
             OpenRouterPwdBox.PasswordChanged += OpenRouterPwdBox_PasswordChanged;
             CerebrasPwdBox.PasswordChanged   += CerebrasPwdBox_PasswordChanged;
@@ -103,14 +112,15 @@ namespace Speakly.Pages
             TraceDebug("PopulatePasswordBoxes complete.");
         }
 
-        private void OnApiTestCompleted(string dg, string oa, string cr, string or)
+        private void OnApiTestCompleted(string dg, string el, string oa, string or, string cr)
         {
             Dispatcher.Invoke(() =>
             {
                 FlashKeyGlow(DeepgramGlow,   DeepgramGlowFx,   dg.StartsWith("OK"));
+                FlashKeyGlow(ElevenLabsGlow, ElevenLabsGlowFx, el.StartsWith("OK"));
                 FlashKeyGlow(OpenAIGlow,     OpenAIGlowFx,     oa.StartsWith("OK"));
-                FlashKeyGlow(CerebrasGlow,   CerebrasGlowFx,   cr.StartsWith("OK"));
                 FlashKeyGlow(OpenRouterGlow, OpenRouterGlowFx, or.StartsWith("OK"));
+                FlashKeyGlow(CerebrasGlow,   CerebrasGlowFx,   cr.StartsWith("OK"));
             });
         }
 
@@ -149,6 +159,16 @@ namespace Speakly.Pages
                 revealTextBox: OpenAITxtBox,
                 currentValue: App.ViewModel.OpenAIApiKey,
                 assign: value => App.ViewModel.OpenAIApiKey = value);
+        }
+
+        private void ElevenLabsPwdBox_PasswordChanged(object sender, RoutedEventArgs e)
+        {
+            UpdateKeyFromPasswordBox(
+                provider: "ElevenLabs",
+                passwordBox: ElevenLabsPwdBox,
+                revealTextBox: ElevenLabsTxtBox,
+                currentValue: App.ViewModel.ElevenLabsApiKey,
+                assign: value => App.ViewModel.ElevenLabsApiKey = value);
         }
 
         private void OpenRouterPwdBox_PasswordChanged(object sender, RoutedEventArgs e)
@@ -191,6 +211,17 @@ namespace Speakly.Pages
                 detach: () => OpenAIPwdBox.PasswordChanged -= OpenAIPwdBox_PasswordChanged,
                 attach: () => OpenAIPwdBox.PasswordChanged += OpenAIPwdBox_PasswordChanged,
                 assign: value => App.ViewModel.OpenAIApiKey = value);
+        }
+
+        private void ElevenLabsTxtBox_TextChanged(object sender, TextChangedEventArgs e)
+        {
+            UpdateKeyFromRevealTextBox(
+                provider: "ElevenLabs",
+                passwordBox: ElevenLabsPwdBox,
+                revealTextBox: ElevenLabsTxtBox,
+                detach: () => ElevenLabsPwdBox.PasswordChanged -= ElevenLabsPwdBox_PasswordChanged,
+                attach: () => ElevenLabsPwdBox.PasswordChanged += ElevenLabsPwdBox_PasswordChanged,
+                assign: value => App.ViewModel.ElevenLabsApiKey = value);
         }
 
         private void OpenRouterTxtBox_TextChanged(object sender, TextChangedEventArgs e)
@@ -285,6 +316,7 @@ namespace Speakly.Pages
             switch (tag)
             {
                 case "Deepgram":   pwdBox = DeepgramPwdBox;   txtBox = DeepgramTxtBox;   break;
+                case "ElevenLabs": pwdBox = ElevenLabsPwdBox; txtBox = ElevenLabsTxtBox; break;
                 case "OpenAI":     pwdBox = OpenAIPwdBox;     txtBox = OpenAITxtBox;     break;
                 case "OpenRouter": pwdBox = OpenRouterPwdBox; txtBox = OpenRouterTxtBox; break;
                 case "Cerebras":   pwdBox = CerebrasPwdBox;   txtBox = CerebrasTxtBox;   break;

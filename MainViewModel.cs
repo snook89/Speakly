@@ -57,7 +57,7 @@ namespace Speakly.ViewModels
             "en", "es", "fr", "de", "hi", "ru", "pt", "ja", "it", "nl"
         };
 
-        public event Action<string, string, string, string>? ApiTestCompleted;
+        public event Action<string, string, string, string, string>? ApiTestCompleted;
         public event Action<bool>? RefreshModelsCompleted;
 
         public List<string> AvailablePrivacyModes { get; } = new() { "normal", "no_history" };
@@ -248,6 +248,7 @@ namespace Speakly.ViewModels
                 return SttModel switch
                 {
                     "Deepgram" => ConfigManager.Config.DeepgramModel,
+                    "ElevenLabs" => ConfigManager.Config.ElevenLabsSttModel,
                     "OpenAI" => ConfigManager.Config.OpenAISttModel,
                     "OpenRouter" => ConfigManager.Config.OpenRouterSttModel,
                     _ => ""
@@ -260,6 +261,7 @@ namespace Speakly.ViewModels
                 if (!IsInModelList(AvailableSttModels, normalized)) return;
 
                 if (SttModel == "Deepgram") ConfigManager.Config.DeepgramModel = normalized;
+                else if (SttModel == "ElevenLabs") ConfigManager.Config.ElevenLabsSttModel = normalized;
                 else if (SttModel == "OpenAI") ConfigManager.Config.OpenAISttModel = normalized;
                 else if (SttModel == "OpenRouter") ConfigManager.Config.OpenRouterSttModel = normalized;
                 SyncActiveProfileFromLegacy();
@@ -339,6 +341,12 @@ namespace Speakly.ViewModels
         {
             get => ConfigManager.Config.OpenAIApiKey;
             set { ConfigManager.Config.OpenAIApiKey = value; OnPropertyChanged(); }
+        }
+
+        public string ElevenLabsApiKey
+        {
+            get => ConfigManager.Config.ElevenLabsApiKey;
+            set { ConfigManager.Config.ElevenLabsApiKey = value; OnPropertyChanged(); }
         }
 
         public string OpenRouterApiKey
@@ -1767,6 +1775,7 @@ namespace Speakly.ViewModels
             OnPropertyChanged(nameof(IsOpenRouterSttProvider));
             OnPropertyChanged(nameof(SelectedSttModelString));
             OnPropertyChanged(nameof(OpenRouterSttShowAllModels));
+            OnPropertyChanged(nameof(ElevenLabsApiKey));
             OnPropertyChanged(nameof(DeepgramApiBaseUrl));
             OnPropertyChanged(nameof(EnableRefinement));
             OnPropertyChanged(nameof(RefinementModel));
@@ -2582,6 +2591,13 @@ namespace Speakly.ViewModels
                 AvailableSttModels.Add("whisper-1");
                 AvailableSttModels.Add("whisper-1-hd");
             }
+            else if (SttModel == "ElevenLabs")
+            {
+                foreach (var model in GetCuratedElevenLabsSttModels())
+                {
+                    AvailableSttModels.Add(model);
+                }
+            }
             else if (SttModel == "OpenRouter")
             {
                 AvailableSttModels.Add("openai/gpt-audio-mini");
@@ -2696,6 +2712,7 @@ namespace Speakly.ViewModels
             return SttModel switch
             {
                 "Deepgram" => ConfigManager.Config.DeepgramFavoriteModels ??= new List<string>(),
+                "ElevenLabs" => ConfigManager.Config.ElevenLabsSttFavoriteModels ??= new List<string>(),
                 "OpenAI" => ConfigManager.Config.OpenAISttFavoriteModels ??= new List<string>(),
                 "OpenRouter" => ConfigManager.Config.OpenRouterSttFavoriteModels ??= new List<string>(),
                 _ => null
@@ -2956,6 +2973,8 @@ namespace Speakly.ViewModels
                         _dynamicRefinementModels["OpenRouter"] = openRouterRefinementModels;
                 }
 
+                _dynamicSttModels["ElevenLabs"] = GetCuratedElevenLabsSttModels();
+
                 UpdateSttModelList();
                 UpdateRefinementModelList();
 
@@ -2997,6 +3016,8 @@ namespace Speakly.ViewModels
                         ModelRefreshStatus += " | mode: experimental all models";
                     }
                 }
+
+                ModelRefreshStatus += " | ElevenLabs uses a curated realtime STT list";
 
                 if (userInitiated)
                 {
@@ -3360,6 +3381,9 @@ namespace Speakly.ViewModels
             var dg = await ApiTester.TestDeepgramAsync(DeepgramApiKey, DeepgramApiBaseUrl);
             sb.AppendLine($"Deepgram: {dg}");
 
+            var el = await ApiTester.TestElevenLabsAsync(ElevenLabsApiKey);
+            sb.AppendLine($"ElevenLabs: {el}");
+
             var oa = await ApiTester.TestOpenAIAsync(OpenAIApiKey);
             sb.AppendLine($"OpenAI: {oa}");
 
@@ -3374,7 +3398,7 @@ namespace Speakly.ViewModels
             sb.AppendLine($"OpenRouter: {or}");
 
             ApiTestStatus = sb.ToString();
-            ApiTestCompleted?.Invoke(dg, oa, cr, or);
+            ApiTestCompleted?.Invoke(dg, el, oa, or, cr);
             TelemetryManager.Track(
                 name: "api_test",
                 level: "info",
@@ -3382,11 +3406,17 @@ namespace Speakly.ViewModels
                 data: new Dictionary<string, string>
                 {
                     ["deepgram_result"] = dg,
+                    ["elevenlabs_result"] = el,
                     ["openai_result"] = oa,
                     ["cerebras_result"] = cr,
                     ["openrouter_result"] = or
                 });
             ApiTestStatus = "Ready";
+        }
+
+        private static List<string> GetCuratedElevenLabsSttModels()
+        {
+            return new List<string> { ElevenLabsRealtimeProtocol.DefaultModel };
         }
 
         private string BuildDeepgramLanguageGuardMessage()

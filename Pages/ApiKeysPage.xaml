@@ -57,6 +57,45 @@
 
                     <Border Style="{StaticResource PageFeatureSurface}">
                         <StackPanel>
+                            <TextBlock Text="ElevenLabs API Key" Style="{StaticResource FieldLabel}" />
+                            <Grid x:Name="ElevenLabsRow">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+                                <PasswordBox x:Name="ElevenLabsPwdBox"
+                                             Grid.Column="0"
+                                             PasswordChanged="ElevenLabsPwdBox_PasswordChanged"
+                                             Style="{StaticResource InputPassword}" />
+                                <ui:TextBox x:Name="ElevenLabsTxtBox"
+                                            Grid.Column="0"
+                                            Visibility="Collapsed"
+                                            TextChanged="ElevenLabsTxtBox_TextChanged"
+                                            Style="{StaticResource InputDefault}" />
+                                <ui:Button Grid.Column="1"
+                                           x:Name="ElevenLabsReveal"
+                                           Content="Show"
+                                           Icon="{ui:SymbolIcon Eye24}"
+                                           Style="{StaticResource RevealButton}"
+                                           Click="RevealApiKey_Click"
+                                           Tag="ElevenLabs" />
+                                <Border x:Name="ElevenLabsGlow"
+                                        Grid.Column="0"
+                                        BorderThickness="2"
+                                        CornerRadius="10"
+                                        IsHitTestVisible="False"
+                                        Opacity="0"
+                                        Panel.ZIndex="10">
+                                    <Border.Effect>
+                                        <DropShadowEffect x:Name="ElevenLabsGlowFx" BlurRadius="18" ShadowDepth="0" Opacity="0.95" />
+                                    </Border.Effect>
+                                </Border>
+                            </Grid>
+                        </StackPanel>
+                    </Border>
+
+                    <Border Style="{StaticResource PageFeatureSurface}">
+                        <StackPanel>
                             <TextBlock Text="OpenAI API Key" Style="{StaticResource FieldLabel}" />
                             <Grid x:Name="OpenAIRow">
                                 <Grid.ColumnDefinitions>

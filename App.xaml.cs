@@ -2478,6 +2478,7 @@ namespace Speakly
             return provider.Trim().ToLowerInvariant() switch
             {
                 "deepgram" => !string.IsNullOrWhiteSpace(ConfigManager.Config.DeepgramApiKey),
+                "elevenlabs" => !string.IsNullOrWhiteSpace(ConfigManager.Config.ElevenLabsApiKey),
                 "openai" => !string.IsNullOrWhiteSpace(ConfigManager.Config.OpenAIApiKey),
                 "openrouter" => !string.IsNullOrWhiteSpace(ConfigManager.Config.OpenRouterApiKey),
                 _ => false
@@ -2917,6 +2918,7 @@ namespace Speakly
             {
                 "OpenAI" => ConfigManager.Config.OpenAISttModel,
                 "Deepgram" => ConfigManager.Config.DeepgramModel,
+                "ElevenLabs" => ConfigManager.Config.ElevenLabsSttModel,
                 "OpenRouter" => ConfigManager.Config.OpenRouterSttModel,
                 _ => string.Empty
             };

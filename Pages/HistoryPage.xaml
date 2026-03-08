@@ -52,6 +52,7 @@
                                       Margin="0,0,12,0">
                                 <ComboBoxItem Content="All providers" Tag="all" />
                                 <ComboBoxItem Content="Deepgram" Tag="Deepgram" />
+                                <ComboBoxItem Content="ElevenLabs" Tag="ElevenLabs" />
                                 <ComboBoxItem Content="OpenAI" Tag="OpenAI" />
                                 <ComboBoxItem Content="OpenRouter" Tag="OpenRouter" />
                             </ComboBox>

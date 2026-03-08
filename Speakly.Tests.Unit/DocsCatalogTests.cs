@@ -77,6 +77,7 @@ namespace Speakly.Tests.Unit
             Assert.Contains("session profile", combinedText, StringComparison.OrdinalIgnoreCase);
             Assert.Contains("cloud.cerebras.ai", combinedText, StringComparison.OrdinalIgnoreCase);
             Assert.Contains("console.deepgram.com/signup", combinedText, StringComparison.OrdinalIgnoreCase);
+            Assert.Contains("elevenlabs.io/app/sign-up", combinedText, StringComparison.OrdinalIgnoreCase);
             Assert.Contains("API Keys section", combinedText, StringComparison.OrdinalIgnoreCase);
         }
     }

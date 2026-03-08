@@ -4,12 +4,14 @@ namespace Speakly.Services
     {
         public static ITranscriber CreateTranscriber(string type)
         {
-            switch (type?.ToLower())
+            switch (type?.ToLowerInvariant())
             {
                 case "openai":
                     return new OpenAITranscriber();
                 case "openrouter":
                     return new OpenRouterTranscriber();
+                case "elevenlabs":
+                    return new ElevenLabsTranscriber();
                 case "deepgram":
                 default:
                     return new DeepgramTranscriber();

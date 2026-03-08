@@ -87,6 +87,7 @@ namespace Speakly.Services
             return provider?.Trim().ToLowerInvariant() switch
             {
                 "deepgram" => !string.IsNullOrWhiteSpace(config.DeepgramApiKey),
+                "elevenlabs" => !string.IsNullOrWhiteSpace(config.ElevenLabsApiKey),
                 "openai" => !string.IsNullOrWhiteSpace(config.OpenAIApiKey),
                 "openrouter" => !string.IsNullOrWhiteSpace(config.OpenRouterApiKey),
                 _ => false

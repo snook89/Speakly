@@ -109,6 +109,22 @@ namespace Speakly.Services
             catch (Exception ex) { return $"FAIL: {ex.Message}"; }
         }
 
+        public static async Task<string> TestElevenLabsAsync(string apiKey)
+        {
+            if (string.IsNullOrWhiteSpace(apiKey)) return "FAIL: No API Key provided";
+            try
+            {
+                var request = new HttpRequestMessage(HttpMethod.Get, "https://api.elevenlabs.io/v1/models");
+                request.Headers.Add("xi-api-key", apiKey);
+                var response = await _client.SendAsync(request);
+                if (response.IsSuccessStatusCode) return "OK: Connection Successful";
+
+                var body = await response.Content.ReadAsStringAsync();
+                return $"FAIL: {response.StatusCode} ({ExtractApiErrorMessage(body)})";
+            }
+            catch (Exception ex) { return $"FAIL: {ex.Message}"; }
+        }
+
         public static async Task<string> TestOpenRouterAsync(string apiKey)
         {
             if (string.IsNullOrWhiteSpace(apiKey)) return "FAIL: No API Key provided";

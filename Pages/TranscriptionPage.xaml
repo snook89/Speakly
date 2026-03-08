@@ -24,7 +24,8 @@
                               MaxWidth="300"
                               MinWidth="240"
                               HorizontalAlignment="Left">
-                        <ComboBoxItem Content="Deepgram" />
+                    <ComboBoxItem Content="Deepgram" />
+                        <ComboBoxItem Content="ElevenLabs" />
                         <ComboBoxItem Content="OpenAI" />
                         <ComboBoxItem Content="OpenRouter" />
                     </ComboBox>

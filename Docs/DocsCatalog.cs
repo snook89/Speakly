@@ -248,7 +248,7 @@ namespace Speakly.Docs
                         "After recording stops, Speakly sends audio to the active STT provider and model from the resolved session profile. That provider returns text, and Speakly uses that text as the base for commands, refinement, snippets, and history."),
                     new DocsSection(
                         "Providers, models, and refresh",
-                        "Speakly supports Deepgram, OpenAI, and OpenRouter for STT. You can refresh model lists from provider APIs and pin favorites so your preferred models stay easy to reach."),
+                        "Speakly supports Deepgram, ElevenLabs, OpenAI, and OpenRouter for STT. ElevenLabs is available as an experimental direct realtime STT provider and uses a curated supported realtime model list in v1. You can refresh model lists from provider APIs and pin favorites so your preferred models stay easy to reach."),
                     new DocsSection(
                         "Failover behavior",
                         "If transient STT errors occur and failover is enabled, Speakly can retry with another provider in the configured failover order. History and telemetry record when failover was attempted and which provider finally succeeded. No-mic-signal sessions stop before this stage because there is nothing useful to transcribe.")
@@ -357,8 +357,11 @@ namespace Speakly.Docs
                         "Getting a Deepgram key",
                         "Open the Deepgram console signup page, create or sign in to your account, then open the API Keys area in the console and generate a new key for speech-to-text use. Paste that key into Speakly before selecting Deepgram for transcription."),
                     new DocsSection(
+                        "Getting an ElevenLabs key",
+                        "Open the ElevenLabs signup or login page, sign in, then open the API Keys section in your account settings and generate a new API key. Paste that key into Speakly before selecting ElevenLabs for experimental realtime transcription benchmarking."),
+                    new DocsSection(
                         "Testing setup",
-                        "The fastest validation is to save the key, choose the matching provider in Transcription or Refinement, then run a short live dictation and confirm the request succeeds without fallback.")
+                        "The fastest validation is to save the key, choose the matching provider in Transcription or Refinement, then run a short live dictation and confirm the request succeeds without fallback. ElevenLabs is STT only in this release, so it should be validated from the Transcription workflow, not Refinement.")
                 },
                 new[]
                 {
@@ -393,7 +396,11 @@ namespace Speakly.Docs
                     new DocsLink(
                         "Open Deepgram signup",
                         "https://console.deepgram.com/signup",
-                        "After signing in, open the API Keys area in the Deepgram console and generate a new key for Speakly transcription.")
+                        "After signing in, open the API Keys area in the Deepgram console and generate a new key for Speakly transcription."),
+                    new DocsLink(
+                        "Open ElevenLabs signup / login",
+                        "https://elevenlabs.io/app/sign-up",
+                        "After signing in, open the API Keys section in ElevenLabs settings and generate a new key for experimental realtime STT testing.")
                 }),
             new DocsTopic(
                 "general",

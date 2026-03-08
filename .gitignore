@@ -42,3 +42,6 @@ Desktop.ini
 
 # Publish outputs
 publish/
+
+# Internal Codex planning files
+CODEX_*.md

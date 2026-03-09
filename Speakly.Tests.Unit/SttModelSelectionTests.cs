@@ -1,4 +1,5 @@
 using Speakly;
+using Speakly.Config;
 using Speakly.ViewModels;
 
 namespace Speakly.Tests.Unit

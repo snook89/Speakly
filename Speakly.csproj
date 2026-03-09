@@ -10,8 +10,8 @@
     <RuntimeIdentifiers>win-x64</RuntimeIdentifiers>
     <DefaultItemExcludes>$(DefaultItemExcludes);obj_build\**;obj_build/**;obj_ci_tmp\**;obj_ci_tmp/**;Speakly.Tests.Unit\**;Speakly.Tests.Unit/**</DefaultItemExcludes>
     <ApplicationIcon>Resources\Speakly_new_logo.ico</ApplicationIcon>
-    <Version>2.0.10</Version>
-    <AssemblyVersion>2.0.10.0</AssemblyVersion>
+    <Version>2.0.11</Version>
+    <AssemblyVersion>2.0.11.0</AssemblyVersion>
   </PropertyGroup>
 
   <ItemGroup>
@@ -19,6 +19,7 @@
     <Resource Include="Resources\Speakly_banner.png" />
     <Resource Include="Resources\start_feedback.wav" />
     <Resource Include="Resources\stop_feedback.wav" />
+    <Resource Include="Resources\update.mp3" />
   </ItemGroup>
 
   <ItemGroup>

@@ -647,7 +647,7 @@ namespace Speakly.Docs
                         "Updates keep the installed app current without asking you to reinstall manually every time a release ships."),
                     new DocsSection(
                         "How it works",
-                        "On startup, Speakly checks GitHub Releases. If a newer release exists and the install type supports self-update, it downloads the update in the background and prompts for restart when the package is ready."),
+                        "On startup, Speakly checks GitHub Releases. If a newer release exists and the install type supports self-update, it downloads the update in the background and shows an in-app update dialog with release-note highlights before asking whether to restart now."),
                     new DocsSection(
                         "Best use scenarios",
                         "Automatic updates are best when Speakly is installed through its normal setup flow. Local publish builds can run, but they may not support the full self-update path.")
@@ -656,6 +656,7 @@ namespace Speakly.Docs
                 {
                     "Use the normal installed build if you want the update flow to work end-to-end.",
                     "Check the Info page when you want to confirm current version and update status.",
+                    "Read the update dialog before restarting; it now summarizes what changed in the new version.",
                     "Restart after an update download when you are ready to apply the new build."
                 },
                 new[]

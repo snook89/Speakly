@@ -18,6 +18,7 @@ namespace Speakly.Services
         private CancellationTokenSource? _cts;
         private TaskCompletionSource<bool>? _sessionStartedTcs;
         private TaskCompletionSource<bool>? _finalResultTcs;
+        private bool _receivedCommittedTranscript;
 
         public event EventHandler<TranscriptionEventArgs>? TranscriptionReceived;
         public event EventHandler<string>? ErrorReceived;
@@ -43,6 +44,7 @@ namespace Speakly.Services
             _cts = new CancellationTokenSource();
             _sessionStartedTcs = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
             _finalResultTcs = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+            _receivedCommittedTranscript = false;
 
             try
             {
@@ -220,6 +222,7 @@ namespace Speakly.Services
                                 Logger.Log($"ElevenLabs committed transcript received: {message.Text}");
                                 TranscriptionReceived?.Invoke(this, new TranscriptionEventArgs(message.Text, true));
                             }
+                            _receivedCommittedTranscript = true;
                             _finalResultTcs?.TrySetResult(true);
                             break;
                         case "error":
@@ -230,6 +233,12 @@ namespace Speakly.Services
                 }
                 catch (OperationCanceledException)
                 {
+                    break;
+                }
+                catch (WebSocketException ex) when (IsBenignCloseHandshakeRace(ex) && _receivedCommittedTranscript)
+                {
+                    Logger.Log("ElevenLabs realtime STT receive loop ended after the provider closed the WebSocket following a committed transcript.");
+                    _finalResultTcs?.TrySetResult(true);
                     break;
                 }
                 catch (Exception ex)

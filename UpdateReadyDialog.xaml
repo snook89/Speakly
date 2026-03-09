@@ -1,0 +1,119 @@
+<Window x:Class="Speakly.UpdateReadyDialog"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Speakly Update Ready"
+        Width="720"
+        Height="560"
+        MinWidth="640"
+        MinHeight="500"
+        Background="{DynamicResource BrushBgBase}"
+        WindowStartupLocation="CenterOwner"
+        ResizeMode="NoResize"
+        Icon="Resources/Speakly_new_logo.ico">
+    <Grid Margin="24">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <Grid>
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="Auto"/>
+                <ColumnDefinition Width="*"/>
+            </Grid.ColumnDefinitions>
+
+            <Border Width="48"
+                    Height="48"
+                    CornerRadius="14"
+                    Background="{DynamicResource BrushAccentSubtle}">
+                <Image Source="pack://application:,,,/Resources/Speakly_new_logo.ico"
+                       Width="26"
+                       Height="26"
+                       Stretch="Uniform"
+                       HorizontalAlignment="Center"
+                       VerticalAlignment="Center"/>
+            </Border>
+
+            <StackPanel Grid.Column="1" Margin="16,0,0,0">
+                <TextBlock Text="Update Ready"
+                           Style="{StaticResource PageEyebrow}"/>
+                <TextBlock x:Name="VersionTitleText"
+                           Style="{StaticResource PageTitle}"
+                           Margin="0,0,0,8"/>
+                <TextBlock Text="Speakly downloaded the latest release and can apply it now."
+                           Style="{StaticResource HintText}"/>
+            </StackPanel>
+        </Grid>
+
+        <Border Grid.Row="1"
+                Style="{StaticResource SectionCardAccent}"
+                Padding="20,16"
+                Margin="0,20,0,12">
+            <StackPanel>
+                <TextBlock x:Name="SummaryText"
+                           Style="{StaticResource BodyText}"
+                           FontWeight="SemiBold"
+                           Margin="0,0,0,10"/>
+                <TextBlock Text="What's included"
+                           Style="{StaticResource SectionTitle}"
+                           Margin="0,0,0,10"/>
+                <ItemsControl x:Name="HighlightsList">
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate>
+                            <DockPanel Margin="0,0,0,8" LastChildFill="True">
+                                <TextBlock Text="•"
+                                           Foreground="{DynamicResource BrushAccent}"
+                                           FontSize="16"
+                                           Margin="0,0,10,0"
+                                           VerticalAlignment="Top"/>
+                                <TextBlock Text="{Binding}"
+                                           Style="{StaticResource BodyText}"/>
+                            </DockPanel>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+            </StackPanel>
+        </Border>
+
+        <Border Grid.Row="2"
+                Style="{StaticResource SectionCard}"
+                Padding="18,16"
+                Margin="0,0,0,12">
+            <ScrollViewer VerticalScrollBarVisibility="Auto">
+                <StackPanel>
+                    <TextBlock Text="Next step"
+                               Style="{StaticResource SectionTitle}"
+                               Margin="0,0,0,10"/>
+                    <TextBlock Text="Choose Update now to restart and apply the new build immediately, or Later to keep the downloaded update pending until a future restart."
+                               Style="{StaticResource BodyText}"
+                               Margin="0,0,0,12"/>
+                    <TextBlock x:Name="ReleaseLinkHintText"
+                               Style="{StaticResource HintText}"
+                               TextWrapping="Wrap"/>
+                </StackPanel>
+            </ScrollViewer>
+        </Border>
+
+        <DockPanel Grid.Row="3" Margin="0,8,0,0">
+            <Button x:Name="ViewReleaseButton"
+                    DockPanel.Dock="Left"
+                    Content="View release"
+                    Style="{StaticResource ButtonSecondary}"
+                    Click="ViewReleaseButton_Click"/>
+            <StackPanel Orientation="Horizontal"
+                        HorizontalAlignment="Right">
+                <Button Content="Later"
+                        Style="{StaticResource ButtonSecondary}"
+                        Width="120"
+                        Margin="0,0,10,0"
+                        Click="LaterButton_Click"/>
+                <Button Content="Update now"
+                        Style="{StaticResource ButtonPrimary}"
+                        Width="140"
+                        Click="UpdateNowButton_Click"/>
+            </StackPanel>
+        </DockPanel>
+    </Grid>
+</Window>

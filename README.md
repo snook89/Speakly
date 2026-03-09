@@ -141,7 +141,7 @@ Speakly is for people who want voice input to feel like part of a serious deskto
 | Reliability | Single-instance activation, STT failover, startup health checks, deferred auto-paste, debug logs |
 | Observability | History, latency statistics, provider breakdowns, top errors, and local structured telemetry with redaction |
 | Startup | Optional Windows startup registration through Task Scheduler, with minimized tray launch support |
-| Updates | Checks GitHub Releases on startup, downloads updates, and prompts for restart when ready |
+| Updates | Checks GitHub Releases on startup, downloads updates, shows in-app release notes, and prompts for restart when ready |
 
 ## What Is New In The Current App
 
@@ -233,6 +233,7 @@ Notes:
 - ElevenLabs is available as an experimental direct realtime STT provider and uses a curated supported realtime model list in v1.
 - ElevenLabs may close its realtime websocket immediately after sending a committed transcript; Speakly now treats that provider-side close as normal session cleanup instead of a transcription failure.
 - When Deepgram, ElevenLabs, or OpenRouter is selected for STT, the Transcription page can show a compact provider balance card if that API key has access to the provider's account or subscription endpoint.
+- When an app update is ready, Speakly now shows a native update dialog with release notes highlights instead of a plain restart prompt.
 - Deepgram signup: [console.deepgram.com/signup](https://console.deepgram.com/signup)
 - ElevenLabs signup or login: [elevenlabs.io/app/sign-up](https://elevenlabs.io/app/sign-up)
 - Cerebras signup or login: [cloud.cerebras.ai](https://cloud.cerebras.ai/?utm_source=homepage)

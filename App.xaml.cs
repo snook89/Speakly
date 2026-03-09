@@ -1061,11 +1061,19 @@ namespace Speakly
                 bool applyNow = false;
                 await Dispatcher.InvokeAsync(() =>
                 {
-                    applyNow = MessageBox.Show(
-                        $"Update {updates.TargetFullRelease.Version} is ready. Restart now to apply?",
-                        "Speakly Update Ready",
-                        MessageBoxButton.YesNo,
-                        MessageBoxImage.Information) == MessageBoxResult.Yes;
+                    var release = updates.TargetFullRelease;
+                    var notes = UpdateReleaseNotesFormatter.Parse(
+                        release.Version.ToString(),
+                        release.NotesMarkdown,
+                        release.NotesHTML);
+                    var releaseUrl = $"{GitHubUpdateRepoUrl}/releases/tag/v{release.Version}";
+                    var dialog = new UpdateReadyDialog(release.Version.ToString(), notes, releaseUrl);
+                    if (MainWindow != null)
+                    {
+                        dialog.Owner = MainWindow;
+                    }
+
+                    applyNow = dialog.ShowDialog() == true;
                 });
 
                 if (applyNow)

@@ -34,6 +34,18 @@ namespace Speakly.ViewModels
         private string _pendingTransferStatus = "No pending auto-paste.";
         private string _healthSummary = "Health checks not run yet.";
         private string _healthDetails = string.Empty;
+        private bool _isRefreshingProviderBalance;
+        private string _providerBalanceBadge = "Unavailable";
+        private string _providerBalancePrimaryLabel = "Total";
+        private string _providerBalancePrimaryValue = "N/A";
+        private string _providerBalanceSecondaryLabel = "Remaining";
+        private string _providerBalanceSecondaryValue = "N/A";
+        private string _providerBalanceStatus = "Select a supported STT provider to load balance.";
+        private bool _isRefreshingElevenLabsBalance;
+        private string _elevenLabsBalanceStatus = "Select ElevenLabs to load provider balance.";
+        private string _elevenLabsBalancePlan = "Unavailable";
+        private long? _elevenLabsBalanceUsed;
+        private long? _elevenLabsBalanceLimit;
         private string _newProfileName = string.Empty;
         private string _profileDraftName = string.Empty;
         private string _profileProcessNamesInput = string.Empty;
@@ -193,7 +205,21 @@ namespace Speakly.ViewModels
                 OnPropertyChanged(); 
                 OnPropertyChanged(nameof(SelectedSttModelString));
                 OnPropertyChanged(nameof(IsOpenRouterSttProvider));
+                OnPropertyChanged(nameof(IsElevenLabsSttProvider));
+                OnPropertyChanged(nameof(IsDeepgramSttProvider));
+                OnPropertyChanged(nameof(HasProviderBalanceSupport));
+                CommandManager.InvalidateRequerySuggested();
                 NotifyDeepgramLanguageGuardChanged();
+
+                if (HasProviderBalanceSupport)
+                {
+                    _ = RefreshSttProviderBalanceAsync();
+                }
+                else
+                {
+                    ResetElevenLabsBalanceState("Select ElevenLabs to load provider balance.");
+                    ResetProviderBalanceState("Select a supported STT provider to load balance.");
+                }
             }
         }
 
@@ -279,6 +305,15 @@ namespace Speakly.ViewModels
         public bool IsOpenRouterSttProvider =>
             string.Equals(SttModel, "OpenRouter", StringComparison.OrdinalIgnoreCase);
 
+        public bool IsElevenLabsSttProvider =>
+            string.Equals(SttModel, "ElevenLabs", StringComparison.OrdinalIgnoreCase);
+
+        public bool IsDeepgramSttProvider =>
+            string.Equals(SttModel, "Deepgram", StringComparison.OrdinalIgnoreCase);
+
+        public bool HasProviderBalanceSupport =>
+            IsDeepgramSttProvider || IsElevenLabsSttProvider || IsOpenRouterSttProvider;
+
         public bool OpenRouterSttShowAllModels
         {
             get => ConfigManager.Config.OpenRouterSttShowAllModels;
@@ -324,7 +359,17 @@ namespace Speakly.ViewModels
         public string DeepgramApiKey
         {
             get => ConfigManager.Config.DeepgramApiKey;
-            set { ConfigManager.Config.DeepgramApiKey = value; OnPropertyChanged(); }
+            set
+            {
+                ConfigManager.Config.DeepgramApiKey = value;
+                OnPropertyChanged();
+                if (IsDeepgramSttProvider)
+                {
+                    ResetProviderBalanceState(string.IsNullOrWhiteSpace(value)
+                        ? "Add a Deepgram API key to load balance."
+                        : "Refresh balance to validate the updated Deepgram key.");
+                }
+            }
         }
 
         public string DeepgramApiBaseUrl
@@ -346,13 +391,163 @@ namespace Speakly.ViewModels
         public string ElevenLabsApiKey
         {
             get => ConfigManager.Config.ElevenLabsApiKey;
-            set { ConfigManager.Config.ElevenLabsApiKey = value; OnPropertyChanged(); }
+            set
+            {
+                ConfigManager.Config.ElevenLabsApiKey = value;
+                OnPropertyChanged();
+
+                if (string.IsNullOrWhiteSpace(value))
+                {
+                    ResetElevenLabsBalanceState("Add an ElevenLabs API key to load balance.");
+                    if (IsElevenLabsSttProvider)
+                    {
+                        ResetProviderBalanceState("Add an ElevenLabs API key to load balance.");
+                    }
+                }
+                else if (IsElevenLabsSttProvider)
+                {
+                    ResetElevenLabsBalanceState("Refresh balance to validate the updated ElevenLabs key.");
+                    ResetProviderBalanceState("Refresh balance to validate the updated ElevenLabs key.");
+                }
+            }
         }
+
+        public bool IsRefreshingProviderBalance
+        {
+            get => _isRefreshingProviderBalance;
+            private set
+            {
+                _isRefreshingProviderBalance = value;
+                OnPropertyChanged();
+                CommandManager.InvalidateRequerySuggested();
+            }
+        }
+
+        public string ProviderBalanceBadge
+        {
+            get => _providerBalanceBadge;
+            private set
+            {
+                _providerBalanceBadge = value;
+                OnPropertyChanged();
+            }
+        }
+
+        public string ProviderBalancePrimaryLabel
+        {
+            get => _providerBalancePrimaryLabel;
+            private set
+            {
+                _providerBalancePrimaryLabel = value;
+                OnPropertyChanged();
+            }
+        }
+
+        public string ProviderBalancePrimaryValue
+        {
+            get => _providerBalancePrimaryValue;
+            private set
+            {
+                _providerBalancePrimaryValue = value;
+                OnPropertyChanged();
+            }
+        }
+
+        public string ProviderBalanceSecondaryLabel
+        {
+            get => _providerBalanceSecondaryLabel;
+            private set
+            {
+                _providerBalanceSecondaryLabel = value;
+                OnPropertyChanged();
+            }
+        }
+
+        public string ProviderBalanceSecondaryValue
+        {
+            get => _providerBalanceSecondaryValue;
+            private set
+            {
+                _providerBalanceSecondaryValue = value;
+                OnPropertyChanged();
+            }
+        }
+
+        public string ProviderBalanceStatus
+        {
+            get => _providerBalanceStatus;
+            private set
+            {
+                _providerBalanceStatus = value;
+                OnPropertyChanged();
+            }
+        }
+
+        public ICommand RefreshProviderBalanceCommand =>
+            new RelayCommand(async _ => await RefreshSttProviderBalanceAsync(), _ => HasProviderBalanceSupport && !IsRefreshingProviderBalance);
+
+        public bool IsRefreshingElevenLabsBalance
+        {
+            get => _isRefreshingElevenLabsBalance;
+            private set
+            {
+                _isRefreshingElevenLabsBalance = value;
+                OnPropertyChanged();
+                CommandManager.InvalidateRequerySuggested();
+            }
+        }
+
+        public string ElevenLabsBalanceStatus
+        {
+            get => _elevenLabsBalanceStatus;
+            private set
+            {
+                _elevenLabsBalanceStatus = value;
+                OnPropertyChanged();
+            }
+        }
+
+        public string ElevenLabsBalancePlan
+        {
+            get => _elevenLabsBalancePlan;
+            private set
+            {
+                _elevenLabsBalancePlan = value;
+                OnPropertyChanged();
+            }
+        }
+
+        public string ElevenLabsBalanceUsedDisplay => FormatBalanceValue(_elevenLabsBalanceUsed);
+
+        public string ElevenLabsBalanceLimitDisplay => FormatBalanceValue(_elevenLabsBalanceLimit);
+
+        public string ElevenLabsBalanceRemainingDisplay => FormatBalanceValue(ElevenLabsBalanceRemaining);
+
+        public long? ElevenLabsBalanceRemaining =>
+            _elevenLabsBalanceUsed.HasValue && _elevenLabsBalanceLimit.HasValue
+                ? Math.Max(0, _elevenLabsBalanceLimit.Value - _elevenLabsBalanceUsed.Value)
+                : null;
+
+        public bool HasElevenLabsBalanceNumbers =>
+            _elevenLabsBalanceUsed.HasValue || _elevenLabsBalanceLimit.HasValue;
+
+        public ICommand RefreshElevenLabsBalanceCommand =>
+            new RelayCommand(async _ => await RefreshElevenLabsBalanceAsync(), _ => IsElevenLabsSttProvider && !IsRefreshingElevenLabsBalance);
 
         public string OpenRouterApiKey
         {
             get => ConfigManager.Config.OpenRouterApiKey;
-            set { ConfigManager.Config.OpenRouterApiKey = value; OnPropertyChanged(); }
+            set
+            {
+                ConfigManager.Config.OpenRouterApiKey = value;
+                OnPropertyChanged();
+                if (IsOpenRouterSttProvider)
+                {
+                    ResetProviderBalanceState(string.IsNullOrWhiteSpace(value)
+                        ? "Add an OpenRouter API key to load balance."
+                        : "Refresh balance to validate the updated OpenRouter key.");
+                }
+            }
         }
 
         public string CerebrasApiKey
@@ -1773,9 +1968,26 @@ namespace Speakly.ViewModels
             RefreshDictionaryTextFromConfig();
             OnPropertyChanged(nameof(SttModel));
             OnPropertyChanged(nameof(IsOpenRouterSttProvider));
+            OnPropertyChanged(nameof(IsElevenLabsSttProvider));
+            OnPropertyChanged(nameof(IsDeepgramSttProvider));
+            OnPropertyChanged(nameof(HasProviderBalanceSupport));
             OnPropertyChanged(nameof(SelectedSttModelString));
             OnPropertyChanged(nameof(OpenRouterSttShowAllModels));
             OnPropertyChanged(nameof(ElevenLabsApiKey));
+            OnPropertyChanged(nameof(IsRefreshingProviderBalance));
+            OnPropertyChanged(nameof(ProviderBalanceBadge));
+            OnPropertyChanged(nameof(ProviderBalancePrimaryLabel));
+            OnPropertyChanged(nameof(ProviderBalancePrimaryValue));
+            OnPropertyChanged(nameof(ProviderBalanceSecondaryLabel));
+            OnPropertyChanged(nameof(ProviderBalanceSecondaryValue));
+            OnPropertyChanged(nameof(ProviderBalanceStatus));
+            OnPropertyChanged(nameof(IsRefreshingElevenLabsBalance));
+            OnPropertyChanged(nameof(ElevenLabsBalanceStatus));
+            OnPropertyChanged(nameof(ElevenLabsBalancePlan));
+            OnPropertyChanged(nameof(ElevenLabsBalanceUsedDisplay));
+            OnPropertyChanged(nameof(ElevenLabsBalanceLimitDisplay));
+            OnPropertyChanged(nameof(ElevenLabsBalanceRemainingDisplay));
+            OnPropertyChanged(nameof(HasElevenLabsBalanceNumbers));
             OnPropertyChanged(nameof(DeepgramApiBaseUrl));
             OnPropertyChanged(nameof(EnableRefinement));
             OnPropertyChanged(nameof(RefinementModel));
@@ -1819,6 +2031,16 @@ namespace Speakly.ViewModels
             OnPropertyChanged(nameof(ProfileDictionaryTermsText));
             NotifyDeepgramLanguageGuardChanged();
             NotifySelectedProfileSummaryChanged();
+
+            if (HasProviderBalanceSupport)
+            {
+                _ = RefreshSttProviderBalanceAsync();
+            }
+            else
+            {
+                ResetElevenLabsBalanceState("Select ElevenLabs to load provider balance.");
+                ResetProviderBalanceState("Select a supported STT provider to load balance.");
+            }
         }
 
         private void RefreshDictionaryTextFromConfig()
@@ -2266,6 +2488,10 @@ namespace Speakly.ViewModels
             UpdateSttModelList();
             UpdateRefinementModelList();
             _ = RefreshProviderModelsAsync();
+            if (HasProviderBalanceSupport)
+            {
+                _ = RefreshSttProviderBalanceAsync();
+            }
             
             foreach (var entry in HistoryManager.GetHistory())
             {
@@ -2571,43 +2797,10 @@ namespace Speakly.ViewModels
         private void UpdateSttModelList()
         {
             AvailableSttModels.Clear();
-            if (TryApplyDynamicModels(AvailableSttModels, _dynamicSttModels, SttModel))
-            {
-                PrioritizeSttFavorites();
-                EnsureCurrentModelInList(AvailableSttModels, SelectedSttModelString);
-                OnPropertyChanged(nameof(SelectedSttModelString));
-                return;
-            }
-
-            if (SttModel == "Deepgram")
-            {
-                AvailableSttModels.Add("nova-3");
-                AvailableSttModels.Add("nova-2");
-                AvailableSttModels.Add("nova-2-phonecall");
-                AvailableSttModels.Add("nova-2-medical");
-            }
-            else if (SttModel == "OpenAI")
-            {
-                AvailableSttModels.Add("whisper-1");
-                AvailableSttModels.Add("whisper-1-hd");
-            }
-            else if (SttModel == "ElevenLabs")
-            {
-                foreach (var model in GetCuratedElevenLabsSttModels())
-                {
-                    AvailableSttModels.Add(model);
-                }
-            }
-            else if (SttModel == "OpenRouter")
-            {
-                AvailableSttModels.Add("openai/gpt-audio-mini");
-                AvailableSttModels.Add("openai/gpt-audio");
-                AvailableSttModels.Add("google/gemini-2.0-flash-001");
-                AvailableSttModels.Add("mistralai/voxtral-small-24b-2507");
-                AvailableSttModels.Add("openai/whisper-large-v3");
-            }
+            AddMissingModels(AvailableSttModels, GetBuiltInSttModelsForProvider(SttModel));
+            TryApplyDynamicModels(AvailableSttModels, _dynamicSttModels, SttModel);
             PrioritizeSttFavorites();
-            EnsureCurrentModelInList(AvailableSttModels, SelectedSttModelString);
+            EnsureValidSttModelSelection();
             OnPropertyChanged(nameof(SelectedSttModelString));
         }
 
@@ -2719,6 +2912,118 @@ namespace Speakly.ViewModels
             };
         }
 
+        private async Task RefreshElevenLabsBalanceAsync()
+        {
+            if (!IsElevenLabsSttProvider)
+            {
+                ResetElevenLabsBalanceState("Select ElevenLabs to load provider balance.");
+                return;
+            }
+
+            if (string.IsNullOrWhiteSpace(ElevenLabsApiKey))
+            {
+                ResetElevenLabsBalanceState("Add an ElevenLabs API key to load balance.");
+                return;
+            }
+
+            if (IsRefreshingElevenLabsBalance)
+            {
+                return;
+            }
+
+            IsRefreshingElevenLabsBalance = true;
+            ElevenLabsBalanceStatus = "Loading ElevenLabs balance...";
+
+            try
+            {
+                var result = await ApiTester.GetElevenLabsSubscriptionAsync(ElevenLabsApiKey.Trim());
+                ElevenLabsBalancePlan = string.IsNullOrWhiteSpace(result.Plan) ? "Unknown" : result.Plan;
+                _elevenLabsBalanceUsed = result.Used;
+                _elevenLabsBalanceLimit = result.Limit;
+                ElevenLabsBalanceStatus = result.StatusMessage;
+
+                OnPropertyChanged(nameof(ElevenLabsBalanceUsedDisplay));
+                OnPropertyChanged(nameof(ElevenLabsBalanceLimitDisplay));
+                OnPropertyChanged(nameof(ElevenLabsBalanceRemainingDisplay));
+                OnPropertyChanged(nameof(HasElevenLabsBalanceNumbers));
+            }
+            finally
+            {
+                IsRefreshingElevenLabsBalance = false;
+            }
+        }
+
+        private async Task RefreshSttProviderBalanceAsync()
+        {
+            if (!HasProviderBalanceSupport)
+            {
+                ResetProviderBalanceState("Select a supported STT provider to load balance.");
+                return;
+            }
+
+            if (IsRefreshingProviderBalance)
+            {
+                return;
+            }
+
+            IsRefreshingProviderBalance = true;
+            ProviderBalanceStatus = $"Loading {SttModel} balance...";
+
+            try
+            {
+                ApiTester.ProviderBalanceCardInfo card = SttModel switch
+                {
+                    "Deepgram" => await ApiTester.GetDeepgramBalanceCardAsync(DeepgramApiKey.Trim(), DeepgramApiBaseUrl),
+                    "ElevenLabs" => await ApiTester.GetElevenLabsBalanceCardAsync(ElevenLabsApiKey.Trim()),
+                    "OpenRouter" => await ApiTester.GetOpenRouterBalanceCardAsync(OpenRouterApiKey.Trim()),
+                    _ => new ApiTester.ProviderBalanceCardInfo(false, false, "Unavailable", "Total", "N/A", "Remaining", "N/A", "Select a supported STT provider to load balance.")
+                };
+
+                ApplyProviderBalanceCard(card);
+            }
+            finally
+            {
+                IsRefreshingProviderBalance = false;
+            }
+        }
+
+        private void ApplyProviderBalanceCard(ApiTester.ProviderBalanceCardInfo card)
+        {
+            ProviderBalanceBadge = string.IsNullOrWhiteSpace(card.Badge) ? "Unavailable" : card.Badge;
+            ProviderBalancePrimaryLabel = string.IsNullOrWhiteSpace(card.PrimaryLabel) ? "Total" : card.PrimaryLabel;
+            ProviderBalancePrimaryValue = string.IsNullOrWhiteSpace(card.PrimaryValue) ? "N/A" : card.PrimaryValue;
+            ProviderBalanceSecondaryLabel = string.IsNullOrWhiteSpace(card.SecondaryLabel) ? "Remaining" : card.SecondaryLabel;
+            ProviderBalanceSecondaryValue = string.IsNullOrWhiteSpace(card.SecondaryValue) ? "N/A" : card.SecondaryValue;
+            ProviderBalanceStatus = string.IsNullOrWhiteSpace(card.StatusMessage) ? "Balance unavailable." : card.StatusMessage;
+        }
+
+        private void ResetProviderBalanceState(string status)
+        {
+            ProviderBalanceBadge = "Unavailable";
+            ProviderBalancePrimaryLabel = "Total";
+            ProviderBalancePrimaryValue = "N/A";
+            ProviderBalanceSecondaryLabel = "Remaining";
+            ProviderBalanceSecondaryValue = "N/A";
+            ProviderBalanceStatus = status;
+            IsRefreshingProviderBalance = false;
+        }
+
+        private void ResetElevenLabsBalanceState(string status)
+        {
+            ElevenLabsBalancePlan = "Unavailable";
+            _elevenLabsBalanceUsed = null;
+            _elevenLabsBalanceLimit = null;
+            ElevenLabsBalanceStatus = status;
+            IsRefreshingElevenLabsBalance = false;
+            OnPropertyChanged(nameof(ElevenLabsBalanceUsedDisplay));
+            OnPropertyChanged(nameof(ElevenLabsBalanceLimitDisplay));
+            OnPropertyChanged(nameof(ElevenLabsBalanceRemainingDisplay));
+            OnPropertyChanged(nameof(HasElevenLabsBalanceNumbers));
+        }
+
+        private static string FormatBalanceValue(long? value) =>
+            value.HasValue ? value.Value.ToString("N0") : "N/A";
+
         private List<string>? GetRefinementFavoriteList()
         {
             return RefinementModel switch
@@ -2778,6 +3083,115 @@ namespace Speakly.ViewModels
             {
                 target.Insert(0, currentModel);
             }
+        }
+
+        private static void AddMissingModels(ObservableCollection<string> target, IEnumerable<string> models)
+        {
+            foreach (var model in models)
+            {
+                if (string.IsNullOrWhiteSpace(model))
+                {
+                    continue;
+                }
+
+                if (!target.Any(existing => string.Equals(existing, model, StringComparison.OrdinalIgnoreCase)))
+                {
+                    target.Add(model);
+                }
+            }
+        }
+
+        private void EnsureValidSttModelSelection()
+        {
+            if (AvailableSttModels.Count == 0)
+            {
+                return;
+            }
+
+            var resolved = ResolveValidSttModelSelection(AvailableSttModels, SelectedSttModelString, SttModel);
+            if (string.Equals(SelectedSttModelString?.Trim(), resolved, StringComparison.OrdinalIgnoreCase))
+            {
+                return;
+            }
+
+            SetCurrentSttModelForProvider(resolved);
+        }
+
+        private void SetCurrentSttModelForProvider(string modelId)
+        {
+            var normalized = modelId?.Trim();
+            if (string.IsNullOrWhiteSpace(normalized))
+            {
+                return;
+            }
+
+            if (string.Equals(SttModel, "Deepgram", StringComparison.OrdinalIgnoreCase))
+            {
+                ConfigManager.Config.DeepgramModel = normalized;
+            }
+            else if (string.Equals(SttModel, "ElevenLabs", StringComparison.OrdinalIgnoreCase))
+            {
+                ConfigManager.Config.ElevenLabsSttModel = normalized;
+            }
+            else if (string.Equals(SttModel, "OpenAI", StringComparison.OrdinalIgnoreCase))
+            {
+                ConfigManager.Config.OpenAISttModel = normalized;
+            }
+            else if (string.Equals(SttModel, "OpenRouter", StringComparison.OrdinalIgnoreCase))
+            {
+                ConfigManager.Config.OpenRouterSttModel = normalized;
+            }
+        }
+
+        internal static string GetDefaultSttModelForProvider(string? provider)
+        {
+            return provider?.Trim() switch
+            {
+                "Deepgram" => "nova-3",
+                "OpenAI" => "whisper-1",
+                "OpenRouter" => "openai/gpt-audio-mini",
+                "ElevenLabs" => ElevenLabsRealtimeProtocol.DefaultModel,
+                _ => "nova-3"
+            };
+        }
+
+        internal static string ResolveValidSttModelSelection(IEnumerable<string> availableModels, string? currentModel, string? provider)
+        {
+            var models = availableModels
+                .Where(model => !string.IsNullOrWhiteSpace(model))
+                .Select(model => model.Trim())
+                .ToList();
+
+            if (models.Count == 0)
+            {
+                return GetDefaultSttModelForProvider(provider);
+            }
+
+            var normalizedCurrent = currentModel?.Trim();
+            if (!string.IsNullOrWhiteSpace(normalizedCurrent))
+            {
+                var exact = models.FirstOrDefault(model => string.Equals(model, normalizedCurrent, StringComparison.OrdinalIgnoreCase));
+                if (!string.IsNullOrWhiteSpace(exact))
+                {
+                    return exact;
+                }
+            }
+
+            var providerDefault = GetDefaultSttModelForProvider(provider);
+            var exactDefault = models.FirstOrDefault(model => string.Equals(model, providerDefault, StringComparison.OrdinalIgnoreCase));
+            return !string.IsNullOrWhiteSpace(exactDefault) ? exactDefault : models[0];
+        }
+
+        internal static IReadOnlyList<string> GetBuiltInSttModelsForProvider(string? provider)
+        {
+            return provider?.Trim() switch
+            {
+                "Deepgram" => new[] { "nova-3", "nova-2", "nova-2-phonecall", "nova-2-medical" },
+                "OpenAI" => new[] { "whisper-1", "whisper-1-hd" },
+                "ElevenLabs" => GetCuratedElevenLabsSttModels(),
+                "OpenRouter" => new[] { "openai/gpt-audio-mini", "openai/gpt-audio", "google/gemini-2.0-flash-001", "mistralai/voxtral-small-24b-2507", "openai/whisper-large-v3" },
+                _ => Array.Empty<string>()
+            };
         }
 
         private static string BuildProviderSummary(IEnumerable<string> models, int maxProviders = 6)

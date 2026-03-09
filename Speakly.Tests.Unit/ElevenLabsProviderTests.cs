@@ -76,5 +76,40 @@ namespace Speakly.Tests.Unit
             Assert.Contains("\"commit\":true", payload);
             Assert.Contains("\"sample_rate\":16000", payload);
         }
+
+        [Fact]
+        public void SubscriptionParser_ExtractsPlanAndBalance()
+        {
+            var info = ApiTester.ParseElevenLabsSubscriptionResponse("""
+                {
+                  "tier": "Creator",
+                  "character_count": 87,
+                  "character_limit": 10000
+                }
+                """);
+
+            Assert.True(info.Success);
+            Assert.Equal("Creator", info.Plan);
+            Assert.Equal(87, info.Used);
+            Assert.Equal(10000, info.Limit);
+            Assert.Equal(9913, info.Remaining);
+        }
+
+        [Fact]
+        public void SubscriptionParser_HandlesMissingBalanceFields()
+        {
+            var info = ApiTester.ParseElevenLabsSubscriptionResponse("""
+                {
+                  "tier": "Starter"
+                }
+                """);
+
+            Assert.True(info.Success);
+            Assert.Equal("Starter", info.Plan);
+            Assert.Null(info.Used);
+            Assert.Null(info.Limit);
+            Assert.Null(info.Remaining);
+            Assert.Contains("Subscription loaded", info.StatusMessage);
+        }
     }
 }

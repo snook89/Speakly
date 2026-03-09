@@ -71,11 +71,22 @@ namespace Speakly.Services
 
         public async Task DisconnectAsync()
         {
-            if (_webSocket != null && _webSocket.State == WebSocketState.Open)
+            if (_webSocket != null)
             {
                 try
                 {
-                    await _webSocket.CloseAsync(WebSocketCloseStatus.NormalClosure, "Client disconnect", CancellationToken.None);
+                    if (_webSocket.State == WebSocketState.Open)
+                    {
+                        await _webSocket.CloseAsync(WebSocketCloseStatus.NormalClosure, "Client disconnect", CancellationToken.None);
+                    }
+                    else if (_webSocket.State == WebSocketState.CloseReceived)
+                    {
+                        await _webSocket.CloseOutputAsync(WebSocketCloseStatus.NormalClosure, "Client disconnect", CancellationToken.None);
+                    }
+                }
+                catch (WebSocketException ex) when (IsBenignCloseHandshakeRace(ex))
+                {
+                    Logger.Log("ElevenLabs realtime STT closed the WebSocket before the close handshake completed.");
                 }
                 catch (Exception ex)
                 {
@@ -255,6 +266,16 @@ namespace Speakly.Services
             }
 
             await Task.CompletedTask;
+        }
+
+        private static bool IsBenignCloseHandshakeRace(WebSocketException ex)
+        {
+            if (ex.WebSocketErrorCode == WebSocketError.ConnectionClosedPrematurely)
+            {
+                return true;
+            }
+
+            return ex.Message?.IndexOf("without completing the close handshake", StringComparison.OrdinalIgnoreCase) >= 0;
         }
 
         public void Dispose()

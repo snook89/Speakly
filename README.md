@@ -231,6 +231,7 @@ Notes:
 - OpenRouter includes an optional experimental mode to show all models, including some that are not ideal for STT.
 - Deepgram multilingual mode is guarded in the UI to prevent unsupported model and language combinations.
 - ElevenLabs is available as an experimental direct realtime STT provider and uses a curated supported realtime model list in v1.
+- ElevenLabs may close its realtime websocket immediately after sending a committed transcript; Speakly now treats that provider-side close as normal session cleanup instead of a transcription failure.
 - When Deepgram, ElevenLabs, or OpenRouter is selected for STT, the Transcription page can show a compact provider balance card if that API key has access to the provider's account or subscription endpoint.
 - Deepgram signup: [console.deepgram.com/signup](https://console.deepgram.com/signup)
 - ElevenLabs signup or login: [elevenlabs.io/app/sign-up](https://elevenlabs.io/app/sign-up)

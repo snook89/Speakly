@@ -195,10 +195,13 @@ namespace Speakly.Docs
                         "Audio settings decide the source quality going into the pipeline. Good transcription starts with clean input from the correct microphone."),
                     new DocsSection(
                         "How it works",
-                        "Speakly records from the selected Windows input device and streams or sends that audio to the active STT provider. Managed audio options can normalize volume, smooth gain, and reduce noise before the provider sees the signal. If Speakly never detects meaningful mic signal during a recording, it warns you and stops before wasting time on STT or failover."),
+                        "Speakly records from the selected Windows input device and streams or sends that audio to the active STT provider. You can choose between the Stable cleanup engine and the WebRTC Experimental cleanup engine before that audio reaches STT. If Speakly never detects meaningful mic signal during a recording, it warns you and stops before wasting time on STT or failover."),
+                    new DocsSection(
+                        "Cleanup engines and presets",
+                        "Stable keeps Speakly's managed cleanup controls such as auto mic gain, dynamic normalization, and optional noise gate. WebRTC Experimental uses a preset-based cleanup path with Balanced, Noisy Room, Keyboard Desk, Speaker / Echo, Broadcast / Close Mic, and Custom. WebRTC only runs on supported mono capture formats at 8, 16, 32, or 48 kHz. If the current format is unsupported, Speakly falls back to Stable for the session instead of failing capture."),
                     new DocsSection(
                         "Best use scenarios",
-                        "Audio tuning matters most in noisy environments, with inconsistent microphones, or when you want lower-latency streaming behavior without clipped syllables."),
+                        "Audio tuning matters most in noisy environments, with inconsistent microphones, or when you need more cleanup than the Stable path provides. Stable is the safer baseline when your microphone already sounds clean. WebRTC Experimental is better when room noise, keyboard noise, speaker bleed, or inconsistent speaking volume need more aggressive handling."),
                     new DocsSection(
                         "Troubleshooting capture quality",
                         "Before changing AI models, check microphone selection, Windows input level, room noise, headset routing, and whether another app is monopolizing the device.")
@@ -206,7 +209,8 @@ namespace Speakly.Docs
                 new[]
                 {
                     "Use the microphone physically closest to you and keep its gain stable.",
-                    "Start with managed audio defaults before pushing extreme normalization values.",
+                    "Start with Stable if your current capture already sounds right, or start with WebRTC Experimental plus Balanced if you need stronger cleanup.",
+                    "Use Keyboard Desk or Speaker / Echo only when that specific problem is real; do not over-process clean audio.",
                     "Only change STT or refinement models after the raw audio sounds clean.",
                     "If you see No mic signal, check mute state, input device selection, and Windows input volume before touching model settings."
                 },
@@ -223,6 +227,11 @@ namespace Speakly.Docs
                         "Speakly shows No mic signal and ends the session cleanly instead of hanging through STT.",
                         "This makes hardware or routing mistakes obvious before they look like provider failures."),
                     new DocsExample(
+                        "WebRTC preset workflow",
+                        "Set engine to WebRTC Experimental and preset to Balanced, then test a short sentence in the same app you normally use.",
+                        "You can compare that result to Stable without touching providers, prompts, or refinement settings.",
+                        "This is the fastest way to judge whether the cleanup engine is helping or over-processing your mic."),
+                    new DocsExample(
                         "Clean baseline",
                         "Select the correct headset mic and test a short dictation in a quiet room.",
                         "The raw transcript is already close to what you said before refinement runs.",
@@ -231,7 +240,8 @@ namespace Speakly.Docs
                 new[]
                 {
                     "Bad audio cannot be fully repaired later by prompts or context settings.",
-                    "Frequent STT mistakes are often microphone or environment issues first, model issues second."
+                    "Frequent STT mistakes are often microphone or environment issues first, model issues second.",
+                    "If WebRTC Experimental is selected but the input format is unsupported, Speakly will use Stable fallback for that session."
                 }),
             new DocsTopic(
                 "transcription",

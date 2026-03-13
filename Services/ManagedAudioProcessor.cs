@@ -29,7 +29,7 @@ namespace Speakly.Services
         public int ClippedSamples { get; }
     }
 
-    public sealed class ManagedAudioProcessor
+    public sealed class ManagedAudioProcessor : IAudioFrameProcessor
     {
         private readonly object _gate = new();
         private double _agcGain = 1.0;
@@ -147,6 +147,16 @@ namespace Speakly.Services
                 appliedGain: (float)totalGain,
                 clippedSamples: clippedSamples);
             return output;
+        }
+
+        public byte[] Flush(out AudioProcessingStats stats)
+        {
+            stats = new AudioProcessingStats(0, 0, 0, 0, 1, 0);
+            return Array.Empty<byte>();
+        }
+
+        public void Dispose()
+        {
         }
     }
 }

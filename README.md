@@ -105,7 +105,7 @@ Speakly is for people who want voice input to feel like part of a serious deskto
 - Optional AI refinement with saved prompt presets.
 - Per-app profiles that auto-switch by foreground process name.
 - Floating overlay plus tray controls for fast recovery and status.
-- Managed audio processing for cleaner captures.
+- Switchable audio cleanup engine with Stable managed processing or WebRTC Experimental presets.
 - No-mic-signal detection that fails fast on muted or dead microphone input.
 - Local telemetry, history, and statistics for troubleshooting.
 - Auto-update flow backed by GitHub Releases.
@@ -155,7 +155,7 @@ This README reflects the newer feature set already present in the codebase:
 - Voice edit commands with mixed, dictation-only, and commands-only behavior.
 - Dynamic model refresh from provider APIs, plus favorite model pinning.
 - Personal dictionary suggestions that can be confirmed globally or per profile.
-- Managed audio processing with auto mic gain, normalization, and optional noise gate.
+- Switchable audio cleanup engine with Stable managed processing or WebRTC Experimental presets and safe fallback rules.
 - No-mic-signal detection so silent sessions stop cleanly instead of stalling through STT or failover.
 - Deferred target auto-paste when focus returns to the target app.
 - Local telemetry controls for level, retention, file size, and redaction mode.
@@ -174,6 +174,13 @@ This README reflects the newer feature set already present in the codebase:
 7. If refinement is enabled, the transcript is sent to the configured AI provider using the active prompt, mode, style, and optional context.
 8. The final text is inserted into the active app.
 9. If direct insertion fails or the target app loses focus, Speakly can fall back to clipboard and deferred paste behavior.
+
+## Audio Cleanup Engines
+
+- `Stable` uses Speakly's managed cleanup path with auto mic gain, dynamic normalization, and optional noise gate controls.
+- `WebRTC Experimental` adds a second cleanup engine with preset-based tuning for `Balanced`, `Noisy Room`, `Keyboard Desk`, `Speaker / Echo`, `Broadcast / Close Mic`, and `Custom`.
+- WebRTC only runs on supported mono capture formats at `8/16/32/48 kHz`. If the current audio format is unsupported, Speakly falls back to `Stable` for the session instead of failing capture.
+- The Audio page shows engine support status so you can tell whether WebRTC is active or whether Stable fallback is in effect.
 
 ## Profiles, Modes, And Prompt Layering
 
@@ -207,7 +214,7 @@ If Speakly never detects meaningful mic signal during a recording, it now exits 
 |------|---------|
 | Home | Active session summary, quick actions, profile switching, process mapping, and profile management |
 | Hotkeys | Configure hold-to-talk and toggle-record shortcuts |
-| Audio | Select input device and tune audio capture and processing |
+| Audio | Select input device, choose the audio cleanup engine, and tune Stable or WebRTC cleanup behavior |
 | Transcription | Choose STT provider, language, model, dictionary, and advanced provider settings |
 | Refinement | Enable or disable refinement, choose provider/model, manage prompts, and tune Cerebras requests |
 | API Keys | Store and test API keys for Deepgram, ElevenLabs, OpenAI, OpenRouter, and Cerebras, with built-in Docs guidance for provider signup and key generation |

@@ -11,7 +11,7 @@ namespace Speakly.Config
 {
     public class AppConfig
     {
-        public const int CurrentConfigVersion = 13;
+        public const int CurrentConfigVersion = 14;
         public const string DefaultRefinementPrompt =
             "Role and Objective:\n" +
             "You refine speech-to-text transcripts for clarity, grammatical correctness, and formatting compliance.\n\n" +
@@ -235,6 +235,12 @@ namespace Speakly.Config
         [JsonPropertyName("chunk_size")]
         public int ChunkSize { get; set; } = 4096;
 
+        [JsonPropertyName("audio_processing_engine")]
+        public string AudioProcessingEngine { get; set; } = AudioProcessorFactory.EngineStable;
+
+        [JsonPropertyName("audio_cleanup_preset")]
+        public string AudioCleanupPreset { get; set; } = WebRtcAudioPresets.Balanced;
+
         [JsonPropertyName("auto_mic_gain_enabled")]
         public bool AutoMicGainEnabled { get; set; } = true;
 
@@ -252,6 +258,33 @@ namespace Speakly.Config
 
         [JsonPropertyName("normalization_target_peak")]
         public double NormalizationTargetPeak { get; set; } = 0.85;
+
+        [JsonPropertyName("webrtc_high_pass_filter_enabled")]
+        public bool WebRtcHighPassFilterEnabled { get; set; } = true;
+
+        [JsonPropertyName("webrtc_noise_suppression_enabled")]
+        public bool WebRtcNoiseSuppressionEnabled { get; set; } = true;
+
+        [JsonPropertyName("webrtc_noise_suppression_level")]
+        public string WebRtcNoiseSuppressionLevel { get; set; } = "Moderate";
+
+        [JsonPropertyName("webrtc_agc_enabled")]
+        public bool WebRtcAgcEnabled { get; set; } = true;
+
+        [JsonPropertyName("webrtc_agc_target_level_dbfs")]
+        public int WebRtcAgcTargetLevelDbfs { get; set; } = -3;
+
+        [JsonPropertyName("webrtc_agc_compression_gain_db")]
+        public int WebRtcAgcCompressionGainDb { get; set; } = 9;
+
+        [JsonPropertyName("webrtc_agc_limiter_enabled")]
+        public bool WebRtcAgcLimiterEnabled { get; set; } = true;
+
+        [JsonPropertyName("webrtc_pre_amp_enabled")]
+        public bool WebRtcPreAmpEnabled { get; set; } = false;
+
+        [JsonPropertyName("webrtc_pre_amp_gain_factor")]
+        public float WebRtcPreAmpGainFactor { get; set; } = 1.0f;
 
         [JsonPropertyName("save_debug_records")]
         public bool SaveDebugRecords { get; set; } = false;
@@ -614,9 +647,14 @@ namespace Speakly.Config
             if (previousVersion < 5 && config.DeferredTargetPasteTtlSeconds == 600)
                 config.DeferredTargetPasteTtlSeconds = 0;
             config.DeferredTargetPasteTtlSeconds = Math.Clamp(config.DeferredTargetPasteTtlSeconds, 0, 604800);
+            config.AudioProcessingEngine = AudioProcessorFactory.NormalizeEngine(config.AudioProcessingEngine);
             config.NoiseGateThresholdDb = Math.Clamp(config.NoiseGateThresholdDb, -80, -10);
             config.AutoMicGainTargetRms = Math.Clamp(config.AutoMicGainTargetRms, 0.02, 0.4);
             config.NormalizationTargetPeak = Math.Clamp(config.NormalizationTargetPeak, 0.2, 0.99);
+            config.WebRtcAgcTargetLevelDbfs = Math.Clamp(config.WebRtcAgcTargetLevelDbfs, -31, 0);
+            config.WebRtcAgcCompressionGainDb = Math.Clamp(config.WebRtcAgcCompressionGainDb, 0, 90);
+            config.WebRtcPreAmpGainFactor = Math.Clamp(config.WebRtcPreAmpGainFactor, 1.0f, 4.0f);
+            WebRtcAudioPresets.NormalizeConfig(config);
             config.PersonalDictionaryGlobal = NormalizeDictionaryTerms(config.PersonalDictionaryGlobal);
             config.OverlayStyle = string.Equals(config.OverlayStyle, "Circle", StringComparison.OrdinalIgnoreCase)
                 ? "Circle"

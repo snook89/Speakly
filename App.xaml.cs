@@ -70,7 +70,7 @@ namespace Speakly
         private const float MicSignalPeakThreshold = 0.0125f;
         private SingleInstanceManager? _singleInstanceManager;
         private readonly PendingTransferManager _pendingTransferManager = new();
-        private readonly ManagedAudioProcessor _managedAudioProcessor = new();
+        private IAudioFrameProcessor _audioProcessor = new ManagedAudioProcessor();
         private bool _deferredPasteApplyInProgress;
         private TargetWindowContext _targetWindowContext = TargetWindowContext.Empty;
         private IntPtr _lastActiveWindow = IntPtr.Zero;
@@ -1230,7 +1230,7 @@ namespace Speakly
                     PrepareSessionContext();
                     _sessionText.Clear();
                     _sessionHasInserted = false;
-                    _managedAudioProcessor.Reset();
+                    ResetAudioProcessorForSession();
                     UpdateOverlayContextIndicator(string.Empty);
                     AutoAdjustRefinementPromptForLanguage();
                     _overlay?.SetActiveLanguage(ResolveOverlayLanguageDisplay());
@@ -1263,7 +1263,7 @@ namespace Speakly
                     PrepareSessionContext();
                     _sessionText.Clear();
                     _sessionHasInserted = false;
-                    _managedAudioProcessor.Reset();
+                    ResetAudioProcessorForSession();
                     UpdateOverlayContextIndicator(string.Empty);
                     AutoAdjustRefinementPromptForLanguage();
                     _overlay?.SetActiveLanguage(ResolveOverlayLanguageDisplay());
@@ -1541,7 +1541,7 @@ namespace Speakly
 
         private async void OnAudioDataAvailable(object? sender, byte[] data)
         {
-            var processed = _managedAudioProcessor.Process(data, out var processingStats);
+            var processed = _audioProcessor.Process(data, out var processingStats);
             _overlay?.UpdateAudioLevel(Math.Min(processingStats.ProcessedRms * 12f, 1f));
             UpdateMicSignalState(processed.Length, processingStats);
 
@@ -1556,6 +1556,13 @@ namespace Speakly
             {
                 _audioBuffer.Write(processed, 0, processed.Length);
             }
+        }
+
+        private void ResetAudioProcessorForSession()
+        {
+            _audioProcessor.Dispose();
+            _audioProcessor = AudioProcessorFactory.Create(ConfigManager.Config);
+            _audioProcessor.Reset();
         }
 
         private void UpdateMicSignalState(int processedBytesLength, AudioProcessingStats processingStats)
@@ -2512,7 +2519,7 @@ namespace Speakly
             PrepareSessionContext();
             _sessionText.Clear();
             _sessionHasInserted = false;
-            _managedAudioProcessor.Reset();
+            ResetAudioProcessorForSession();
             AutoAdjustRefinementPromptForLanguage();
             _overlay?.SetActiveLanguage(ResolveOverlayLanguageDisplay());
             _isToggleRecording = true;
@@ -2548,6 +2555,7 @@ namespace Speakly
             _singleInstanceManager?.Dispose();
             _recorder?.Dispose();
             _transcriber?.Dispose();
+            _audioProcessor.Dispose();
             _overlay?.Close();
             _startSound?.Dispose();
             _stopSound?.Dispose();

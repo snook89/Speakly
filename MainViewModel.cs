@@ -64,6 +64,7 @@ namespace Speakly.ViewModels
         private string _newSnippetTrigger = string.Empty;
         private string _newSnippetReplacement = string.Empty;
         private string _lastContextUsageStatus = "Context used: none yet.";
+        private string _audioProcessingEngineSupportStatus = "Stable managed cleanup is active.";
         private static readonly string[] DeepgramMultilingualCodes =
         {
             "en", "es", "fr", "de", "hi", "ru", "pt", "ja", "it", "nl"
@@ -229,7 +230,175 @@ namespace Speakly.ViewModels
             set { ConfigManager.Config.AudioDevice = value; OnPropertyChanged(); }
         }
 
+        public string AudioProcessingEngine
+        {
+            get => ConfigManager.Config.AudioProcessingEngine;
+            set
+            {
+                var normalized = AudioProcessorFactory.NormalizeEngine(value);
+                if (ConfigManager.Config.AudioProcessingEngine == normalized)
+                {
+                    return;
+                }
+
+                ConfigManager.Config.AudioProcessingEngine = normalized;
+                RefreshAudioProcessingEngineSupportStatus();
+                OnPropertyChanged();
+                OnPropertyChanged(nameof(IsWebRtcExperimentalAudioEngine));
+                OnPropertyChanged(nameof(IsStableAudioEngine));
+                OnPropertyChanged(nameof(WebRtcAudioFeatureSummary));
+            }
+        }
+
+        public bool IsWebRtcExperimentalAudioEngine =>
+            string.Equals(AudioProcessingEngine, AudioProcessorFactory.WebRtcExperimentalEngine, StringComparison.OrdinalIgnoreCase);
+
+        public bool IsStableAudioEngine => !IsWebRtcExperimentalAudioEngine;
+
+        public string AudioCleanupPreset
+        {
+            get => WebRtcAudioPresets.InferPreset(ConfigManager.Config);
+            set
+            {
+                var normalized = WebRtcAudioPresets.NormalizePreset(value);
+                WebRtcAudioPresets.ApplyPreset(ConfigManager.Config, normalized);
+                RefreshAudioProcessingEngineSupportStatus();
+                NotifyWebRtcAudioPropertiesChanged();
+            }
+        }
+
+        public string AudioProcessingEngineSupportStatus
+        {
+            get => _audioProcessingEngineSupportStatus;
+            private set
+            {
+                _audioProcessingEngineSupportStatus = value;
+                OnPropertyChanged();
+            }
+        }
+
+        public string WebRtcNoiseSuppressionLevel
+        {
+            get => ConfigManager.Config.WebRtcNoiseSuppressionLevel;
+            set
+            {
+                ConfigManager.Config.WebRtcNoiseSuppressionLevel = WebRtcAudioPresets.NormalizeNoiseSuppressionLevel(value).ToString();
+                MarkWebRtcPresetDirty();
+                OnPropertyChanged();
+                OnPropertyChanged(nameof(WebRtcAudioFeatureSummary));
+            }
+        }
+
+        public bool WebRtcNoiseSuppressionEnabled
+        {
+            get => ConfigManager.Config.WebRtcNoiseSuppressionEnabled;
+            set
+            {
+                ConfigManager.Config.WebRtcNoiseSuppressionEnabled = value;
+                MarkWebRtcPresetDirty();
+                OnPropertyChanged();
+                OnPropertyChanged(nameof(WebRtcAudioFeatureSummary));
+            }
+        }
+
+        public bool WebRtcHighPassFilterEnabled
+        {
+            get => ConfigManager.Config.WebRtcHighPassFilterEnabled;
+            set
+            {
+                ConfigManager.Config.WebRtcHighPassFilterEnabled = value;
+                MarkWebRtcPresetDirty();
+                OnPropertyChanged();
+                OnPropertyChanged(nameof(WebRtcAudioFeatureSummary));
+            }
+        }
+
+        public bool WebRtcAgcEnabled
+        {
+            get => ConfigManager.Config.WebRtcAgcEnabled;
+            set
+            {
+                ConfigManager.Config.WebRtcAgcEnabled = value;
+                MarkWebRtcPresetDirty();
+                OnPropertyChanged();
+                OnPropertyChanged(nameof(WebRtcAudioFeatureSummary));
+            }
+        }
+
+        public int WebRtcAgcTargetLevelDbfs
+        {
+            get => ConfigManager.Config.WebRtcAgcTargetLevelDbfs;
+            set
+            {
+                ConfigManager.Config.WebRtcAgcTargetLevelDbfs = Clamp(value, -31, 0);
+                MarkWebRtcPresetDirty();
+                OnPropertyChanged();
+            }
+        }
+
+        public int WebRtcAgcCompressionGainDb
+        {
+            get => ConfigManager.Config.WebRtcAgcCompressionGainDb;
+            set
+            {
+                ConfigManager.Config.WebRtcAgcCompressionGainDb = Clamp(value, 0, 90);
+                MarkWebRtcPresetDirty();
+                OnPropertyChanged();
+            }
+        }
+
+        public bool WebRtcAgcLimiterEnabled
+        {
+            get => ConfigManager.Config.WebRtcAgcLimiterEnabled;
+            set
+            {
+                ConfigManager.Config.WebRtcAgcLimiterEnabled = value;
+                MarkWebRtcPresetDirty();
+                OnPropertyChanged();
+            }
+        }
+
+        public bool WebRtcPreAmpEnabled
+        {
+            get => ConfigManager.Config.WebRtcPreAmpEnabled;
+            set
+            {
+                ConfigManager.Config.WebRtcPreAmpEnabled = value;
+                MarkWebRtcPresetDirty();
+                OnPropertyChanged();
+                OnPropertyChanged(nameof(WebRtcAudioFeatureSummary));
+            }
+        }
+
+        public double WebRtcPreAmpGainFactor
+        {
+            get => ConfigManager.Config.WebRtcPreAmpGainFactor;
+            set
+            {
+                ConfigManager.Config.WebRtcPreAmpGainFactor = (float)Math.Clamp(value, 0.5, 4.0);
+                MarkWebRtcPresetDirty();
+                OnPropertyChanged();
+                OnPropertyChanged(nameof(WebRtcAudioFeatureSummary));
+            }
+        }
+
+        public string WebRtcAudioFeatureSummary => WebRtcAudioPresets.BuildFeatureSummary(ConfigManager.Config);
+
         public ObservableCollection<string> AvailableAudioDevices { get; } = new ObservableCollection<string>();
+        public ObservableCollection<string> AvailableAudioProcessingEngines { get; } = new ObservableCollection<string>
+        {
+            AudioProcessorFactory.StableEngine,
+            AudioProcessorFactory.WebRtcExperimentalEngine
+        };
+        public ObservableCollection<string> AvailableAudioCleanupPresets { get; } = new ObservableCollection<string>(
+            WebRtcAudioPresets.GetPresetNames());
+        public ObservableCollection<string> AvailableWebRtcNoiseSuppressionLevels { get; } = new ObservableCollection<string>
+        {
+            "Low",
+            "Moderate",
+            "High",
+            "VeryHigh"
+        };
         public ObservableCollection<string> AvailableOverlaySkins { get; } = new ObservableCollection<string>
         {
             "Lavender",
@@ -956,6 +1125,7 @@ namespace Speakly.ViewModels
             set
             {
                 ConfigManager.Config.SampleRate = Clamp(value, 8000, 48000);
+                RefreshAudioProcessingEngineSupportStatus();
                 OnPropertyChanged();
             }
         }
@@ -966,6 +1136,7 @@ namespace Speakly.ViewModels
             set
             {
                 ConfigManager.Config.Channels = Clamp(value, 1, 2);
+                RefreshAudioProcessingEngineSupportStatus();
                 OnPropertyChanged();
             }
         }
@@ -2020,6 +2191,20 @@ namespace Speakly.ViewModels
             OnPropertyChanged(nameof(LearnFromRefinementCorrections));
             OnPropertyChanged(nameof(EnableSttFailover));
             OnPropertyChanged(nameof(DeferredTargetPasteEnabled));
+            OnPropertyChanged(nameof(AudioProcessingEngine));
+            OnPropertyChanged(nameof(IsWebRtcExperimentalAudioEngine));
+            OnPropertyChanged(nameof(IsStableAudioEngine));
+            OnPropertyChanged(nameof(AudioCleanupPreset));
+            OnPropertyChanged(nameof(WebRtcNoiseSuppressionEnabled));
+            OnPropertyChanged(nameof(WebRtcNoiseSuppressionLevel));
+            OnPropertyChanged(nameof(WebRtcHighPassFilterEnabled));
+            OnPropertyChanged(nameof(WebRtcAgcEnabled));
+            OnPropertyChanged(nameof(WebRtcAgcTargetLevelDbfs));
+            OnPropertyChanged(nameof(WebRtcAgcCompressionGainDb));
+            OnPropertyChanged(nameof(WebRtcAgcLimiterEnabled));
+            OnPropertyChanged(nameof(WebRtcPreAmpEnabled));
+            OnPropertyChanged(nameof(WebRtcPreAmpGainFactor));
+            OnPropertyChanged(nameof(WebRtcAudioFeatureSummary));
             OnPropertyChanged(nameof(StartWithWindows));
             OnPropertyChanged(nameof(AutoMicGainEnabled));
             OnPropertyChanged(nameof(DynamicNormalizationEnabled));
@@ -2029,6 +2214,7 @@ namespace Speakly.ViewModels
             OnPropertyChanged(nameof(NormalizationTargetPeak));
             OnPropertyChanged(nameof(GlobalDictionaryTermsText));
             OnPropertyChanged(nameof(ProfileDictionaryTermsText));
+            RefreshAudioProcessingEngineSupportStatus();
             NotifyDeepgramLanguageGuardChanged();
             NotifySelectedProfileSummaryChanged();
 
@@ -2485,6 +2671,7 @@ namespace Speakly.ViewModels
         {
             LoadProfiles();
             LoadAudioDevices();
+            RefreshAudioProcessingEngineSupportStatus();
             UpdateSttModelList();
             UpdateRefinementModelList();
             _ = RefreshProviderModelsAsync();
@@ -3881,6 +4068,37 @@ namespace Speakly.ViewModels
                 level: result.HasIssues ? "warning" : "info",
                 success: !result.HasIssues,
                 result: result.HasIssues ? "issues_detected" : "healthy");
+        }
+
+        private void RefreshAudioProcessingEngineSupportStatus()
+        {
+            AudioProcessingEngineSupportStatus = AudioProcessorFactory.DescribeEngineSelection(ConfigManager.Config);
+        }
+
+        private void MarkWebRtcPresetDirty()
+        {
+            ConfigManager.Config.AudioCleanupPreset = WebRtcAudioPresets.InferPreset(ConfigManager.Config);
+            RefreshAudioProcessingEngineSupportStatus();
+            OnPropertyChanged(nameof(AudioCleanupPreset));
+        }
+
+        private void NotifyWebRtcAudioPropertiesChanged()
+        {
+            RefreshAudioProcessingEngineSupportStatus();
+            OnPropertyChanged(nameof(AudioProcessingEngine));
+            OnPropertyChanged(nameof(IsWebRtcExperimentalAudioEngine));
+            OnPropertyChanged(nameof(IsStableAudioEngine));
+            OnPropertyChanged(nameof(AudioCleanupPreset));
+            OnPropertyChanged(nameof(WebRtcHighPassFilterEnabled));
+            OnPropertyChanged(nameof(WebRtcNoiseSuppressionEnabled));
+            OnPropertyChanged(nameof(WebRtcNoiseSuppressionLevel));
+            OnPropertyChanged(nameof(WebRtcAgcEnabled));
+            OnPropertyChanged(nameof(WebRtcAgcTargetLevelDbfs));
+            OnPropertyChanged(nameof(WebRtcAgcCompressionGainDb));
+            OnPropertyChanged(nameof(WebRtcAgcLimiterEnabled));
+            OnPropertyChanged(nameof(WebRtcPreAmpEnabled));
+            OnPropertyChanged(nameof(WebRtcPreAmpGainFactor));
+            OnPropertyChanged(nameof(WebRtcAudioFeatureSummary));
         }
 
         private static string NormalizePrivacyMode(string? value)
